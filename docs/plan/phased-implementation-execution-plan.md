@@ -239,7 +239,7 @@ scripts/deployment_smoke.sh
 - [x] 实现 `Decision`、`Step`、`StepResult` 和严格枚举。
 - [x] 实现 `ToolSpec`、`ToolContext`、`ToolResult`、`ToolError`。
 - [x] 实现 `DomainEvent`、`EventEnvelope` 和事件 payload 版本。
-- [ ] 实现 workflow/policy 版本引用和不可变定义。
+- [x] 实现 workflow/policy 版本引用和不可变定义。
 - [x] 对所有协议禁止未知字段，对外 JSON 含 `schema_version`。
 
 数据库：
