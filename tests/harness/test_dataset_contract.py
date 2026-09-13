@@ -47,3 +47,4 @@ def test_rag_clarification_and_guardrail_goldens_have_verifiable_evidence() -> N
             assert expected["required_slots"] and expected["acceptable_keywords"]
         if case["task_type"] == "guardrail_handoff":
             assert expected["outcome"] and expected["reason_code"]
+            assert case["forbidden_tools"]

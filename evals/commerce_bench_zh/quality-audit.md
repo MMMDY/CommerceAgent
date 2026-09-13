@@ -16,4 +16,6 @@ python -m pytest tests/harness/test_dataset_contract.py
 | clarification | 20 | 每项均要求澄清、缺失槽和可接受关键词 | 通过 |
 | guardrail | 20 | 每项均有 outcome、reason code；并至少含 forbidden tool 或不得虚假声称成功约束 | 通过 |
 
-冻结 hash 由 `CaseLoader` 计算；任何 case、ID、track、证据引用或金标字段的改动都会使上述合同测试或 loader hash 发生变化，必须重新审核并单独提交数据变更。
+本次冻结 hash：`cases.jsonl` 为 `240846bdb3d3dbb0b5c2b16df9df4b9d8f45a24c06bd8b77abd84910edb10ff5`；`knowledge.jsonl` 为 `bb86344cd7a2c39d19abd5d8352dd479caf4a15bc3956696c6fa340cdad88ac4`。本次修订为 5 条原本缺少 forbidden tool 的 guardrail case 补充最小禁止调用约束；未改变用户消息、预期 route/outcome 或知识证据。
+
+任何 case、ID、track、证据引用或金标字段的改动都会使上述合同测试或 loader hash 发生变化，必须重新审核并单独提交数据变更。
