@@ -253,8 +253,8 @@ scripts/deployment_smoke.sh
 
 Repository 与事务：
 
-- [ ] 实现 `RunRepository`、`ConversationRepository`、`ConfirmationRepository`、`EvaluationRepository`。
-- [ ] 实现 `MemoryRepository`、`KnowledgeRepository`、`AuditRepository`，并保持接口与物理 SQL 分离。
+- [x] 实现 `RunRepository`、`ConversationRepository`、`ConfirmationRepository`、`EvaluationRepository`。
+- [x] 实现 `MemoryRepository`、`KnowledgeRepository`、`AuditRepository`，并保持接口与物理 SQL 分离。
 - [ ] 所有读写入口强制要求 `tenant_id`，禁止业务层拼接 SQL。
 - [x] 实现“事件 + checkpoint + run 行版本”的单事务提交。
 - [x] 实现 confirmation token 条件消费与 idempotency record 同事务。
