@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=80.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "commerce-agent"
+version = "0.1.0"
+description = "Self-built e-commerce customer-service Agent"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic==1.16.5",
+  "fastapi==0.116.1",
+  "httpx==0.28.1",
+  "psycopg[binary]==3.2.10",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "sqlalchemy==2.0.43",
+  "uvicorn[standard]==0.35.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy==1.17.1",
+  "pytest==8.4.1",
+  "ruff==0.12.12",
+]
+
+[tool.setuptools.packages.find]
+include = ["src*", "apps*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"] # FastAPI declares dependencies in endpoint signatures.
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["src", "apps"]
+exclude = ["infra/migrations"]

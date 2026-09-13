@@ -1,0 +1,121 @@
+.shell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
+  min-height: 100vh;
+}
+
+.sidePanel,
+.workspace {
+  padding: 2rem;
+}
+
+.sidePanel {
+  background: #ffffff;
+  border-color: #dfe5ef;
+  border-style: solid;
+}
+
+.leftPanel {
+  border-width: 0 1px 0 0;
+}
+
+.rightPanel {
+  border-width: 0 0 0 1px;
+}
+
+.leftPanel nav {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.workspace {
+  display: grid;
+  align-content: center;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: #60718c;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.drawerToggle,
+.drawerClose,
+.backdrop {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidePanel {
+    display: block;
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    bottom: 0;
+    width: min(86vw, 360px);
+    overflow-y: auto;
+    transition: transform 160ms ease;
+  }
+
+  .leftPanel {
+    left: 0;
+    border-width: 0 1px 0 0;
+    transform: translateX(-105%);
+  }
+
+  .rightPanel {
+    right: 0;
+    border-width: 0 0 0 1px;
+    transform: translateX(105%);
+  }
+
+  .drawerOpen {
+    transform: translateX(0);
+  }
+
+  .drawerToggle,
+  .drawerClose {
+    display: block;
+    position: fixed;
+    z-index: 1;
+    top: 1rem;
+  }
+
+  .drawerToggle {
+    border: 1px solid #dfe5ef;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .navigationToggle {
+    left: 1rem;
+  }
+
+  .traceToggle {
+    right: 1rem;
+  }
+
+  .drawerClose {
+    position: static;
+    margin: 0 0 1.5rem auto;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    z-index: 1;
+    inset: 0;
+    border: 0;
+    background: rgb(15 23 42 / 38%);
+  }
+}

@@ -4,7 +4,7 @@
 > 日期：2026-09-13  
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`not_started`
+> 当前整体状态：`partial`（Phase 0 工程骨架已实现，本地质量门禁通过；容器化验收与 `.env` 卫生门禁待完成）
 
 ## 1. Codex 使用规则
 
@@ -103,7 +103,7 @@ Codex 执行每个阶段时必须：
 
 | 阶段 | 状态 | 核心产物 | 硬门禁 |
 |---|---|---|---|
-| Phase 0：可运行工程骨架 | `not_started` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
+| Phase 0：可运行工程骨架 | `partial` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
 | Phase 1：协议、持久化与 Eval Core | `not_started` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
 | Phase 2：自研 Runtime 与最小 Harness | `not_started` | ModelGateway、AgentLoop、编排、工具/政策、hard runner | 循环可终止/恢复，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
@@ -135,41 +135,41 @@ Phase 0 工程骨架
 
 工程结构：
 
-- [ ] 创建 `pyproject.toml`，锁定 Python 3.12 及后端依赖。
-- [ ] 创建 `src/`、`apps/api/`、`apps/worker/`、`apps/web/` 和 `tests/` 包结构。
-- [ ] 创建 `apps/web/package.json`、`apps/web/package-lock.json`、TypeScript/Vite 配置和 CSS Modules 入口。
+- [x] 创建 `pyproject.toml`，锁定 Python 3.12 及后端依赖。
+- [x] 创建 `src/`、`apps/api/`、`apps/worker/`、`apps/web/` 和 `tests/` 包结构。
+- [x] 创建 `apps/web/package.json`、`apps/web/package-lock.json`、TypeScript/Vite 配置和 CSS Modules 入口。
 - [x] Git 仓库和 `.gitignore` 已存在，`.env` 已被忽略。
-- [ ] 补齐 `.gitignore`：Python/Node 缓存、前端构建目录、测试覆盖率、`evals/reports/`、soak PID/状态文件和本地数据库产物；保留可提交的 `docs/releases/`。
-- [ ] 创建 `.env.example`，只包含变量名和非敏感默认值。
-- [ ] 明确 `src` 为 Python 顶层包并加入 `src/__init__.py`，所有命令统一使用 `python -m src...`。
-- [ ] 配置 pytest、Ruff、mypy、Vitest、ESLint 和 TypeScript typecheck，并在 `docs/runbooks/local-development.md` 固定命令。
-- [ ] 定义开发环境 bootstrap：激活 `commerce`、校验 Python 3.12、执行 `python -m pip install -e ".[dev]"` 和 `npm ci --prefix apps/web`。
+- [x] 补齐 `.gitignore`：Python/Node 缓存、前端构建目录、测试覆盖率、`evals/reports/`、soak PID/状态文件和本地数据库产物；保留可提交的 `docs/releases/`。
+- [x] 创建 `.env.example`，只包含变量名和非敏感默认值。
+- [x] 明确 `src` 为 Python 顶层包并加入 `src/__init__.py`，所有命令统一使用 `python -m src...`。
+- [x] 配置 pytest、Ruff、mypy、Vitest、ESLint 和 TypeScript typecheck，并在 `docs/runbooks/local-development.md` 固定命令。
+- [x] 定义开发环境 bootstrap：激活 `commerce`、校验 Python 3.12、执行 `python -m pip install -e ".[dev]"` 和 `npm ci --prefix apps/web`。
 - [ ] 实现 `scripts/check_secrets.py` 并执行密钥卫生 preflight：`.env` 权限为 `0600`、清除工作区注释中的凭据字面量、Git tracked files/镜像/前端产物扫描通过；扫描结果不得输出密钥值。`.env` 只做权限、变量名和注释策略检查，不把预期存在的密钥值当成仓库泄漏。
-- [ ] 检查 Git 历史是否含凭据；若命中，立即停止、轮换凭据并请求用户决定历史清理方案，不得擅自重写历史。
+- [x] 检查 Git 历史是否含凭据；若命中，立即停止、轮换凭据并请求用户决定历史清理方案，不得擅自重写历史。
 
 应用与前端：
 
-- [ ] 实现 FastAPI 应用工厂和 `/health/live`。
-- [ ] 实现 `/health/ready`，初版检查 DB 连通和 migration 版本。
-- [ ] 实现最小 `conversation.conversations` 表、`ConversationRepository.create/list` 和 `POST/GET /v1/conversations`，专用于可复用的 deployment smoke。
-- [ ] 实现 React 三个空路由：`/`、`/runs/:runId`、`/evals`。
-- [ ] 实现三栏响应式页面壳，小屏将两侧栏收起为 drawer。
-- [ ] Vite 构建产物由 FastAPI 同源托管，任意前端路由刷新均回退到 `index.html`。
+- [x] 实现 FastAPI 应用工厂和 `/health/live`。
+- [x] 实现 `/health/ready`，初版检查 DB 连通和 migration 版本。
+- [x] 实现最小 `conversation.conversations` 表、`ConversationRepository.create/list` 和 `POST/GET /v1/conversations`，专用于可复用的 deployment smoke。
+- [x] 实现 React 三个空路由：`/`、`/runs/:runId`、`/evals`。
+- [x] 实现三栏响应式页面壳，小屏将两侧栏收起为 drawer。
+- [x] Vite 构建产物由 FastAPI 同源托管，任意前端路由刷新均回退到 `index.html`。
 
 数据库与部署：
 
-- [ ] 创建 Alembic 基线 migration，创建七个 PostgreSQL schema 和最小 `conversation.conversations` 表。
-- [ ] migration 中创建 `pg_trgm`，失败时 ready 不通过。
-- [ ] 创建 multi-stage `Dockerfile`：Node 22 builder + Python 3.12 runtime。
-- [ ] 创建 `compose.yaml`，只含 `app` 和 `db` 默认服务。
-- [ ] `app` 限制 384 MiB/1.5 CPU，`db` 限制 256 MiB/0.75 CPU。
-- [ ] DB volume 挂载到 `/var/lib/postgresql`，不使用旧版 data 挂载点。
-- [ ] 宿主只暴露 `127.0.0.1:18080`，PostgreSQL 不映射宿主端口。
-- [ ] 应用使用非 superuser runtime 账号，migration 权限与 runtime 权限分离。
-- [ ] 提供幂等 DB bootstrap：管理账号只负责创建 migration/runtime 角色；migration 使用 `DATABASE_MIGRATION_URL`，应用只使用受限 `DATABASE_URL`。
-- [ ] Compose 的 `db` 服务只用 `POSTGRES_USER/POSTGRES_PASSWORD` 初始化 admin；app 不接收 admin 凭据，只接收 `DATABASE_URL`，migration 命令只接收 `DATABASE_MIGRATION_URL`。
-- [ ] 用 GRANT/默认权限限制 runtime 只能对必要表执行 DML，不能执行 DDL、创建扩展或访问其他 schema。
-- [ ] 固定 PostgreSQL 首版参数：`shared_buffers=64MB`、`work_mem=2MB`、`max_connections=20`、`statement_timeout=10s`。
+- [x] 创建 Alembic 基线 migration，创建七个 PostgreSQL schema 和最小 `conversation.conversations` 表。
+- [x] migration 中创建 `pg_trgm`，失败时 ready 不通过。
+- [x] 创建 multi-stage `Dockerfile`：Node 22 builder + Python 3.12 runtime。
+- [x] 创建 `compose.yaml`，只含 `app` 和 `db` 默认服务。
+- [x] `app` 限制 384 MiB/1.5 CPU，`db` 限制 256 MiB/0.75 CPU。
+- [x] DB volume 挂载到 `/var/lib/postgresql`，不使用旧版 data 挂载点。
+- [x] 宿主只暴露 `127.0.0.1:18080`，PostgreSQL 不映射宿主端口。
+- [x] 应用使用非 superuser runtime 账号，migration 权限与 runtime 权限分离。
+- [x] 提供幂等 DB bootstrap：管理账号只负责创建 migration/runtime 角色；migration 使用 `DATABASE_MIGRATION_URL`，应用只使用受限 `DATABASE_URL`。
+- [x] Compose 的 `db` 服务只用 `POSTGRES_USER/POSTGRES_PASSWORD` 初始化 admin；app 不接收 admin 凭据，只接收 `DATABASE_URL`，migration 命令只接收 `DATABASE_MIGRATION_URL`。
+- [x] 用 GRANT/默认权限限制 runtime 只能对必要表执行 DML，不能执行 DDL、创建扩展或访问其他 schema。
+- [x] 固定 PostgreSQL 首版参数：`shared_buffers=64MB`、`work_mem=2MB`、`max_connections=20`、`statement_timeout=10s`。
 
 ### 5.3 验证命令
 
@@ -859,7 +859,27 @@ format/lint
 - BLOCKED：无 | <具体阻塞与所需输入>
 ```
 
-当前尚无实施执行记录。
+### 2026-09-13 — Phase 0 — 工程骨架与本地质量门禁
+
+- 状态：partial
+- 变更文件：
+  - `pyproject.toml`、`src/`、`apps/`、`tests/`
+  - `infra/migrations/`、`infra/postgres/init/00-create-roles.sh`
+  - `Dockerfile`、`compose.yaml`、`.dockerignore`、`.env.example`
+  - `scripts/check_secrets.py`、`scripts/deployment_smoke.sh`
+  - `docs/runbooks/local-development.md`
+- 执行验证：
+  - `python -m ruff check src apps tests scripts/check_secrets.py` → pass
+  - `python -m mypy src apps` → pass
+  - `python -m pytest tests/unit` → pass（3 passed）
+  - `npm --prefix apps/web run lint && npm --prefix apps/web run typecheck && npm --prefix apps/web test -- --run && npm --prefix apps/web run build` → pass
+  - `python scripts/check_secrets.py --repository . --tracked-only`、`--git-history --redact` → pass
+- 关键证据：
+  - 已构建的 `apps/web/dist/` 由 FastAPI 单测验证可同源服务并覆盖三个 SPA 路由。
+- 剩余 TODO：
+  - 执行完整 Compose build、migration、ready、重启持久化和数据库最小权限验证。
+  - 完成镜像/前端产物密钥扫描与 Phase 0 验收 checklist。
+- BLOCKED：Docker 上游基础镜像下载过程中发生网络连接重置，未得到可验证镜像；`.env` 卫生检查要求该文件权限为 `0600` 且不得存在注释形式的凭据赋值，按项目规则未擅自修改。
 
 ## 15. 停止或请求用户输入的条件
 
