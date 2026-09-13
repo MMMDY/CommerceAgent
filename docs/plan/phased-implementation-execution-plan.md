@@ -902,7 +902,7 @@ format/lint
   - `scripts/run_phase1_contract_tests.sh` → pass（独立 Compose DB；migration/schema 2 项、RunRepository 原子性/回滚/并发/租户隔离 5 项）
   - `python -m pytest tests/unit/test_health.py tests/unit/test_protocols.py tests/unit/test_mutation_safety.py tests/harness/test_loader.py tests/harness/test_hard_eval.py` → pass（12 passed）
 - 关键证据：
-  - 提交：`32595e0`、`893203c`、`6a7329d`、`bad9f67`、`49c05fc`、`39f99aa`、`16dcdf7`
+  - 提交：`32595e0`、`893203c`、`6a7329d`、`bad9f67`、`49c05fc`、`39f99aa`、`16dcdf7`、`f5a83b0`
   - `cases.jsonl` 已验证 300 条，五轨计数为 `150/60/50/20/20`，dataset hash 可复现。
 - 剩余 TODO：
   - 实现 Confirmation/Evaluation/Memory/Knowledge/Audit repository、confirmation/idempotency 原子消费与 outbox lease。
