@@ -876,6 +876,7 @@ format/lint
   - `python scripts/check_secrets.py --repository . --tracked-only`、`--git-history --redact` → pass
 - 关键证据：
   - 已构建的 `apps/web/dist/` 由 FastAPI 单测验证可同源服务并覆盖三个 SPA 路由。
+  - 工程骨架源码提交：`cb1b193`（提交后工作区为 clean）。
 - 剩余 TODO：
   - 执行完整 Compose build、migration、ready、重启持久化和数据库最小权限验证。
   - 完成镜像/前端产物密钥扫描与 Phase 0 验收 checklist。
