@@ -38,7 +38,8 @@
 ## Agent 与 Judge 模型配置
 
 - 主 Agent 和 Rubric LLM Judge 的模型信息、API 地址及 API Key 保存在 `/home/CommerceAgent/.env`，真实调用时必须从该文件读取，不得在代码中硬编码。
-- 主 Agent 使用 `.env` 中的 `MODEL`、`API_BASE`、`API_KEY`。Judge 优先使用 `JUDGE_MODEL`；未配置时按照技术设计复用 `MODEL`，并使用同一 `API_BASE` 和 `API_KEY`。
+- 主 Agent 使用 `.env` 中的 `MODEL`、`API_BASE`、`API_KEY`。Judge 优先使用 `JUDGE_MODEL`、`JUDGE_API_BASE`、`JUDGE_API_KEY`；开发调试时缺失的 Judge 配置可以按照技术设计回退到主模型配置。
+- Release 评测必须显式使用固定且独立于候选 Agent 的 Judge；复用候选模型生成的自评报告只能标记为 provisional，不能作为发布门禁。
 - `.env` 只允许由后端进程读取，不得发送到前端、写入 prompt、trace、日志、评测报告或 Docker 镜像。
 - 不得通过 `cat`、`echo`、调试输出、异常堆栈或 Git diff 展示 `.env` 的值；检查配置时只确认变量是否存在。
 - `.env` 必须保持在 `.gitignore` 中，任何真实密钥、Bearer Token 或确认 token 都不得提交到 Git。

@@ -1259,7 +1259,7 @@ FAQ 和政策库与商品事实库分开：政策适合段落检索，价格、�
 
 - 主 Agent 使用工具调用和中文指令遵循较强的模型；路由、摘要、query rewrite 可使用更便宜的小模型。
 - 模型仅通过自研 `ModelGateway` 接入，具体型号按 `commerce-bench-zh` 实测选择，不把任何模型部署方案绑定为 Agent 运行底座。
-- Judge 使用独立、固定版本且中文评测能力足够的模型；不要随候选 Agent 一起切换 Judge，也不要只依赖候选模型自评。
+- Judge 使用独立、固定版本且中文评测能力足够的模型；不要随候选 Agent 一起切换 Judge，也不要只依赖候选模型自评。开发调试允许在未配置 Judge 时复用主模型，但报告必须标记 `provisional/self_judged=true`，不得作为 release gate。
 - 首版不建议微调主 Agent。先通过强类型工具、确定性工作流、RAG 和 prompt 建立基线；积累足够失败样本后，再考虑微调 intent/slot router 或 reranker。
 - 对同一发布版本固定模型 snapshot、温度、system prompt、工具 schema 和政策版本，避免线上漂移后无法复现。
 - 成本评估按“一次完整会话的模型调用数 × 输入/输出 token × 模型单价”计算，并把评测批跑和重试成本单列；本版没有模拟用户的额外模型费用。
@@ -1289,6 +1289,7 @@ API 只接受渠道认证中间件产生的 actor context，不允许客户端�
 | `POST` | `/v1/conversations/{id}/messages` | 发送用户消息并创建/推进 run | message_id、run_id、run_status、assistant response/waiting action |
 | `GET` | `/v1/runs/{run_id}` | 查询 run 状态 | status、current_step、safe summary |
 | `POST` | `/v1/runs/{run_id}/confirmations` | 明确确认或拒绝 pending mutation | accepted、run_status；请求带 confirmation token |
+| `POST` | `/v1/runs/{run_id}/confirmations/refresh` | 页面刷新丢失明文 token 后重新签发 | 新 confirmation token、原 preview、expires_at；旧 token 立即作废 |
 | `POST` | `/v1/runs/{run_id}/cancel` | 请求取消 | run_status |
 | `GET` | `/v1/runs/{run_id}/events` | 授权调试/审计查询 | 脱敏事件流，不返回隐藏思维链 |
 | `GET` | `/v1/conversations/{id}/stream` | SSE/事件流 | token、tool status、waiting、final events |
@@ -1427,6 +1428,7 @@ sequenceDiagram
 
 - 使用 SSE 接收 `run.status_changed/message.delta/tool.started/tool.finished/confirmation.required/run.finished`；断线后用 `Last-Event-ID` 续传，失败则回读 run。
 - 确认必须用服务端返回的 preview 卡展示操作、商品、金额、渠道和过期时间；按钮点击只调用 confirmation API，不直接调用 commit 工具。
+- confirmation token 只保存在浏览器内存。页面在 `waiting_confirmation` 时刷新后，先回读 run；服务端仅返回 `token_refresh_required + preview`，前端再调用 authenticated refresh endpoint。刷新操作必须验证 actor/tenant/resource/preview/workflow/policy 版本、限流并原子作废旧 token，不得通过 GET、SSE 或 trace 回传旧 token 明文。
 - 页面只保存输入草稿、drawer 开关等 UI 状态；conversation、run、confirmation 和 eval 状态均以服务端为真值。
 - Trace 默认显示脱敏摘要，原始 JSON 需演示管理员权限；页面不展示隐藏思维链、凭据或完整 PII。
 - 连续点击发送/确认由 `client_message_id`/`Idempotency-Key` 去重；请求进行时禁用对应按钮，409 时自动刷新 run。
@@ -1470,7 +1472,7 @@ sequenceDiagram
 | 测试 | pytest + Vitest | 8.x / 3.x | 单元、合同、状态机与前端组件测试 |
 | 打包/运行 | Docker multi-stage + Compose | Dockerfile/Compose v2 规范 | Node builder 产出静态文件，Python runtime 单容器服务 |
 
-依赖在 `pyproject.toml` 和 `package-lock.json` 中锁定确切 patch 版本；表中版本线是升级边界。FastAPI、SQLAlchemy、React 等只解决 HTTP、持久化和 UI，不得侵入或代替自研 AgentLoop、编排、状态机和 EvalHarness。
+依赖在 `pyproject.toml` 和 `apps/web/package-lock.json` 中锁定确切 patch 版本；表中版本线是升级边界。FastAPI、SQLAlchemy、React 等只解决 HTTP、持久化和 UI，不得侵入或代替自研 AgentLoop、编排、状态机和 EvalHarness。
 
 ### 10.3 PostgreSQL 物理映射
 
@@ -1534,13 +1536,20 @@ curl -fsS http://127.0.0.1:18080/health/ready
 | `APP_ENV` | 否 | `demo` | `demo/test/production` |
 | `APP_BIND` | 否 | `0.0.0.0:8000` | 容器内监听；宿主映射仍限 `127.0.0.1:18080` |
 | `DATABASE_URL` | 是 | Compose secret 组装 | 只指向内部 `db:5432` |
+| `DATABASE_MIGRATION_URL` | 是 | Compose secret 组装 | 仅 migration 进程使用，应用 runtime 不得读取 |
+| `POSTGRES_USER` | 否 | `commerce_agent_admin` | 官方镜像初始化账号，仅 DB/bootstrap 使用，不进入 app runtime |
+| `POSTGRES_PASSWORD` | 是 | 部署时生成 | admin 密钥，仅 DB/bootstrap 使用，不进入 app runtime |
+| `POSTGRES_MIGRATION_USER` | 否 | `commerce_agent_migration` | 拥有本项目 schema 的 DDL 权限，不作为应用账号 |
+| `POSTGRES_MIGRATION_PASSWORD` | 是 | 部署时生成 | 仅 migration 进程使用 |
 | `POSTGRES_DB` | 否 | `commerce_agent` | 独立数据库 |
-| `POSTGRES_USER` | 否 | `commerce_agent_runtime` | runtime 非 superuser 角色 |
-| `POSTGRES_PASSWORD` | 是 | 部署时生成 | 不提交到仓库 |
+| `POSTGRES_RUNTIME_USER` | 否 | `commerce_agent_runtime` | runtime 非 superuser 角色 |
+| `POSTGRES_RUNTIME_PASSWORD` | 是 | 部署时生成 | 只用于组装 `DATABASE_URL`，不提交到仓库 |
 | `MODEL` | 否 | 现有 `.env` | Agent 模型 ID |
 | `API_BASE` | 否 | 现有 `.env` | OpenAI-compatible 格式的模型 API 根路径 |
 | `API_KEY` | 是 | 现有 `.env` | 只进入 app 进程，不进前端 |
-| `JUDGE_MODEL` | 否 | 未设置时复用 `MODEL` | 评测批次启动时固定 |
+| `JUDGE_MODEL` | 否 | 开发时未设置可复用 `MODEL` | release 必须显式配置且与候选模型独立 |
+| `JUDGE_API_BASE` | 否 | 未设置时复用 `API_BASE` | Judge 独立端点；只进入后端进程 |
+| `JUDGE_API_KEY` | 是 | 未设置时复用 `API_KEY` | Judge 独立凭据；不得记录或进入前端 |
 | `RUNTIME_MAX_STEPS` | 否 | `6` | 强制终止上限 |
 | `RUN_DEADLINE_SECONDS` | 否 | `60` | 单 run deadline |
 | `EVAL_CONCURRENCY` | 否 | `1` | 当前服务器不得默认超过 1 |
@@ -1591,6 +1600,8 @@ CommerceAgent/
 │   ├── api/                 # FastAPI 入口、SSE、健康检查和静态文件托管
 │   ├── worker/              # 可选的独立评测/索引 worker 入口
 │   └── web/                 # React + TypeScript + Vite 演示页
+│       ├── package.json
+│       ├── package-lock.json
 │       ├── src/pages/       # chat/run/evals 三个页面
 │       ├── src/components/  # 消息、确认卡、Trace、评测组件
 │       ├── src/api/         # fetch、SSE 和 API types
@@ -1617,15 +1628,25 @@ CommerceAgent/
 │   ├── guardrails/          # 输入、输出、权限、注入
 │   ├── telemetry/           # TraceStore、JSON 日志、指标
 │   └── harness/
+│       ├── schema.py        # case、normalized trace 与判分结果协议
+│       ├── loader.py        # JSONL/schema/track/hash 校验
 │       ├── runner.py        # 自研 case 执行与并发控制
 │       ├── fixtures.py      # 隔离 mock 状态装载/回收
+│       ├── run_driver.py    # 驱动真实 Runtime 到终止/等待态
 │       ├── trace_adapter.py # Runtime trace 标准化
 │       ├── hard_eval.py     # 确定性 evaluator
 │       ├── judge.py         # Rubric Judge adapter
 │       └── report.py        # 分层结果与发布 gate
 ├── evals/
-│   ├── commerce_bench_zh/   # case、evidence、rubric 与来源
+│   ├── commerce_bench_zh/   # case、evidence、rubric、质量审核与校准标签
 │   └── reports/             # harness 生成的报告
+├── docs/releases/           # 可提交的脱敏发布摘要与版本证据
+├── scripts/
+│   ├── check_secrets.py
+│   ├── deployment_smoke.sh
+│   ├── soak_monitor.sh
+│   ├── backup_db.sh
+│   └── restore_db.sh
 ├── tests/
 │   ├── unit/
 │   ├── contract/
@@ -1638,7 +1659,6 @@ CommerceAgent/
 ├── Dockerfile             # Node builder + Python runtime
 ├── compose.yaml           # app + 独立 PostgreSQL
 ├── pyproject.toml
-├── package-lock.json
 └── .env.example           # 只含变量名/非敏感默认值
 ```
 

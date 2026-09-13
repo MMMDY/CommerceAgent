@@ -1,6 +1,6 @@
 # 电商客服 Agent 分阶段实施与验收清单
 
-> 版本：v2.1  
+> 版本：v2.2
 > 日期：2026-09-13  
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
@@ -39,7 +39,8 @@ Codex 执行每个阶段时必须：
 4. 执行与变更风险匹配的验证；
 5. 将已验证 TODO 和验收项改为 `[x]`；
 6. 在第 14 章追加执行记录；
-7. 本阶段验收 checklist 未全部勾选时，不得声称阶段完成。
+7. 在可独立验证的垂直切片和阶段验收完成后创建原子 Git commit，并记录 commit SHA；
+8. 本阶段验收 checklist 未全部勾选时，不得声称阶段完成。
 
 ### 1.4 必须保持的约束
 
@@ -60,20 +61,24 @@ Codex 执行每个阶段时必须：
 |---|---|
 | 后端 | Python 3.12.x、FastAPI 0.116.x、Uvicorn 0.35.x、Pydantic 2.11.x |
 | 持久化 | PostgreSQL 18.6、SQLAlchemy Core 2.0.x、psycopg 3.2.x、Alembic 1.16.x |
-| 模型调用 | 自研 ModelGateway + HTTPX 0.28.x，使用 `.env` 中 `MODEL/API_BASE/API_KEY` |
+| 模型调用 | 自研 ModelGateway + HTTPX 0.28.x；Agent/Judge 均从项目 `.env` 读取各自模型、端点和密钥 |
 | 前端 | React 19.1.x、TypeScript 5.8.x、Vite 7.x、CSS Modules、原生 fetch/EventSource |
+| 质量工具 | pytest + Ruff + mypy；Vitest + ESLint + `tsc --noEmit` |
 | 运行 | Docker multi-stage build + Docker Compose |
 | 服务拓扑 | `app` 384 MiB + `db` 256 MiB，总上限 640 MiB |
 | 端口 | 宿主 `127.0.0.1:18080` 映射容器 `8000`；DB 仅内部网络 |
 | RAG | PostgreSQL metadata filter + `pg_trgm` + 应用内排序；dense retrieval 默认关闭 |
-| 评测 | 自研 EvalHarness；硬判分 + Rubric Judge；默认并发 1 |
+| 评测 | 自研 EvalHarness；硬判分 + Rubric Judge；默认并发 1；release 使用独立 Judge |
 
-实现时将确切 patch 版本锁定到 `pyproject.toml` 和 `package-lock.json`。未经用户请求，不在实施过程中重新选型。
+实现时将确切 patch 版本锁定到 `pyproject.toml` 和 `apps/web/package-lock.json`。未经用户请求，不在实施过程中重新选型。
 
 ## 3. 已有输入与初始状态
 
 ### 3.1 已具备资产
 
+- [x] Git 仓库已初始化，默认分支为 `main`，已有可追溯提交基线。
+- [x] Conda 环境 `commerce` 已创建，Python 版本为 3.12.x。
+- [x] Agent/Judge 模型配置保存在项目根目录 `.env`，且 `.env` 已被 Git 忽略；这里只确认配置位置，不记录配置值。
 - [x] 技术设计文档：[`docs/plan/feasibility-and-implementation-plan.md`](./feasibility-and-implementation-plan.md)。
 - [x] 目标参考图：[`docs/plan/image.png`](./image.png)。
 - [x] 300 条静态 case：[`evals/commerce_bench_zh/cases.jsonl`](../../evals/commerce_bench_zh/cases.jsonl)。
@@ -98,19 +103,19 @@ Codex 执行每个阶段时必须：
 
 | 阶段 | 状态 | 核心产物 | 硬门禁 |
 |---|---|---|---|
-| Phase 0：可运行工程骨架 | `not_started` | app/web/db/Compose 最小闭环 | 目标机可启动、ready、重启不丢数据 |
-| Phase 1：协议与持久化 | `not_started` | 核心 schema、migration、repository | 原子 checkpoint、事件顺序和租户隔离测试通过 |
-| Phase 2：自研 Runtime | `not_started` | ModelGateway、AgentLoop、编排、工具/政策 | 循环可终止、可恢复、无非法副作用 |
+| Phase 0：可运行工程骨架 | `not_started` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
+| Phase 1：协议、持久化与 Eval Core | `not_started` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
+| Phase 2：自研 Runtime 与最小 Harness | `not_started` | ModelGateway、AgentLoop、编排、工具/政策、hard runner | 循环可终止/恢复，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
-| Phase 5：评测 Harness 与面板 | `not_started` | 300-case、hard eval、Judge、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
+| Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
 | Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
 | Phase 7：全链路验收 | `not_started` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
 
 ```text
 Phase 0 工程骨架
-  → Phase 1 协议/持久化
-  → Phase 2 Runtime
+  → Phase 1 协议/持久化/Eval Core
+  → Phase 2 Runtime/最小 Harness
   → Phase 3 只读业务/UI
   → Phase 4 事务 workflow/UI
   → Phase 5 EvalHarness/UI
@@ -132,22 +137,28 @@ Phase 0 工程骨架
 
 - [ ] 创建 `pyproject.toml`，锁定 Python 3.12 及后端依赖。
 - [ ] 创建 `src/`、`apps/api/`、`apps/worker/`、`apps/web/` 和 `tests/` 包结构。
-- [ ] 创建 `apps/web/package.json`、`package-lock.json`、TypeScript/Vite 配置和 CSS Modules 入口。
-- [ ] 创建 `.gitignore`，忽略 `.env`、构建产物、缓存、报告和本地密钥。
+- [ ] 创建 `apps/web/package.json`、`apps/web/package-lock.json`、TypeScript/Vite 配置和 CSS Modules 入口。
+- [x] Git 仓库和 `.gitignore` 已存在，`.env` 已被忽略。
+- [ ] 补齐 `.gitignore`：Python/Node 缓存、前端构建目录、测试覆盖率、`evals/reports/`、soak PID/状态文件和本地数据库产物；保留可提交的 `docs/releases/`。
 - [ ] 创建 `.env.example`，只包含变量名和非敏感默认值。
 - [ ] 明确 `src` 为 Python 顶层包并加入 `src/__init__.py`，所有命令统一使用 `python -m src...`。
+- [ ] 配置 pytest、Ruff、mypy、Vitest、ESLint 和 TypeScript typecheck，并在 `docs/runbooks/local-development.md` 固定命令。
+- [ ] 定义开发环境 bootstrap：激活 `commerce`、校验 Python 3.12、执行 `python -m pip install -e ".[dev]"` 和 `npm ci --prefix apps/web`。
+- [ ] 实现 `scripts/check_secrets.py` 并执行密钥卫生 preflight：`.env` 权限为 `0600`、清除工作区注释中的凭据字面量、Git tracked files/镜像/前端产物扫描通过；扫描结果不得输出密钥值。`.env` 只做权限、变量名和注释策略检查，不把预期存在的密钥值当成仓库泄漏。
+- [ ] 检查 Git 历史是否含凭据；若命中，立即停止、轮换凭据并请求用户决定历史清理方案，不得擅自重写历史。
 
 应用与前端：
 
 - [ ] 实现 FastAPI 应用工厂和 `/health/live`。
 - [ ] 实现 `/health/ready`，初版检查 DB 连通和 migration 版本。
+- [ ] 实现最小 `conversation.conversations` 表、`ConversationRepository.create/list` 和 `POST/GET /v1/conversations`，专用于可复用的 deployment smoke。
 - [ ] 实现 React 三个空路由：`/`、`/runs/:runId`、`/evals`。
 - [ ] 实现三栏响应式页面壳，小屏将两侧栏收起为 drawer。
 - [ ] Vite 构建产物由 FastAPI 同源托管，任意前端路由刷新均回退到 `index.html`。
 
 数据库与部署：
 
-- [ ] 创建 Alembic 基线 migration，创建七个 PostgreSQL schema。
+- [ ] 创建 Alembic 基线 migration，创建七个 PostgreSQL schema 和最小 `conversation.conversations` 表。
 - [ ] migration 中创建 `pg_trgm`，失败时 ready 不通过。
 - [ ] 创建 multi-stage `Dockerfile`：Node 22 builder + Python 3.12 runtime。
 - [ ] 创建 `compose.yaml`，只含 `app` 和 `db` 默认服务。
@@ -155,22 +166,39 @@ Phase 0 工程骨架
 - [ ] DB volume 挂载到 `/var/lib/postgresql`，不使用旧版 data 挂载点。
 - [ ] 宿主只暴露 `127.0.0.1:18080`，PostgreSQL 不映射宿主端口。
 - [ ] 应用使用非 superuser runtime 账号，migration 权限与 runtime 权限分离。
+- [ ] 提供幂等 DB bootstrap：管理账号只负责创建 migration/runtime 角色；migration 使用 `DATABASE_MIGRATION_URL`，应用只使用受限 `DATABASE_URL`。
+- [ ] Compose 的 `db` 服务只用 `POSTGRES_USER/POSTGRES_PASSWORD` 初始化 admin；app 不接收 admin 凭据，只接收 `DATABASE_URL`，migration 命令只接收 `DATABASE_MIGRATION_URL`。
+- [ ] 用 GRANT/默认权限限制 runtime 只能对必要表执行 DML，不能执行 DDL、创建扩展或访问其他 schema。
 - [ ] 固定 PostgreSQL 首版参数：`shared_buffers=64MB`、`work_mem=2MB`、`max_connections=20`、`statement_timeout=10s`。
 
 ### 5.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
+python --version
+python -m pip install -e ".[dev]"
+npm ci --prefix apps/web
+python -m ruff check src tests
+python -m mypy src
+npm --prefix apps/web run lint
+npm --prefix apps/web run typecheck
+npm --prefix apps/web test -- --run
+npm --prefix apps/web run build
+python scripts/check_secrets.py --repository . --tracked-only --env-policy .env --frontend apps/web/dist
+python scripts/check_secrets.py --git-history --redact
 docker compose config --quiet
 docker compose build
+python scripts/check_secrets.py --compose-service app
 docker compose up -d
 docker compose ps
 curl -fsS http://127.0.0.1:18080/health/live
 curl -fsS http://127.0.0.1:18080/health/ready
-npm --prefix apps/web test -- --run
-npm --prefix apps/web run build
+scripts/deployment_smoke.sh
 ```
 
-另执行一次持久化验证：写入一条测试记录，执行 `docker compose restart`，确认数据仍存在。不使用 `docker compose down -v`。
+`scripts/deployment_smoke.sh` 必须通过 `POST /v1/conversations` 创建带唯一 `client_request_id` 的 smoke conversation，执行 `docker compose restart`，再通过 `GET /v1/conversations` 确认同一记录仍存在；重复执行不得产生重复记录。不使用 `docker compose down -v`。
 
 ### 5.4 验收 checklist
 
@@ -179,7 +207,10 @@ npm --prefix apps/web run build
 - [ ] `/`、`/runs/demo`、`/evals` 都能打开空页壳。
 - [ ] 容器总内存上限为 640 MiB，没有 Redis/Node/Nginx 运行容器。
 - [ ] DB 重启后数据保留，卷挂载点正确。
+- [ ] migration 账号可前向迁移；runtime 账号不能执行 DDL、创建扩展或跨 schema 越权访问。
 - [ ] 镜像、前端 bundle 和日志中不含 `.env` 密钥。
+- [ ] `commerce` 环境和前后端依赖可由 bootstrap 命令重复建立，lint/typecheck 均通过。
+- [ ] Phase 0 完成后创建原子 commit，并在执行记录中保存 commit SHA 和 clean worktree 证据。
 - [ ] Phase 0 所有 TODO 均已勾选。
 
 ### 5.5 阶段产物
@@ -187,14 +218,16 @@ npm --prefix apps/web run build
 - `pyproject.toml`、`apps/web/package.json`、`apps/web/package-lock.json`
 - `Dockerfile`、`compose.yaml`、`.env.example`
 - FastAPI/React 最小应用
-- Alembic 基线 migration
+- Alembic 基线 migration、DB 角色 bootstrap、最小 conversation slice
+- `scripts/deployment_smoke.sh`
+- `scripts/check_secrets.py`
 - `docs/runbooks/local-development.md`
 
-## 6. Phase 1：核心协议与持久化
+## 6. Phase 1：核心协议、持久化与 Eval Core
 
 ### 6.1 目标与依赖
 
-目标：实现 Runtime、workflow 和 EvalHarness 共用的强类型协议，并将数据库逻辑 Schema 落成 PostgreSQL migration 和 repository。
+目标：实现 Runtime、workflow 和 EvalHarness 共用的强类型协议，将数据库逻辑 Schema 落成 PostgreSQL migration/repository，并前置不依赖 Runtime 的 case loader 与 hard evaluator，解除后续阶段的评测循环依赖。
 
 依赖：Phase 0 验收完成。
 
@@ -211,7 +244,7 @@ npm --prefix apps/web run build
 
 数据库：
 
-- [ ] 为 `conversation` 实现 conversations/messages migration。
+- [ ] 在 Phase 0 的 conversations 表上补齐索引/约束，并实现 messages migration。
 - [ ] 为 `runtime` 实现 runs/checkpoints/events/model/tool/confirmation/idempotency/outbox migration。
 - [ ] 为 `domain/memory/knowledge/evaluation/audit` 实现对应 migration。
 - [ ] 将逻辑 `VARCHAR(36)/TIMESTAMP/JSON` 映射为 `uuid/timestamptz/jsonb`。
@@ -228,14 +261,26 @@ Repository 与事务：
 - [ ] 实现 outbox 租约，使用 `FOR UPDATE SKIP LOCKED`。
 - [ ] 实现 schema migration 版本检查和 checkpoint state migration 接口。
 
+Eval Core：
+
+- [ ] 实现 `EvalCase`、`ExpectedOutcome`、`NormalizedTrace` 和 hard-eval result schema。
+- [ ] 实现 `CaseLoader`：JSONL/schema、track/ID 过滤、总数/分轨计数和 dataset hash；禁止运行时静默修复 case。
+- [ ] 实现五个 track 的纯函数 hard evaluator，并用独立 golden pass/fail fixtures 验证判分器自身。
+- [ ] 对 300-case 生成语义审核清单：逐项检查 intent/route、60 个 workflow 参数、50 个 RAG 证据可推出性、20 个 clarification 槽位和 20 个 guardrail forbidden tools。
+- [ ] 将审核结论、修订原因、数据版本和冻结 hash 写入 `evals/commerce_bench_zh/quality-audit.md`；数据修订必须单独 commit。
+
 ### 6.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit/test_protocols.py
 python -m pytest tests/contract/test_migrations.py
 python -m pytest tests/contract/test_repositories.py
 python -m pytest tests/recovery/test_checkpoint_atomicity.py
 python -m pytest tests/security/test_tenant_isolation.py
+python -m pytest tests/harness/test_loader.py tests/harness/test_hard_eval.py tests/harness/test_dataset_contract.py
 ```
 
 ### 6.4 验收 checklist
@@ -247,6 +292,10 @@ python -m pytest tests/security/test_tenant_isolation.py
 - [ ] 同一 run 并发更新只有一个成功，另一个收到版本冲突。
 - [ ] 跨租户 repository 读写返回空/拒绝，不泄露资源是否存在。
 - [ ] confirmation/idempotency 唯一约束能阻止重放。
+- [ ] CaseLoader 恰好加载 300 条，五个 track 为 150/60/50/20/20，schema/ID/hash 异常均 fail closed。
+- [ ] golden pass/fail fixtures 被 hard evaluator 100% 正确判断。
+- [ ] 300-case 语义审核有逐轨证据和冻结 hash，不能只以 JSON 可解析代替质量审核。
+- [ ] Phase 1 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 1 所有 TODO 和验证命令均完成。
 
 ### 6.5 阶段产物
@@ -254,14 +303,16 @@ python -m pytest tests/security/test_tenant_isolation.py
 - `src/orchestration/context.py`、`step.py`、`events.py`
 - `src/agent/decision.py`、`src/tools/spec.py`
 - `src/storage/` repository 实现
+- `src/harness/schema.py`、`loader.py`、`hard_eval.py`
 - `infra/migrations/` 全量基础 migration
-- 协议、migration、repository、事务和租户隔离测试
+- `evals/commerce_bench_zh/quality-audit.md`
+- 协议、migration、repository、事务、租户隔离和 Eval Core 测试
 
-## 7. Phase 2：自研 Agent Runtime
+## 7. Phase 2：自研 Agent Runtime 与最小 Harness
 
 ### 7.1 目标与依赖
 
-目标：用 fake model/fake tools 先完整验证自研执行语义，再连接真实模型 API。
+目标：用 fake model/fake tools 先完整验证自研执行语义，再连接真实模型 API，并交付能按 track 驱动 Runtime 的最小 hard-eval Harness，供 Phase 3/4 使用。
 
 依赖：Phase 1 验收完成。
 
@@ -271,6 +322,7 @@ ModelGateway：
 
 - [ ] 实现 `.env` 配置读取，不记录 `API_KEY`。
 - [ ] 实现 OpenAI-compatible HTTP 请求、timeout、限次重试和错误归一化。
+- [ ] 固定 Agent model、temperature、token limit、timeout、retry 和 prompt hash，并把配置指纹写入 run/model invocation。
 - [ ] 实现结构化 Decision 解析；不合法输出只修复一次。
 - [ ] 实现 `model_invocations` 脱敏记录，不保存隐藏思维链。
 - [ ] 提供 deterministic fake model，覆盖所有 Decision 分支。
@@ -296,13 +348,26 @@ Loop 与编排：
 - [ ] 实现 `TraceStore`，只保留结构化决定和脱敏 observation。
 - [ ] Runtime 注册完成后扩展 `/health/ready`：检查 Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不调用模型。
 
+最小 Harness：
+
+- [ ] 实现 `FixtureManager`、`RunDriver` 和 `TraceAdapter`，每个 case 使用隔离 mock 状态并输出 Phase 1 定义的 `NormalizedTrace`。
+- [ ] 实现 `src.harness.runner` 的 `--track/--case-id/--judge off/--timeout` 参数、失败隔离、取消和确定性 JSON 报告。
+- [ ] 最小 Harness 只执行 hard eval，不包含 Judge、批次持久化或 Web 面板；这些能力在 Phase 5 完成。
+- [ ] 添加 opt-in live ModelGateway smoke：仅检查真实端点认证、结构化 Decision、错误归一化和延迟，不输出 request header、密钥或完整 payload。
+
 ### 7.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit/agent tests/unit/orchestration tests/unit/tools tests/unit/policies
 python -m pytest tests/workflow/test_readonly_loop.py
 python -m pytest tests/recovery/test_run_resume.py tests/recovery/test_run_concurrency.py
 python -m pytest tests/security/test_decision_validation.py tests/security/test_tool_scope.py
+python -m pytest tests/harness/test_fixtures.py tests/harness/test_run_driver.py tests/harness/test_trace_adapter.py
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track intent_route --judge off
+RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gateway_live.py
 ```
 
 ### 7.4 验收 checklist
@@ -315,6 +380,9 @@ python -m pytest tests/security/test_decision_validation.py tests/security/test_
 - [ ] 旧 run 在 workflow v2 发布后仍使用创建时锁定的 v1。
 - [ ] Trace 不含密钥、确认 token 明文、完整 PII 或隐藏思维链。
 - [ ] fake model/fake tools 可跑通 complete、wait_user、wait_human、fail 和 cancel 路径。
+- [ ] 最小 Harness 能筛选 case/track、隔离 fixture、驱动 Runtime 并生成 hard-eval JSON。
+- [ ] 真实模型 smoke 返回合法 Decision 并记录脱敏的模型版本与延迟；未执行时 Phase 2 不标记完成。
+- [ ] Phase 2 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 2 所有 TODO 和验证命令均完成。
 
 ### 7.5 阶段产物
@@ -323,7 +391,9 @@ python -m pytest tests/security/test_decision_validation.py tests/security/test_
 - `src/tools/registry.py`、`executor.py`
 - `src/policies/engine.py`
 - `src/telemetry/trace.py`
+- `src/harness/fixtures.py`、`run_driver.py`、`trace_adapter.py`、`runner.py`
 - Runtime 单元、workflow、recovery 和 security 测试
+- 最小 hard-eval Harness 报告与脱敏 live ModelGateway smoke 证据
 
 ## 8. Phase 3：只读业务、API 与对话页
 
@@ -357,7 +427,7 @@ Memory：
 
 API 与 SSE：
 
-- [ ] 实现 `POST/GET /v1/conversations`、`GET/POST /v1/conversations/{id}/messages`。
+- [ ] 扩展 Phase 0 的 `POST/GET /v1/conversations` 为完整 actor/分页合同，并实现 `GET/POST /v1/conversations/{id}/messages`。
 - [ ] 实现 `GET /v1/runs/{run_id}` 和脱敏 `GET /v1/runs/{run_id}/events`。
 - [ ] 实现 SSE 事件 ID、heartbeat、`Last-Event-ID` 续传和 run 回读恢复。
 - [ ] message API 使用 `client_message_id`/`Idempotency-Key` 去重。
@@ -376,11 +446,16 @@ API 与 SSE：
 ### 8.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit/rag tests/contract/tools/test_readonly_tools.py
 python -m pytest tests/workflow/test_faq.py tests/workflow/test_product_compare.py tests/workflow/test_order_query.py
 python -m pytest tests/security/test_resource_owner.py tests/security/test_rag_acl.py
 npm --prefix apps/web test -- --run
 npm --prefix apps/web run build
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track intent_route --judge off
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track rag_grounding --judge off
 ```
 
 ### 8.4 验收 checklist
@@ -395,6 +470,8 @@ npm --prefix apps/web run build
 - [ ] 长期 memory 仅包含允许的稳定偏好，过期/删除后不再进入 `PromptView`。
 - [ ] 150 个 intent case 的 intent/route exact match ≥ 90%。
 - [ ] 50 个 RAG case 必要事实覆盖率 ≥ 90%，evidence ID 精度 ≥ 95%。
+- [ ] Phase 3 指标由 Phase 2 的最小 Harness 生成，报告记录 dataset/runtime/prompt hash。
+- [ ] Phase 3 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 3 所有 TODO 和验证命令均完成。
 
 ### 8.5 阶段产物
@@ -444,15 +521,23 @@ API 与前端：
 - [ ] 请求进行中禁用重复点击，但安全性仍由服务端 token/幂等保证。
 - [ ] 409 时重新读取 run/preview，前端不覆盖服务端状态。
 - [ ] 页面不显示 confirmation token 原文，只作为请求数据保存于内存。
+- [ ] 实现 `POST /v1/runs/{run_id}/confirmations/refresh`：仅在 authenticated owner 的同一 run/preview/version 仍有效时原子作废旧 token 并签发新 token，且进行限流和审计。
+- [ ] `GET /v1/runs/{run_id}` 在等待确认时只返回 `token_refresh_required + preview`，不得通过 GET、SSE、trace 或日志返回旧 token 明文。
+- [ ] 前端刷新后回读 run；若需要 token，则显式调用 refresh endpoint 后恢复确认卡，不把 GET 变成有副作用操作。
 
 ### 9.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit/policies tests/unit/confirmation tests/unit/idempotency
 python -m pytest tests/workflow/test_cancel.py tests/workflow/test_address.py tests/workflow/test_refund.py tests/workflow/test_return.py tests/workflow/test_exchange.py
 python -m pytest tests/recovery/test_commit_unknown.py tests/recovery/test_confirmation_replay.py
 python -m pytest tests/security/test_mutation_authorization.py tests/security/test_confirmation_binding.py
 npm --prefix apps/web test -- --run
+python -m pytest tests/contract/test_confirmation_refresh.py
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track tool_workflow --judge off
 ```
 
 ### 9.4 验收 checklist
@@ -465,7 +550,10 @@ npm --prefix apps/web test -- --run
 - [ ] 工具 trace 可串起 prepare/confirm/commit/verify，不包含 token 明文或完整地址。
 - [ ] 前端反复点击确认不会产生重复 commit。
 - [ ] 前端完整展示金额/渠道/影响/过期时间，用户拒绝后不再推进。
+- [ ] 在 `waiting_confirmation` 刷新页面后能安全获得新 token 并继续；旧 token、跨 actor 刷新和过期 preview 均被拒绝。
 - [ ] 60 个 workflow case 的 next-action/tool/args 全字段通过率 ≥ 85%，缺槽追问率 ≥ 90%。
+- [ ] Phase 4 指标由最小 Harness 生成，不依赖 Phase 5 的 Judge/面板。
+- [ ] Phase 4 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 4 所有 TODO 和验证命令均完成。
 
 ### 9.5 阶段产物
@@ -476,45 +564,35 @@ npm --prefix apps/web test -- --run
 - Web preview/确认/拒绝/状态未知 UI
 - mutation workflow、recovery 和 security 测试
 
-## 10. Phase 5：自研 EvalHarness、Judge 与评测面板
+## 10. Phase 5：EvalHarness 完整化、Judge 与评测面板
 
 ### 10.1 目标与依赖
 
-目标：用固定 300-case 驱动真实 Runtime，对不可协商的安全/工具字段做硬判分，对自然语言质量做 Rubric Judge，并在 Web 页定位失败。
+目标：在 Phase 1/2 的 Eval Core 与最小 Harness 上增加批次持久化、Rubric Judge、三次重复运行、聚合报告和 Web 失败定位。
 
 依赖：Phase 4 验收完成。
 
 ### 10.2 实现 TODO checklist
 
-Harness 主链路：
+Harness 完整化：
 
-- [ ] 将现有 300-case schema 和 track 计数校验纳入 Harness/CI，不在运行时静默修复 case。
-- [ ] 实现 `CaseLoader`：JSONL/schema、track/ID 过滤、dataset hash。
-- [ ] 实现 `FixtureManager`：每 case 独立 transaction/schema 或可证明的等价隔离。
-- [ ] 实现 `RunDriver`：注入固定 messages/context，驱动至终态/等待态。
-- [ ] 实现 `TraceAdapter`：标准化 decision/tool/event/evidence/final state。
+- [ ] 复用 Phase 1 的 CaseLoader/hard evaluator 和 Phase 2 的 FixtureManager/RunDriver/TraceAdapter，不创建第二套评测路径。
 - [ ] 实现并发上限 1、case timeout、取消、失败隔离和按 case 重跑。
 - [ ] 实现 eval run/case result 持久化，同一配置可回放。
-
-硬判分：
-
-- [ ] 实现 `intent_route`：intent/route exact match。
-- [ ] 实现 `tool_workflow`：next action/tool/args/required slots/confirmation。
-- [ ] 实现 `rag_grounding`：required facts/evidence IDs。
-- [ ] 实现 `scripted_clarification`：ask/required slot/问题语义。
-- [ ] 实现 `guardrail_handoff`：outcome/reason/forbidden tools/must-not-claim-success。
 - [ ] 任意 owner、confirmation、forbidden tool、关键参数或虚假成功违规直接 hard fail。
 
 Rubric Judge：
 
-- [ ] 实现 Judge adapter，读取 `JUDGE_MODEL`，未配置时复用 `MODEL`。
+- [ ] 实现 Judge adapter，支持 `.env` 中独立的 `JUDGE_MODEL/JUDGE_API_BASE/JUDGE_API_KEY`；开发模式缺失时可回退 Agent 配置，但报告必须标记 `provisional/self_judged=true`。
+- [ ] Release 模式强制要求显式、固定且独立于候选 Agent 的 `JUDGE_MODEL`；不满足时整体状态为 `blocked/incomplete`，不得形成 release gate。
 - [ ] 仅对 150 个非纯 intent case 调用 Judge。
 - [ ] 将 case/回复/证据/trace 包裹为不可信评分数据，抵抗评测注入。
 - [ ] 校验 Judge JSON schema，不合法只重试一次。
 - [ ] Runner 自行根据 rubric 重算 pass，不直接采信 Judge 布尔值。
 - [ ] `final_pass = hard_pass AND judge_pass`；Judge 错误/缺失不默认通过。
 - [ ] 保存 model/prompt/rubric/input hash、分维度分数、critical violations 和 token/延迟。
-- [ ] 固定 30 条分层校准 case 与基准标签，输出 Judge pass/fail 一致率和逐维度偏差。
+- [ ] 固定 30 条分层校准 case 与独立基准标签，记录标签来源、审核时间、rubric 版本和不可变 hash；不得由被校准的 Judge 生成自身金标。
+- [ ] 输出 Judge pass/fail 一致率、逐维度偏差、边界 case 和冲突清单。
 
 报告与前端：
 
@@ -528,6 +606,9 @@ Rubric Judge：
 ### 10.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/harness/test_loader.py tests/harness/test_fixtures.py tests/harness/test_trace_adapter.py
 python -m pytest tests/harness/test_hard_eval.py tests/harness/test_judge.py tests/harness/test_report.py
 python -m pytest tests/security/test_judge_injection.py
@@ -548,15 +629,18 @@ npm --prefix apps/web test -- --run
 - [ ] 30 条校准集上 Judge pass/fail 一致率 ≥ 90%，校准报告固定 Judge/prompt/rubric 版本。
 - [ ] 同一 case 连跑 3 次全部成功的比例 ≥ 80%，报告同时保留首跑指标。
 - [ ] Judge 不可用时仍产生完整 hard report，整体状态明确标记 incomplete。
+- [ ] Release report 的 `self_judged=false` 且 Judge 配置完整；开发回退报告不能被标为 release pass。
 - [ ] `/evals` 能定位到单个失败 case，hard fail 和 Judge fail 可分开过滤。
 - [ ] 报告固定 dataset/model/prompt/workflow/policy/tool/rubric 版本和 hash。
 - [ ] 300-case 各轨指标达到上位设计第 11.2 节门槛。
+- [ ] Phase 5 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 5 所有 TODO 和验证命令均完成。
 
 ### 10.5 阶段产物
 
 - `src/harness/loader.py`、`fixtures.py`、`runner.py`、`trace_adapter.py`
 - `src/harness/hard_eval.py`、`judge.py`、`report.py`
+- `evals/commerce_bench_zh/calibration_labels.jsonl`、校准报告与标签 provenance/hash
 - eval API 和 `apps/web` 评测面板
 - `evals/reports/<eval_run_id>/report.json`、`report.md`
 - Harness/Judge/注入/前端测试
@@ -579,6 +663,7 @@ npm --prefix apps/web test -- --run
 - [ ] 实现输入/存储/模型/trace/输出五个边界的 PII 脱敏。
 - [ ] 实现 `security_audit_events` append-only 写入和独立查询权限。
 - [ ] 禁止前端 source map/环境注入泄露 API key、DB URL 和内部 ID。
+- [ ] 实现仓库、镜像、前端 bundle、日志和报告的 secret scan；只报告变量名/文件位置，不输出匹配到的 secret 值。
 - [ ] `DEMO_MODE=false` 时完全禁用 demo actor/scenario API。
 
 恢复与降级：
@@ -588,6 +673,7 @@ npm --prefix apps/web test -- --run
 - [ ] 实现 waiting/confirmation 过期任务和 outbox dead-letter 处理。
 - [ ] 实现优雅关闭：停止接收新 run，完成/中断当前安全 step，保存 checkpoint。
 - [ ] 实现 PostgreSQL 备份/恢复脚本和恢复演练文档。
+- [ ] 实现 `scripts/soak_monitor.sh`：非交互后台运行、记录 PID/开始结束时间、定期采集容器资源和错误计数、支持 status/stop，并原子写结果。
 
 可观测与资源：
 
@@ -601,6 +687,9 @@ npm --prefix apps/web test -- --run
 ### 11.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/security
 python -m pytest tests/recovery
 python -m pytest tests/contract/test_error_envelopes.py tests/contract/test_redaction.py
@@ -608,6 +697,8 @@ python -m pytest tests/deployment/test_backup_restore.py tests/deployment/test_g
 docker compose up -d --build
 docker compose ps
 docker stats --no-stream
+scripts/soak_monitor.sh --duration 10m --interval 30s --output evals/reports/soak-smoke.json --detach
+scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 ```
 
 ### 11.4 验收 checklist
@@ -621,6 +712,8 @@ docker stats --no-stream
 - [ ] app + DB 稳态使用不突破容器上限，不依赖 swap 才能处理单会话。
 - [ ] 模型/Judge 不可用时的降级回复不产生 mutation。
 - [ ] P0 安全和恢复断言全部通过。
+- [ ] soak monitor 的短时自测可启动、查询、停止并生成无密钥的完整 JSON；24 小时 gate 留在 Phase 7。
+- [ ] Phase 6 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 6 所有 TODO 和验证命令均完成。
 
 ### 11.5 阶段产物
@@ -628,6 +721,7 @@ docker stats --no-stream
 - `src/guardrails/`、`src/telemetry/`、安全审计 API
 - 过期/outbox/降级/优雅关闭任务
 - `scripts/backup_db.sh`、`scripts/restore_db.sh`
+- `scripts/soak_monitor.sh`
 - `docs/runbooks/failure-recovery.md`、`backup-restore.md`、`security.md`
 - security/recovery/deployment 测试报告
 
@@ -642,20 +736,28 @@ docker stats --no-stream
 ### 12.2 实现 TODO checklist
 
 - [ ] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本。
+- [ ] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名。
 - [ ] 从空数据库执行全新部署，不依赖开发机残留状态。
 - [ ] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试。
-- [ ] 执行固定 300-case hard + Judge release run。
+- [ ] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过。
 - [ ] 生成按 track 分层的正式 JSON/Markdown 报告。
 - [ ] 从 Web 完整演示 FAQ/商品对比、订单物流、退款确认和失败 case 定位。
 - [ ] 执行 Compose 停止/重启，验证会话、run、checkpoint、评测报告不丢失。
 - [ ] 执行备份/恢复演练，记录恢复点和验证查询。
-- [ ] 通过非交互式 soak 脚本记录连续 24 小时运行中的内存、磁盘、错误率和外部 API 失败；Codex 不用阻塞式 `sleep` 占用会话。
+- [ ] 使用 `scripts/soak_monitor.sh` 非交互记录连续 24 小时运行中的内存、磁盘、错误率和外部 API 失败；通过 status/产物回读，不用阻塞式 `sleep` 占用会话。
 - [ ] 完成 `README.md`、本地启动、评测、数据库、故障恢复和已知限制文档。
 - [ ] 明确标记当前产物为 `internal beta / mock business data`，不声称可执行生产退款。
+- [ ] 提交最终脱敏证据和文档，记录证据 commit SHA；候选源码 commit 与证据 commit 分开记录，必要时创建 annotated internal-beta tag。
+- [ ] 将可提交的脱敏发布摘要写入 `docs/releases/<release_id>/`；`evals/reports/` 中的原始运行产物保持忽略，不使用 `git add -f` 提交。
 
 ### 12.3 验证命令
 
 ```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate commerce
+test "$CONDA_DEFAULT_ENV" = commerce
+test -z "$(git status --porcelain)"
+git rev-parse HEAD
 python -m pytest
 npm --prefix apps/web test -- --run
 npm --prefix apps/web run build
@@ -663,8 +765,12 @@ docker compose config --quiet
 docker compose up -d --build
 curl -fsS http://127.0.0.1:18080/health/live
 curl -fsS http://127.0.0.1:18080/health/ready
-python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --repetitions 3 --mode release
+scripts/soak_monitor.sh --duration 24h --interval 60s --output evals/reports/release-soak.json --detach
+scripts/soak_monitor.sh --status --output evals/reports/release-soak.json
 ```
+
+24 小时 soak 启动命令应立即返回；只有后续 `--status` 显示 `completed`、采样窗口达到 24 小时且产物校验通过后，才能勾选对应验收项。
 
 ### 12.4 最终验收 checklist
 
@@ -686,6 +792,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --jud
 - [ ] intent/route ≥ 90%，workflow 全字段 ≥ 85%，RAG 事实覆盖 ≥ 90%，evidence 精度 ≥ 95%。
 - [ ] clarification required slot 命中 ≥ 85%，forbidden tool = 0。
 - [ ] Judge 平均分 ≥ 3.0/4.0，critical dimension 低于 2 的 case 不通过。
+- [ ] 三次全通过比例 ≥ 80%，Judge 校准一致率 ≥ 90%，且 release report 为 `self_judged=false`、`status=complete`。
 
 工程：
 
@@ -693,6 +800,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --jud
 - [ ] app + DB 上限 640 MiB，默认无额外 worker/Redis/本地模型。
 - [ ] DB 重启、应用重启和备份恢复后核心数据完整。
 - [ ] 所有报告可追溯到代码、模型、prompt、workflow、policy、tool、dataset 和 rubric 版本。
+- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，24 小时 soak 产物完整。
 - [ ] 所有 Phase 0～7 验收 checklist 已勾选。
 
 ### 12.5 交付产物
@@ -702,6 +810,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --jud
 - React 对话工作台、run Trace 和评测面板
 - 300-case 正式评测报告和脱敏失败详情
 - 启动、评测、安全、故障恢复、备份和已知限制文档
+- `docs/releases/<release_id>/` 脱敏发布摘要、候选源码 SHA、证据 SHA 和 internal-beta tag（如创建）
 
 ## 13. 全局测试矩阵
 
@@ -727,7 +836,7 @@ format/lint
   → recovery/security
   → frontend build/test
   → 300-case hard evaluation
-  → optional Judge batch
+  → Judge batch（普通变更可选，release 必跑且必须独立）
   → report artifacts
 ```
 
@@ -759,6 +868,7 @@ Codex 应在以下情况停止扩张实现，完成仍可安全完成的检查�
 - 需要将 Demo 从 `127.0.0.1` 暴露到公网；
 - 需要调用真实订单/退款 API 并产生真实副作用；
 - 需要新的密钥、租户凭据、业务政策或真实数据授权；
+- Release 缺少独立 Judge 配置或缺少独立的 30 条校准基准标签；此时可以继续开发/hard eval，但 release 状态只能是 `blocked/incomplete`；
 - 需要删除未明确属于本项目的数据、Docker volume 或其他服务容器；
 - 技术设计与当前用户指令冲突，且不同选择会显著改变结果；
 - 完成原型后要将 `internal beta` 提升为生产自动执行系统。
