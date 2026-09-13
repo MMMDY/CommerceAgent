@@ -235,21 +235,21 @@ scripts/deployment_smoke.sh
 
 协议：
 
-- [ ] 实现 `RunContext`、`SlotValue`、`PromptView` 和 `StatePatch`。
-- [ ] 实现 `Decision`、`Step`、`StepResult` 和严格枚举。
-- [ ] 实现 `ToolSpec`、`ToolContext`、`ToolResult`、`ToolError`。
-- [ ] 实现 `DomainEvent`、`EventEnvelope` 和事件 payload 版本。
+- [x] 实现 `RunContext`、`SlotValue`、`PromptView` 和 `StatePatch`。
+- [x] 实现 `Decision`、`Step`、`StepResult` 和严格枚举。
+- [x] 实现 `ToolSpec`、`ToolContext`、`ToolResult`、`ToolError`。
+- [x] 实现 `DomainEvent`、`EventEnvelope` 和事件 payload 版本。
 - [ ] 实现 workflow/policy 版本引用和不可变定义。
-- [ ] 对所有协议禁止未知字段，对外 JSON 含 `schema_version`。
+- [x] 对所有协议禁止未知字段，对外 JSON 含 `schema_version`。
 
 数据库：
 
-- [ ] 在 Phase 0 的 conversations 表上补齐索引/约束，并实现 messages migration。
+- [x] 在 Phase 0 的 conversations 表上补齐索引/约束，并实现 messages migration。
 - [ ] 为 `runtime` 实现 runs/checkpoints/events/model/tool/confirmation/idempotency/outbox migration。
 - [ ] 为 `domain/memory/knowledge/evaluation/audit` 实现对应 migration。
 - [ ] 将逻辑 `VARCHAR(36)/TIMESTAMP/JSON` 映射为 `uuid/timestamptz/jsonb`。
 - [ ] 实现主键、外键、唯一约束、部分唯一索引和租户索引。
-- [ ] 实现同一 conversation 最多一个非终态 run 的数据库约束。
+- [x] 实现同一 conversation 最多一个非终态 run 的数据库约束。
 
 Repository 与事务：
 
@@ -263,9 +263,9 @@ Repository 与事务：
 
 Eval Core：
 
-- [ ] 实现 `EvalCase`、`ExpectedOutcome`、`NormalizedTrace` 和 hard-eval result schema。
-- [ ] 实现 `CaseLoader`：JSONL/schema、track/ID 过滤、总数/分轨计数和 dataset hash；禁止运行时静默修复 case。
-- [ ] 实现五个 track 的纯函数 hard evaluator，并用独立 golden pass/fail fixtures 验证判分器自身。
+- [x] 实现 `EvalCase`、`ExpectedOutcome`、`NormalizedTrace` 和 hard-eval result schema。
+- [x] 实现 `CaseLoader`：JSONL/schema、track/ID 过滤、总数/分轨计数和 dataset hash；禁止运行时静默修复 case。
+- [x] 实现五个 track 的纯函数 hard evaluator，并用独立 golden pass/fail fixtures 验证判分器自身。
 - [ ] 对 300-case 生成语义审核清单：逐项检查 intent/route、60 个 workflow 参数、50 个 RAG 证据可推出性、20 个 clarification 槽位和 20 个 guardrail forbidden tools。
 - [ ] 将审核结论、修订原因、数据版本和冻结 hash 写入 `evals/commerce_bench_zh/quality-audit.md`；数据修订必须单独 commit。
 
