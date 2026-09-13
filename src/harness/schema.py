@@ -51,6 +51,8 @@ class NormalizedTrace(Contract):
     case_id: str
     route: str | None = None
     intent: str | None = None
+    next_action: str | None = None
+    args: dict[str, Any] = Field(default_factory=dict)
     tools_called: tuple[str, ...] = ()
     evidence_ids: tuple[str, ...] = ()
     response: str = ""
