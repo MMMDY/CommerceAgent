@@ -266,8 +266,8 @@ Eval Core：
 - [x] 实现 `EvalCase`、`ExpectedOutcome`、`NormalizedTrace` 和 hard-eval result schema。
 - [x] 实现 `CaseLoader`：JSONL/schema、track/ID 过滤、总数/分轨计数和 dataset hash；禁止运行时静默修复 case。
 - [x] 实现五个 track 的纯函数 hard evaluator，并用独立 golden pass/fail fixtures 验证判分器自身。
-- [ ] 对 300-case 生成语义审核清单：逐项检查 intent/route、60 个 workflow 参数、50 个 RAG 证据可推出性、20 个 clarification 槽位和 20 个 guardrail forbidden tools。
-- [ ] 将审核结论、修订原因、数据版本和冻结 hash 写入 `evals/commerce_bench_zh/quality-audit.md`；数据修订必须单独 commit。
+- [x] 对 300-case 生成语义审核清单：逐项检查 intent/route、60 个 workflow 参数、50 个 RAG 证据可推出性、20 个 clarification 槽位和 20 个 guardrail forbidden tools。
+- [x] 将审核结论、修订原因、数据版本和冻结 hash 写入 `evals/commerce_bench_zh/quality-audit.md`；数据修订必须单独 commit。
 
 ### 6.3 验证命令
 
