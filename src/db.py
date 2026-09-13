@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_settings
 
-PHASE0_ALEMBIC_REVISION = "20260913_0001"
+EXPECTED_ALEMBIC_REVISION = "20260913_0004"
 
 
 @lru_cache(maxsize=1)
@@ -38,6 +38,6 @@ def check_ready() -> tuple[bool, str]:
     except (RuntimeError, SQLAlchemyError):
         return False, "database_or_migration_unavailable"
 
-    if revision != PHASE0_ALEMBIC_REVISION:
+    if revision != EXPECTED_ALEMBIC_REVISION:
         return False, "migration_not_at_expected_revision"
     return True, "ready"

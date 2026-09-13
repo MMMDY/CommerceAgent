@@ -104,7 +104,7 @@ Codex 执行每个阶段时必须：
 | 阶段 | 状态 | 核心产物 | 硬门禁 |
 |---|---|---|---|
 | Phase 0：可运行工程骨架 | `completed` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
-| Phase 1：协议、持久化与 Eval Core | `not_started` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
+| Phase 1：协议、持久化与 Eval Core | `in_progress` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
 | Phase 2：自研 Runtime 与最小 Harness | `not_started` | ModelGateway、AgentLoop、编排、工具/政策、hard runner | 循环可终止/恢复，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
@@ -245,10 +245,10 @@ scripts/deployment_smoke.sh
 数据库：
 
 - [x] 在 Phase 0 的 conversations 表上补齐索引/约束，并实现 messages migration。
-- [ ] 为 `runtime` 实现 runs/checkpoints/events/model/tool/confirmation/idempotency/outbox migration。
-- [ ] 为 `domain/memory/knowledge/evaluation/audit` 实现对应 migration。
-- [ ] 将逻辑 `VARCHAR(36)/TIMESTAMP/JSON` 映射为 `uuid/timestamptz/jsonb`。
-- [ ] 实现主键、外键、唯一约束、部分唯一索引和租户索引。
+- [x] 为 `runtime` 实现 runs/checkpoints/events/model/tool/confirmation/idempotency/outbox migration。
+- [x] 为 `domain/memory/knowledge/evaluation/audit` 实现对应 migration。
+- [x] 将逻辑 `VARCHAR(36)/TIMESTAMP/JSON` 映射为 `uuid/timestamptz/jsonb`。
+- [x] 实现主键、外键、唯一约束、部分唯一索引和租户索引。
 - [x] 实现同一 conversation 最多一个非终态 run 的数据库约束。
 
 Repository 与事务：
@@ -256,7 +256,7 @@ Repository 与事务：
 - [ ] 实现 `RunRepository`、`ConversationRepository`、`ConfirmationRepository`、`EvaluationRepository`。
 - [ ] 实现 `MemoryRepository`、`KnowledgeRepository`、`AuditRepository`，并保持接口与物理 SQL 分离。
 - [ ] 所有读写入口强制要求 `tenant_id`，禁止业务层拼接 SQL。
-- [ ] 实现“事件 + checkpoint + run 行版本”的单事务提交。
+- [x] 实现“事件 + checkpoint + run 行版本”的单事务提交。
 - [ ] 实现 confirmation token 条件消费与 idempotency record 同事务。
 - [ ] 实现 outbox 租约，使用 `FOR UPDATE SKIP LOCKED`。
 - [ ] 实现 schema migration 版本检查和 checkpoint state migration 接口。
@@ -899,11 +899,13 @@ format/lint
   - Phase 1 协议、loader、hard evaluator、mutation safety 单测 → pass（当前累计 12 项相关测试）
   - `python -m mypy src`、`python -m ruff check` → pass
   - 真实 PostgreSQL 空库前向迁移至 `20260913_0004`，七个 schema 共 19 张表已核验
+  - `scripts/run_phase1_contract_tests.sh` → pass（独立 Compose DB；migration/schema 2 项、RunRepository 原子性/回滚/并发/租户隔离 5 项）
+  - `python -m pytest tests/unit/test_health.py tests/unit/test_protocols.py tests/unit/test_mutation_safety.py tests/harness/test_loader.py tests/harness/test_hard_eval.py` → pass（12 passed）
 - 关键证据：
   - 提交：`32595e0`、`893203c`、`6a7329d`、`bad9f67`、`49c05fc`、`39f99aa`、`16dcdf7`
   - `cases.jsonl` 已验证 300 条，五轨计数为 `150/60/50/20/20`，dataset hash 可复现。
 - 剩余 TODO：
-  - 实现 SQL repository、checkpoint 原子事务、租户隔离与 outbox lease。
+  - 实现 Confirmation/Evaluation/Memory/Knowledge/Audit repository、confirmation/idempotency 原子消费与 outbox lease。
   - 完成 300-case 语义审核清单和 `quality-audit.md`。
   - 完成 Phase 1 全部验证命令后再标记阶段完成。
 - BLOCKED：无。
