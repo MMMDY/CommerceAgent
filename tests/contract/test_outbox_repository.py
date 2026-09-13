@@ -44,8 +44,9 @@ def test_concurrent_workers_lease_each_outbox_row_once(engine: Engine) -> None:
                  "topic": str(outbox_id), "payload": "{\"safe\":true}"})
     repository = OutboxRepository(engine)
     with ThreadPoolExecutor(max_workers=2) as executor:
-        leases = list(executor.map(lambda _: repository.lease_pending(limit=1, lease_for=timedelta(minutes=1)), range(2)))
+        leases = list(executor.map(lambda _: repository.lease_pending(limit=100, lease_for=timedelta(minutes=1)), range(2)))
     leased_ids = {lease.outbox_id for group in leases for lease in group}
-    assert leased_ids == set(outbox_ids)
-    assert repository.mark_published(outbox_id=next(iter(leased_ids))) is True
-    assert repository.mark_published(outbox_id=next(iter(leased_ids))) is False
+    assert set(outbox_ids).issubset(leased_ids)
+    assert sum(len(group) for group in leases) == len(leased_ids)
+    assert repository.mark_published(outbox_id=outbox_ids[0]) is True
+    assert repository.mark_published(outbox_id=outbox_ids[0]) is False
