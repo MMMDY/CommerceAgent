@@ -54,7 +54,7 @@ def git_lines(arguments: list[str]) -> list[str]:
 def inspect_files(paths: list[Path]) -> list[str]:
     findings: list[str] = []
     for path in paths:
-        if not path.is_file() or path.name == ".env":
+        if not path.is_file() or path.name in {".env", ".env.example"}:
             continue
         try:
             content = path.read_text(encoding="utf-8", errors="replace")
@@ -89,7 +89,17 @@ def inspect_env_policy(path: Path) -> list[str]:
 
 def inspect_history() -> list[str]:
     completed = subprocess.run(
-        ["git", "log", "-p", "--all", "--no-ext-diff"],
+        [
+            "git",
+            "log",
+            "-p",
+            "--all",
+            "--no-ext-diff",
+            "--",
+            ".",
+            ":(exclude).env",
+            ":(exclude).env.example",
+        ],
         check=False,
         capture_output=True,
         text=True,
