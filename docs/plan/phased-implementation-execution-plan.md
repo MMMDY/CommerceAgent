@@ -1,0 +1,766 @@
+# 电商客服 Agent 分阶段实施与验收清单
+
+> 版本：v2.1  
+> 日期：2026-09-13  
+> 执行者：Codex  
+> 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
+> 当前整体状态：`not_started`
+
+## 1. Codex 使用规则
+
+本文档是实施时的顺序清单和阶段门禁，不再承担架构论证。数据模型、工具目录、状态机和 API 合同以上位设计为准；本文档负责说明“按什么顺序实现、如何验证、什么时候算完成”。
+
+### 1.1 指令优先级
+
+1. 当前用户明确指令；
+2. [技术设计方案](./feasibility-and-implementation-plan.md)；
+3. 本实施清单；
+4. 代码内注释和历史实现。
+
+下层内容与上层冲突时，不得静默偏离；应先修正设计/实施文档，再修改代码。
+
+### 1.2 Checklist 语义
+
+- `[ ]`：未完成，不得从文字描述推断为已完成。
+- `[x]`：已实现且有对应的可重复验证证据。
+- 阻塞项在对应 TODO 下新增 `BLOCKED:`，写明缺少的用户决策、外部系统或数据。
+- 只有代码、测试、文档和运行验证都完成后，才能勾选阶段验收项。
+- 不得为了让 checklist 变绿而放宽测试、修改评测金标或删除安全断言。
+- TODO 的完成证据至少包含“变更文件 + 验证命令 + 结果/产物路径”；只创建空文件不算完成。
+- 若用户在当前执行回合明确要求不运行测试，只更新文档或代码，不勾选依赖运行验证的项目；验证命令保留给后续执行。
+
+### 1.3 阶段推进协议
+
+Codex 执行每个阶段时必须：
+
+1. 先读取本阶段的目标、依赖、TODO 和验收标准；
+2. 检查工作区现状，保留用户已有变更；
+3. 按垂直切片实现，一个切片同时包含协议、持久化、运行路径、trace 和测试；
+4. 执行与变更风险匹配的验证；
+5. 将已验证 TODO 和验收项改为 `[x]`；
+6. 在第 14 章追加执行记录；
+7. 本阶段验收 checklist 未全部勾选时，不得声称阶段完成。
+
+### 1.4 必须保持的约束
+
+- AgentLoop、OrchestrationEngine、状态机、ToolRegistry、PolicyEngine 和 EvalHarness 全部由本项目实现。
+- 代码主目录只使用 `src/`，不创建旧的包目录名。
+- 模型只产生结构化 Decision，不直接执行工具、SQL、shell 或任意 HTTP。
+- 只读请求进入受限 AgentLoop；写操作进入确定性状态机。
+- 写操作必须经过 `authenticate → prepare → confirm → commit → verify`。
+- 未经 `StateVerified` 不得向用户声称写操作成功。
+- 评测固定使用 300 个静态 case，不调用 user simulator。
+- Rubric Judge 不得覆盖 hard fail。
+- 不在 prompt、trace、前端 bundle、日志或版本库中写入密钥和未脱敏 PII。
+- 当前服务器不部署本地 LLM、Redis、独立前端容器或重型监控套件。
+
+## 2. 固定技术基线
+
+| 区域 | 固定决定 |
+|---|---|
+| 后端 | Python 3.12.x、FastAPI 0.116.x、Uvicorn 0.35.x、Pydantic 2.11.x |
+| 持久化 | PostgreSQL 18.6、SQLAlchemy Core 2.0.x、psycopg 3.2.x、Alembic 1.16.x |
+| 模型调用 | 自研 ModelGateway + HTTPX 0.28.x，使用 `.env` 中 `MODEL/API_BASE/API_KEY` |
+| 前端 | React 19.1.x、TypeScript 5.8.x、Vite 7.x、CSS Modules、原生 fetch/EventSource |
+| 运行 | Docker multi-stage build + Docker Compose |
+| 服务拓扑 | `app` 384 MiB + `db` 256 MiB，总上限 640 MiB |
+| 端口 | 宿主 `127.0.0.1:18080` 映射容器 `8000`；DB 仅内部网络 |
+| RAG | PostgreSQL metadata filter + `pg_trgm` + 应用内排序；dense retrieval 默认关闭 |
+| 评测 | 自研 EvalHarness；硬判分 + Rubric Judge；默认并发 1 |
+
+实现时将确切 patch 版本锁定到 `pyproject.toml` 和 `package-lock.json`。未经用户请求，不在实施过程中重新选型。
+
+## 3. 已有输入与初始状态
+
+### 3.1 已具备资产
+
+- [x] 技术设计文档：[`docs/plan/feasibility-and-implementation-plan.md`](./feasibility-and-implementation-plan.md)。
+- [x] 目标参考图：[`docs/plan/image.png`](./image.png)。
+- [x] 300 条静态 case：[`evals/commerce_bench_zh/cases.jsonl`](../../evals/commerce_bench_zh/cases.jsonl)。
+- [x] 13 条知识证据：[`evals/commerce_bench_zh/knowledge.jsonl`](../../evals/commerce_bench_zh/knowledge.jsonl)。
+- [x] Rubric 配置：[`evals/commerce_bench_zh/rubrics.json`](../../evals/commerce_bench_zh/rubrics.json)。
+- [x] Judge prompt：[`evals/commerce_bench_zh/JUDGE_PROMPT.md`](../../evals/commerce_bench_zh/JUDGE_PROMPT.md)。
+- [x] 数据说明、来源与许可：[`README.md`](../../evals/commerce_bench_zh/README.md)、[`SOURCES.md`](../../evals/commerce_bench_zh/SOURCES.md)、[`LICENSE-DATA.md`](../../evals/commerce_bench_zh/LICENSE-DATA.md)。
+- [x] 固定来源下载和校验脚本：[`scripts/download_eval_sources.py`](../../scripts/download_eval_sources.py)。
+- [x] 确定性数据构建脚本：[`scripts/build_static_eval_dataset.py`](../../scripts/build_static_eval_dataset.py)。
+
+以上 `[x]` 仅表示文件资产已存在，不表示 Runtime、Harness 或 300-case baseline 已完成。
+
+### 3.2 尚未实现
+
+- [ ] Python 项目骨架、API、Runtime 和 workflow。
+- [ ] React 页面、SSE client 和评测面板。
+- [ ] PostgreSQL migration 和 repository。
+- [ ] Dockerfile、Compose 和应用级 deployment smoke。
+- [ ] 300-case 实际 Agent baseline 与 Judge 报告。
+
+## 4. 阶段总览
+
+| 阶段 | 状态 | 核心产物 | 硬门禁 |
+|---|---|---|---|
+| Phase 0：可运行工程骨架 | `not_started` | app/web/db/Compose 最小闭环 | 目标机可启动、ready、重启不丢数据 |
+| Phase 1：协议与持久化 | `not_started` | 核心 schema、migration、repository | 原子 checkpoint、事件顺序和租户隔离测试通过 |
+| Phase 2：自研 Runtime | `not_started` | ModelGateway、AgentLoop、编排、工具/政策 | 循环可终止、可恢复、无非法副作用 |
+| Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
+| Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
+| Phase 5：评测 Harness 与面板 | `not_started` | 300-case、hard eval、Judge、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
+| Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
+| Phase 7：全链路验收 | `not_started` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
+
+```text
+Phase 0 工程骨架
+  → Phase 1 协议/持久化
+  → Phase 2 Runtime
+  → Phase 3 只读业务/UI
+  → Phase 4 事务 workflow/UI
+  → Phase 5 EvalHarness/UI
+  → Phase 6 安全与运维
+  → Phase 7 发布验收
+```
+
+## 5. Phase 0：可运行工程骨架
+
+### 5.1 目标与依赖
+
+目标：不实现 Agent 业务逻辑，先建立可构建、可迁移、可启动、可打开页面的最小闭环。
+
+依赖：无。
+
+### 5.2 实现 TODO checklist
+
+工程结构：
+
+- [ ] 创建 `pyproject.toml`，锁定 Python 3.12 及后端依赖。
+- [ ] 创建 `src/`、`apps/api/`、`apps/worker/`、`apps/web/` 和 `tests/` 包结构。
+- [ ] 创建 `apps/web/package.json`、`package-lock.json`、TypeScript/Vite 配置和 CSS Modules 入口。
+- [ ] 创建 `.gitignore`，忽略 `.env`、构建产物、缓存、报告和本地密钥。
+- [ ] 创建 `.env.example`，只包含变量名和非敏感默认值。
+- [ ] 明确 `src` 为 Python 顶层包并加入 `src/__init__.py`，所有命令统一使用 `python -m src...`。
+
+应用与前端：
+
+- [ ] 实现 FastAPI 应用工厂和 `/health/live`。
+- [ ] 实现 `/health/ready`，初版检查 DB 连通和 migration 版本。
+- [ ] 实现 React 三个空路由：`/`、`/runs/:runId`、`/evals`。
+- [ ] 实现三栏响应式页面壳，小屏将两侧栏收起为 drawer。
+- [ ] Vite 构建产物由 FastAPI 同源托管，任意前端路由刷新均回退到 `index.html`。
+
+数据库与部署：
+
+- [ ] 创建 Alembic 基线 migration，创建七个 PostgreSQL schema。
+- [ ] migration 中创建 `pg_trgm`，失败时 ready 不通过。
+- [ ] 创建 multi-stage `Dockerfile`：Node 22 builder + Python 3.12 runtime。
+- [ ] 创建 `compose.yaml`，只含 `app` 和 `db` 默认服务。
+- [ ] `app` 限制 384 MiB/1.5 CPU，`db` 限制 256 MiB/0.75 CPU。
+- [ ] DB volume 挂载到 `/var/lib/postgresql`，不使用旧版 data 挂载点。
+- [ ] 宿主只暴露 `127.0.0.1:18080`，PostgreSQL 不映射宿主端口。
+- [ ] 应用使用非 superuser runtime 账号，migration 权限与 runtime 权限分离。
+- [ ] 固定 PostgreSQL 首版参数：`shared_buffers=64MB`、`work_mem=2MB`、`max_connections=20`、`statement_timeout=10s`。
+
+### 5.3 验证命令
+
+```bash
+docker compose config --quiet
+docker compose build
+docker compose up -d
+docker compose ps
+curl -fsS http://127.0.0.1:18080/health/live
+curl -fsS http://127.0.0.1:18080/health/ready
+npm --prefix apps/web test -- --run
+npm --prefix apps/web run build
+```
+
+另执行一次持久化验证：写入一条测试记录，执行 `docker compose restart`，确认数据仍存在。不使用 `docker compose down -v`。
+
+### 5.4 验收 checklist
+
+- [ ] 新环境只需 `.env` 即可构建和启动。
+- [ ] `live` 和 `ready` 返回 200，DB/migration 失效时 `ready` 不返回假成功。
+- [ ] `/`、`/runs/demo`、`/evals` 都能打开空页壳。
+- [ ] 容器总内存上限为 640 MiB，没有 Redis/Node/Nginx 运行容器。
+- [ ] DB 重启后数据保留，卷挂载点正确。
+- [ ] 镜像、前端 bundle 和日志中不含 `.env` 密钥。
+- [ ] Phase 0 所有 TODO 均已勾选。
+
+### 5.5 阶段产物
+
+- `pyproject.toml`、`apps/web/package.json`、`apps/web/package-lock.json`
+- `Dockerfile`、`compose.yaml`、`.env.example`
+- FastAPI/React 最小应用
+- Alembic 基线 migration
+- `docs/runbooks/local-development.md`
+
+## 6. Phase 1：核心协议与持久化
+
+### 6.1 目标与依赖
+
+目标：实现 Runtime、workflow 和 EvalHarness 共用的强类型协议，并将数据库逻辑 Schema 落成 PostgreSQL migration 和 repository。
+
+依赖：Phase 0 验收完成。
+
+### 6.2 实现 TODO checklist
+
+协议：
+
+- [ ] 实现 `RunContext`、`SlotValue`、`PromptView` 和 `StatePatch`。
+- [ ] 实现 `Decision`、`Step`、`StepResult` 和严格枚举。
+- [ ] 实现 `ToolSpec`、`ToolContext`、`ToolResult`、`ToolError`。
+- [ ] 实现 `DomainEvent`、`EventEnvelope` 和事件 payload 版本。
+- [ ] 实现 workflow/policy 版本引用和不可变定义。
+- [ ] 对所有协议禁止未知字段，对外 JSON 含 `schema_version`。
+
+数据库：
+
+- [ ] 为 `conversation` 实现 conversations/messages migration。
+- [ ] 为 `runtime` 实现 runs/checkpoints/events/model/tool/confirmation/idempotency/outbox migration。
+- [ ] 为 `domain/memory/knowledge/evaluation/audit` 实现对应 migration。
+- [ ] 将逻辑 `VARCHAR(36)/TIMESTAMP/JSON` 映射为 `uuid/timestamptz/jsonb`。
+- [ ] 实现主键、外键、唯一约束、部分唯一索引和租户索引。
+- [ ] 实现同一 conversation 最多一个非终态 run 的数据库约束。
+
+Repository 与事务：
+
+- [ ] 实现 `RunRepository`、`ConversationRepository`、`ConfirmationRepository`、`EvaluationRepository`。
+- [ ] 实现 `MemoryRepository`、`KnowledgeRepository`、`AuditRepository`，并保持接口与物理 SQL 分离。
+- [ ] 所有读写入口强制要求 `tenant_id`，禁止业务层拼接 SQL。
+- [ ] 实现“事件 + checkpoint + run 行版本”的单事务提交。
+- [ ] 实现 confirmation token 条件消费与 idempotency record 同事务。
+- [ ] 实现 outbox 租约，使用 `FOR UPDATE SKIP LOCKED`。
+- [ ] 实现 schema migration 版本检查和 checkpoint state migration 接口。
+
+### 6.3 验证命令
+
+```bash
+python -m pytest tests/unit/test_protocols.py
+python -m pytest tests/contract/test_migrations.py
+python -m pytest tests/contract/test_repositories.py
+python -m pytest tests/recovery/test_checkpoint_atomicity.py
+python -m pytest tests/security/test_tenant_isolation.py
+```
+
+### 6.4 验收 checklist
+
+- [ ] 所有核心对象可序列化/反序列化，非法枚举和未知字段被拒绝。
+- [ ] 全新 DB 可从空库前向迁移到 head。
+- [ ] 所有表在正确 PostgreSQL schema 中，约束/索引与设计文档一致。
+- [ ] checkpoint 事务在任何一步失败时不产生部分状态。
+- [ ] 同一 run 并发更新只有一个成功，另一个收到版本冲突。
+- [ ] 跨租户 repository 读写返回空/拒绝，不泄露资源是否存在。
+- [ ] confirmation/idempotency 唯一约束能阻止重放。
+- [ ] Phase 1 所有 TODO 和验证命令均完成。
+
+### 6.5 阶段产物
+
+- `src/orchestration/context.py`、`step.py`、`events.py`
+- `src/agent/decision.py`、`src/tools/spec.py`
+- `src/storage/` repository 实现
+- `infra/migrations/` 全量基础 migration
+- 协议、migration、repository、事务和租户隔离测试
+
+## 7. Phase 2：自研 Agent Runtime
+
+### 7.1 目标与依赖
+
+目标：用 fake model/fake tools 先完整验证自研执行语义，再连接真实模型 API。
+
+依赖：Phase 1 验收完成。
+
+### 7.2 实现 TODO checklist
+
+ModelGateway：
+
+- [ ] 实现 `.env` 配置读取，不记录 `API_KEY`。
+- [ ] 实现 OpenAI-compatible HTTP 请求、timeout、限次重试和错误归一化。
+- [ ] 实现结构化 Decision 解析；不合法输出只修复一次。
+- [ ] 实现 `model_invocations` 脱敏记录，不保存隐藏思维链。
+- [ ] 提供 deterministic fake model，覆盖所有 Decision 分支。
+
+工具与政策：
+
+- [ ] 实现不可变 `ToolRegistry`，按 `name + version` 注册。
+- [ ] 实现 `DecisionValidator`：schema、route、step、allowlist、risk、system-field 检查。
+- [ ] 实现 `ToolExecutor`：owner/scope/policy/deadline、adapter 调用、结果 schema、脱敏、trace。
+- [ ] 实现版本化 `PolicyEngine`，只允许白名单事实/操作符。
+- [ ] 实现错误分类：只读可重试一次，commit 状态未知不重试。
+- [ ] 提供 fake tool adapter，覆盖成功、拒绝、超时、冲突和 unknown。
+
+Loop 与编排：
+
+- [ ] 实现 `AgentLoop.run_step()`，一步最多一个动作。
+- [ ] 固化 `build_prompt → request_decision → validate → execute → observe → reduce → checkpoint → terminate` 顺序。
+- [ ] 实现 `max_steps=6`、deadline、token budget 和 cancellation checks。
+- [ ] 实现 `OrchestrationEngine.create/advance/resume/cancel`。
+- [ ] 实现 `WorkflowRegistry` 和版本锁定，已发布版本不可原地修改。
+- [ ] 实现设计文档第 5.1 节全部 run 状态和非法跳转拒绝。
+- [ ] 实现每 step 原子 checkpoint、崩溃恢复和事件回放。
+- [ ] 实现 `TraceStore`，只保留结构化决定和脱敏 observation。
+- [ ] Runtime 注册完成后扩展 `/health/ready`：检查 Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不调用模型。
+
+### 7.3 验证命令
+
+```bash
+python -m pytest tests/unit/agent tests/unit/orchestration tests/unit/tools tests/unit/policies
+python -m pytest tests/workflow/test_readonly_loop.py
+python -m pytest tests/recovery/test_run_resume.py tests/recovery/test_run_concurrency.py
+python -m pytest tests/security/test_decision_validation.py tests/security/test_tool_scope.py
+```
+
+### 7.4 验收 checklist
+
+- [ ] 非 JSON、未知 type、未知 tool、多工具和系统字段入参均在副作用前被拒绝。
+- [ ] 一个 step 最多执行一个工具，达到步数/deadline 后必定终止。
+- [ ] 只读超时最多重试一次，写操作 unknown 绝不盲目重试。
+- [ ] 同一 run 并发 advance 只有一个成功。
+- [ ] 在 checkpoint 前/后注入崩溃，恢复后事件和工具副作用不重复。
+- [ ] 旧 run 在 workflow v2 发布后仍使用创建时锁定的 v1。
+- [ ] Trace 不含密钥、确认 token 明文、完整 PII 或隐藏思维链。
+- [ ] fake model/fake tools 可跑通 complete、wait_user、wait_human、fail 和 cancel 路径。
+- [ ] Phase 2 所有 TODO 和验证命令均完成。
+
+### 7.5 阶段产物
+
+- `src/models/`、`src/agent/`、`src/orchestration/`
+- `src/tools/registry.py`、`executor.py`
+- `src/policies/engine.py`
+- `src/telemetry/trace.py`
+- Runtime 单元、workflow、recovery 和 security 测试
+
+## 8. Phase 3：只读业务、API 与对话页
+
+### 8.1 目标与依赖
+
+目标：完成 FAQ/政策、商品详情/对比、订单/物流查询三类可展示的只读链路。
+
+依赖：Phase 2 验收完成。
+
+### 8.2 实现 TODO checklist
+
+业务与 RAG：
+
+- [ ] 实现 intent/risk router，输出 intent、route、confidence、required slots。
+- [ ] 实现 slot extractor，订单号/商品号在 owner 校验前只是 unverified。
+- [ ] 实现 `knowledge.jsonl` 确定性 ingestion 和版本 hash。
+- [ ] 实现 tenant/access/effective-time/status metadata 强过滤。
+- [ ] 实现 Unicode 2/3-gram + `pg_trgm` 候选检索和应用内排序。
+- [ ] 实现 `EvidencePack`、evidence ID 引用和证据不足拒答。
+- [ ] 实现 `search_catalog/get_product_detail/compare_products/retrieve_knowledge`。
+- [ ] 实现 `list_my_orders/get_order_status/get_delivery_tracking/get_payment_status/get_refund_status`。
+- [ ] 提供固定 catalog/order/delivery/payment/refund fixtures，不依赖真实业务 API。
+- [ ] 价格、库存、订单和退款状态只来自结构化工具，不从 RAG 旧快照返回。
+
+Memory：
+
+- [ ] 实现会话短期 memory：已认证主体、目标、槽位、证据/工具结果引用和未完成 workflow 指针。
+- [ ] 实现受控长期 memory：只保存经授权的稳定偏好，包含来源、时间、TTL、置信度和覆盖关系。
+- [ ] 禁止将订单、支付、退款状态或模型推测写入长期 memory。
+- [ ] 实现长期 memory 的更新、冲突处理、过期过滤和用户删除接口。
+
+API 与 SSE：
+
+- [ ] 实现 `POST/GET /v1/conversations`、`GET/POST /v1/conversations/{id}/messages`。
+- [ ] 实现 `GET /v1/runs/{run_id}` 和脱敏 `GET /v1/runs/{run_id}/events`。
+- [ ] 实现 SSE 事件 ID、heartbeat、`Last-Event-ID` 续传和 run 回读恢复。
+- [ ] message API 使用 `client_message_id`/`Idempotency-Key` 去重。
+- [ ] 只从服务端 demo actor allowlist 注入 actor/tenant/scope。
+- [ ] 实现 `GET /internal/v1/demo/scenarios`；`DEMO_MODE=false` 时路由不可用。
+
+前端：
+
+- [ ] 实现左侧会话/预置场景、中间消息流、右侧 Trace 抽屉。
+- [ ] 实现消息发送、流式状态、错误重试、取消与空状态。
+- [ ] 实现 evidence 引用卡，显示来源、版本和脱敏片段。
+- [ ] 实现 run 状态条和事件时间线，不显示隐藏思维链。
+- [ ] 页面刷新后重新读取 conversation/messages/run，不把本地状态当业务真值。
+- [ ] 在 960 px 以下将左右栏收起为 drawer，确保键盘焦点和基本无障碍标签。
+
+### 8.3 验证命令
+
+```bash
+python -m pytest tests/unit/rag tests/contract/tools/test_readonly_tools.py
+python -m pytest tests/workflow/test_faq.py tests/workflow/test_product_compare.py tests/workflow/test_order_query.py
+python -m pytest tests/security/test_resource_owner.py tests/security/test_rag_acl.py
+npm --prefix apps/web test -- --run
+npm --prefix apps/web run build
+```
+
+### 8.4 验收 checklist
+
+- [ ] FAQ/政策回答带有效 evidence ID，无证据时不编造。
+- [ ] 商品对比仅使用对齐后的结构化字段和当前证据。
+- [ ] 订单/物流查询强制 owner + tenant，跨账号工具调用为 0。
+- [ ] 三个预置场景可从 Web 首页完整走通。
+- [ ] SSE 中断并重连后无丢事件、无重复消息；失败时能回读 run。
+- [ ] 页面刷新后会话与最终状态恢复。
+- [ ] Trace UI 只显示脱敏事件、工具和规则摘要。
+- [ ] 长期 memory 仅包含允许的稳定偏好，过期/删除后不再进入 `PromptView`。
+- [ ] 150 个 intent case 的 intent/route exact match ≥ 90%。
+- [ ] 50 个 RAG case 必要事实覆盖率 ≥ 90%，evidence ID 精度 ≥ 95%。
+- [ ] Phase 3 所有 TODO 和验证命令均完成。
+
+### 8.5 阶段产物
+
+- `src/rag/`、`src/workflows/faq.py`、`catalog.py`、`order_query.py`
+- `src/tools/adapters/mock/` 只读 fixtures/adapters
+- conversation/run/events/SSE API
+- `apps/web` 对话工作台和 run Trace 页
+- 只读业务、越权、RAG grounding 和前端测试
+
+## 9. Phase 4：确定性事务 Workflow
+
+### 9.1 目标与依赖
+
+目标：用 mock 业务系统实现取消、修改地址、退款、退货和换货，所有副作用均由状态机执行。
+
+依赖：Phase 3 验收完成。
+
+### 9.2 实现 TODO checklist
+
+通用事务协议：
+
+- [ ] 实现 `authenticate/load_resource/check_eligibility/collect_slots/prepare/confirm/commit/verify`。
+- [ ] 为取消、地址、退款、退货、换货发布独立 workflow version。
+- [ ] 实现 prepare preview：操作、资源、商品、数量、金额/差价、渠道、时效、政策版本。
+- [ ] confirmation token 绑定 actor、tenant、resource、mutation、args、preview、policy/workflow 版本和过期时间。
+- [ ] 只接受明确确认；“随便/应该可以/先这样”不消费 token。
+- [ ] 任一参数、preview 或版本变化后立即作废旧 token，重新 prepare。
+- [ ] 实现幂等预留、fingerprint 冲突拒绝和 commit 单次执行。
+- [ ] commit 成功或超时后进入 verify，禁止自动再次 commit。
+- [ ] 只有回读状态与 preview 一致才生成成功回复。
+- [ ] verify unknown/mismatch 生成接管 ticket 和安全事件。
+
+具体工具：
+
+- [ ] 实现五个 `prepare_*` 工具与五个 Runtime-only `commit_*` 工具。
+- [ ] 实现 `create_invoice_request/report_delivery_issue/request_handoff` 的确定性低风险写入小 workflow。
+- [ ] Runtime-only 工具永不出现在模型 tool schema 中。
+- [ ] 退款原因原文由确定性 normalizer 生成 `reason_code`，不让模型自行改写枚举。
+- [ ] 数量未提供时，只有可操作数量为 1 才默认 1，否则追问。
+
+API 与前端：
+
+- [ ] 实现 `POST /v1/runs/{run_id}/confirmations` 的 accept/reject、过期、重放和 409 冲突。
+- [ ] 实现 `POST /v1/runs/{run_id}/cancel`、`POST /internal/v1/handoffs/{id}/resolve`。
+- [ ] 实现变更 preview/确认卡，确认按钮只调 confirmation API。
+- [ ] 请求进行中禁用重复点击，但安全性仍由服务端 token/幂等保证。
+- [ ] 409 时重新读取 run/preview，前端不覆盖服务端状态。
+- [ ] 页面不显示 confirmation token 原文，只作为请求数据保存于内存。
+
+### 9.3 验证命令
+
+```bash
+python -m pytest tests/unit/policies tests/unit/confirmation tests/unit/idempotency
+python -m pytest tests/workflow/test_cancel.py tests/workflow/test_address.py tests/workflow/test_refund.py tests/workflow/test_return.py tests/workflow/test_exchange.py
+python -m pytest tests/recovery/test_commit_unknown.py tests/recovery/test_confirmation_replay.py
+python -m pytest tests/security/test_mutation_authorization.py tests/security/test_confirmation_binding.py
+npm --prefix apps/web test -- --run
+```
+
+### 9.4 验收 checklist
+
+- [ ] 五个 mutation workflow 的正常、缺槽、政策拒绝、参数变更和 unknown 路径可回放。
+- [ ] 未确认写入、跨账号写入、过期 token 写入和重复写入均为 0。
+- [ ] 同一 token 并发确认两次，仅一次 commit。
+- [ ] commit 请求发送后响应超时，系统查状态而不盲目重试。
+- [ ] verify mismatch/unknown 时不声称成功，进入 `waiting_human`。
+- [ ] 工具 trace 可串起 prepare/confirm/commit/verify，不包含 token 明文或完整地址。
+- [ ] 前端反复点击确认不会产生重复 commit。
+- [ ] 前端完整展示金额/渠道/影响/过期时间，用户拒绝后不再推进。
+- [ ] 60 个 workflow case 的 next-action/tool/args 全字段通过率 ≥ 85%，缺槽追问率 ≥ 90%。
+- [ ] Phase 4 所有 TODO 和验证命令均完成。
+
+### 9.5 阶段产物
+
+- `src/workflows/cancel.py`、`address.py`、`refund.py`、`return.py`、`exchange.py`
+- prepare/commit/verify adapters 和 mock 业务状态
+- confirmation/idempotency/handoff API
+- Web preview/确认/拒绝/状态未知 UI
+- mutation workflow、recovery 和 security 测试
+
+## 10. Phase 5：自研 EvalHarness、Judge 与评测面板
+
+### 10.1 目标与依赖
+
+目标：用固定 300-case 驱动真实 Runtime，对不可协商的安全/工具字段做硬判分，对自然语言质量做 Rubric Judge，并在 Web 页定位失败。
+
+依赖：Phase 4 验收完成。
+
+### 10.2 实现 TODO checklist
+
+Harness 主链路：
+
+- [ ] 将现有 300-case schema 和 track 计数校验纳入 Harness/CI，不在运行时静默修复 case。
+- [ ] 实现 `CaseLoader`：JSONL/schema、track/ID 过滤、dataset hash。
+- [ ] 实现 `FixtureManager`：每 case 独立 transaction/schema 或可证明的等价隔离。
+- [ ] 实现 `RunDriver`：注入固定 messages/context，驱动至终态/等待态。
+- [ ] 实现 `TraceAdapter`：标准化 decision/tool/event/evidence/final state。
+- [ ] 实现并发上限 1、case timeout、取消、失败隔离和按 case 重跑。
+- [ ] 实现 eval run/case result 持久化，同一配置可回放。
+
+硬判分：
+
+- [ ] 实现 `intent_route`：intent/route exact match。
+- [ ] 实现 `tool_workflow`：next action/tool/args/required slots/confirmation。
+- [ ] 实现 `rag_grounding`：required facts/evidence IDs。
+- [ ] 实现 `scripted_clarification`：ask/required slot/问题语义。
+- [ ] 实现 `guardrail_handoff`：outcome/reason/forbidden tools/must-not-claim-success。
+- [ ] 任意 owner、confirmation、forbidden tool、关键参数或虚假成功违规直接 hard fail。
+
+Rubric Judge：
+
+- [ ] 实现 Judge adapter，读取 `JUDGE_MODEL`，未配置时复用 `MODEL`。
+- [ ] 仅对 150 个非纯 intent case 调用 Judge。
+- [ ] 将 case/回复/证据/trace 包裹为不可信评分数据，抵抗评测注入。
+- [ ] 校验 Judge JSON schema，不合法只重试一次。
+- [ ] Runner 自行根据 rubric 重算 pass，不直接采信 Judge 布尔值。
+- [ ] `final_pass = hard_pass AND judge_pass`；Judge 错误/缺失不默认通过。
+- [ ] 保存 model/prompt/rubric/input hash、分维度分数、critical violations 和 token/延迟。
+- [ ] 固定 30 条分层校准 case 与基准标签，输出 Judge pass/fail 一致率和逐维度偏差。
+
+报告与前端：
+
+- [ ] 生成 JSON 真值报告和 Markdown 摘要，不只输出单一总分。
+- [ ] 实现 eval run 创建/查询/取消和 case result 分页/过滤 API。
+- [ ] 实现 `/evals` 面板：进度、五 track、hard/Judge 分层指标、延迟/token。
+- [ ] 实现 case 失败详情：预期/实际、hard failures、rubric 分数、脱敏 trace 引用。
+- [ ] 前端不获得 API key、Judge 原始 prompt 或未脱敏 payload。
+- [ ] Release 模式对每个 case 连跑 3 次，分别报告首跑成功率与三次全通过率；调试模式允许单次运行。
+
+### 10.3 验证命令
+
+```bash
+python -m pytest tests/harness/test_loader.py tests/harness/test_fixtures.py tests/harness/test_trace_adapter.py
+python -m pytest tests/harness/test_hard_eval.py tests/harness/test_judge.py tests/harness/test_report.py
+python -m pytest tests/security/test_judge_injection.py
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge off
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --repetitions 3 --mode release
+npm --prefix apps/web test -- --run
+```
+
+### 10.4 验收 checklist
+
+- [ ] 加载数量恰好 300，五个 track 数量分别为 150/60/50/20/20。
+- [ ] 固定 case 不调用 user simulator，case 之间无状态污染。
+- [ ] golden pass/fail fixtures 被 hard evaluator 100% 正确判断。
+- [ ] 20 个 guardrail case 的 forbidden tool 调用次数为 0。
+- [ ] Judge 不能将 hard fail 改为 pass。
+- [ ] Judge 平均分门槛为 3.0/4.0，critical dimension < 2 的 case 不通过。
+- [ ] 30 条校准集上 Judge pass/fail 一致率 ≥ 90%，校准报告固定 Judge/prompt/rubric 版本。
+- [ ] 同一 case 连跑 3 次全部成功的比例 ≥ 80%，报告同时保留首跑指标。
+- [ ] Judge 不可用时仍产生完整 hard report，整体状态明确标记 incomplete。
+- [ ] `/evals` 能定位到单个失败 case，hard fail 和 Judge fail 可分开过滤。
+- [ ] 报告固定 dataset/model/prompt/workflow/policy/tool/rubric 版本和 hash。
+- [ ] 300-case 各轨指标达到上位设计第 11.2 节门槛。
+- [ ] Phase 5 所有 TODO 和验证命令均完成。
+
+### 10.5 阶段产物
+
+- `src/harness/loader.py`、`fixtures.py`、`runner.py`、`trace_adapter.py`
+- `src/harness/hard_eval.py`、`judge.py`、`report.py`
+- eval API 和 `apps/web` 评测面板
+- `evals/reports/<eval_run_id>/report.json`、`report.md`
+- Harness/Judge/注入/前端测试
+
+## 11. Phase 6：安全、恢复与运维硬化
+
+### 11.1 目标与依赖
+
+目标：在不增加新业务能力的前提下，系统性验证越权、注入、PII、并发、崩溃、上游失败、备份和资源边界。
+
+依赖：Phase 5 验收完成。
+
+### 11.2 实现 TODO checklist
+
+安全：
+
+- [ ] 实现用户输入、RAG 文档和 ToolResult 的不可信数据标记。
+- [ ] 实现 Decision 工具白名单和系统字段拒绝，注入内容不能扩权。
+- [ ] 实现 tenant + actor + owner 多层校验和统一不泄露错误。
+- [ ] 实现输入/存储/模型/trace/输出五个边界的 PII 脱敏。
+- [ ] 实现 `security_audit_events` append-only 写入和独立查询权限。
+- [ ] 禁止前端 source map/环境注入泄露 API key、DB URL 和内部 ID。
+- [ ] `DEMO_MODE=false` 时完全禁用 demo actor/scenario API。
+
+恢复与降级：
+
+- [ ] 在模型请求、工具前/后、checkpoint 前/后、commit 前/后注入崩溃。
+- [ ] 实现模型、RAG、只读工具、写工具、DB、TraceStore 和 Judge 的明确降级。
+- [ ] 实现 waiting/confirmation 过期任务和 outbox dead-letter 处理。
+- [ ] 实现优雅关闭：停止接收新 run，完成/中断当前安全 step，保存 checkpoint。
+- [ ] 实现 PostgreSQL 备份/恢复脚本和恢复演练文档。
+
+可观测与资源：
+
+- [ ] 输出结构化 JSON 日志，字段包含 request/run/step/tool/error/version，不含原始密钥/PII。
+- [ ] 实现延迟、超时、工具错误、Judge 错误、安全事件、当前 run/eval 队列指标。
+- [ ] 评测执行时持续检查内存/磁盘；实际可用盘 < 3 GiB 时停止新批次。
+- [ ] 限制 Uvicorn 1 worker、DB pool 5+2、Eval 并发 1；当前主机不启动额外 worker 容器。
+- [ ] 实现 trace/report 保留和清理策略，不使用未校验的宽范围递归删除。
+- [ ] 实现 live/ready 与运行异常的安全错误信封。
+
+### 11.3 验证命令
+
+```bash
+python -m pytest tests/security
+python -m pytest tests/recovery
+python -m pytest tests/contract/test_error_envelopes.py tests/contract/test_redaction.py
+python -m pytest tests/deployment/test_backup_restore.py tests/deployment/test_graceful_shutdown.py
+docker compose up -d --build
+docker compose ps
+docker stats --no-stream
+```
+
+### 11.4 验收 checklist
+
+- [ ] prompt/tool/RAG/Judge 注入无法扩大工具白名单、scope 或状态机权限。
+- [ ] 跨 actor/租户的读写均被拒绝，返回不泄露资源存在性。
+- [ ] 密钥、confirmation token、完整手机/地址/支付信息不出现在日志、trace、报告或前端 bundle。
+- [ ] 崩溃注入后的 run 可恢复或安全失败，不重复副作用。
+- [ ] 任意写工具状态 unknown 时不对用户声称成功。
+- [ ] DB 备份可恢复到空实例，conversation/run/checkpoint/event 关系完整。
+- [ ] app + DB 稳态使用不突破容器上限，不依赖 swap 才能处理单会话。
+- [ ] 模型/Judge 不可用时的降级回复不产生 mutation。
+- [ ] P0 安全和恢复断言全部通过。
+- [ ] Phase 6 所有 TODO 和验证命令均完成。
+
+### 11.5 阶段产物
+
+- `src/guardrails/`、`src/telemetry/`、安全审计 API
+- 过期/outbox/降级/优雅关闭任务
+- `scripts/backup_db.sh`、`scripts/restore_db.sh`
+- `docs/runbooks/failure-recovery.md`、`backup-restore.md`、`security.md`
+- security/recovery/deployment 测试报告
+
+## 12. Phase 7：全链路候选版本与交付验收
+
+### 12.1 目标与依赖
+
+目标：不再增加功能，生成可复现的 internal beta 候选版本和完整证据包。
+
+依赖：Phase 0～6 验收完成。
+
+### 12.2 实现 TODO checklist
+
+- [ ] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本。
+- [ ] 从空数据库执行全新部署，不依赖开发机残留状态。
+- [ ] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试。
+- [ ] 执行固定 300-case hard + Judge release run。
+- [ ] 生成按 track 分层的正式 JSON/Markdown 报告。
+- [ ] 从 Web 完整演示 FAQ/商品对比、订单物流、退款确认和失败 case 定位。
+- [ ] 执行 Compose 停止/重启，验证会话、run、checkpoint、评测报告不丢失。
+- [ ] 执行备份/恢复演练，记录恢复点和验证查询。
+- [ ] 通过非交互式 soak 脚本记录连续 24 小时运行中的内存、磁盘、错误率和外部 API 失败；Codex 不用阻塞式 `sleep` 占用会话。
+- [ ] 完成 `README.md`、本地启动、评测、数据库、故障恢复和已知限制文档。
+- [ ] 明确标记当前产物为 `internal beta / mock business data`，不声称可执行生产退款。
+
+### 12.3 验证命令
+
+```bash
+python -m pytest
+npm --prefix apps/web test -- --run
+npm --prefix apps/web run build
+docker compose config --quiet
+docker compose up -d --build
+curl -fsS http://127.0.0.1:18080/health/live
+curl -fsS http://127.0.0.1:18080/health/ready
+python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on
+```
+
+### 12.4 最终验收 checklist
+
+功能：
+
+- [ ] FAQ/政策、商品检索/对比、订单/物流、五个事务 workflow 和人工接管均可执行。
+- [ ] Web 对话页、run Trace 页和评测面板均可展示并可刷新恢复。
+
+安全：
+
+- [ ] 跨账号/跨租户工具调用为 0。
+- [ ] 未确认、重放、参数篡改和重复 commit 为 0。
+- [ ] 密钥、完整 PII、token 明文和隐藏思维链不出现在可见产物中。
+- [ ] 任意安全 hard fail 都不能被 Judge 高分抵消。
+
+评测：
+
+- [ ] 300 条 case 全部产生结果或明确的非默认通过错误。
+- [ ] intent/route ≥ 90%，workflow 全字段 ≥ 85%，RAG 事实覆盖 ≥ 90%，evidence 精度 ≥ 95%。
+- [ ] clarification required slot 命中 ≥ 85%，forbidden tool = 0。
+- [ ] Judge 平均分 ≥ 3.0/4.0，critical dimension 低于 2 的 case 不通过。
+
+工程：
+
+- [ ] `docker compose up -d --build` 一条命令可启动。
+- [ ] app + DB 上限 640 MiB，默认无额外 worker/Redis/本地模型。
+- [ ] DB 重启、应用重启和备份恢复后核心数据完整。
+- [ ] 所有报告可追溯到代码、模型、prompt、workflow、policy、tool、dataset 和 rubric 版本。
+- [ ] 所有 Phase 0～7 验收 checklist 已勾选。
+
+### 12.5 交付产物
+
+- 自研 Agent Runtime、workflow、ToolRegistry、PolicyEngine 和 EvalHarness 源码
+- PostgreSQL migrations、Dockerfile、Compose 和备份/恢复脚本
+- React 对话工作台、run Trace 和评测面板
+- 300-case 正式评测报告和脱敏失败详情
+- 启动、评测、安全、故障恢复、备份和已知限制文档
+
+## 13. 全局测试矩阵
+
+| 测试层 | 必测内容 | 最低执行频率 |
+|---|---|---|
+| Unit | reducer、validator、policy、token、idempotency、RAG ranker、UI components | 每个相关变更 |
+| Schema/Contract | model/tool/API/repository/migration/fixture/schema compatibility | 每个相关变更 |
+| Workflow | readonly、refund、cancel、address、return、exchange、handoff | 每次合并前 |
+| Recovery | checkpoint 前后崩溃、并发 advance、重放、unknown commit | 每次合并前 |
+| Security | owner/tenant、PII、prompt injection、tool injection、Judge injection | 每次合并前 |
+| Frontend | API contract、SSE 续传、刷新恢复、确认防重、响应式 | 每次合并前 |
+| Harness | fixture 隔离、hard eval、Judge error、report reproducibility | 每次合并前 |
+| Regression | 300 个静态 case | 候选版本必跑 |
+| Deployment | Compose、migration、ready、resource limits、restart、backup/restore | 候选版本必跑 |
+
+建议 CI 顺序：
+
+```text
+format/lint
+  → unit
+  → schema/contract
+  → workflow
+  → recovery/security
+  → frontend build/test
+  → 300-case hard evaluation
+  → optional Judge batch
+  → report artifacts
+```
+
+## 14. Codex 执行记录
+
+每完成一个垂直切片或阶段，在下方追加记录。不要覆盖历史记录。
+
+```markdown
+### YYYY-MM-DD — Phase N — <切片名>
+
+- 状态：completed | partial | blocked
+- 变更文件：
+  - `path/to/file`
+- 执行验证：
+  - `<command>` → pass/fail
+- 关键证据：
+  - `<result or artifact path>`
+- 剩余 TODO：
+  - `<unchecked item>`
+- BLOCKED：无 | <具体阻塞与所需输入>
+```
+
+当前尚无实施执行记录。
+
+## 15. 停止或请求用户输入的条件
+
+Codex 应在以下情况停止扩张实现，完成仍可安全完成的检查后，向用户说明所需决策：
+
+- 需要将 Demo 从 `127.0.0.1` 暴露到公网；
+- 需要调用真实订单/退款 API 并产生真实副作用；
+- 需要新的密钥、租户凭据、业务政策或真实数据授权；
+- 需要删除未明确属于本项目的数据、Docker volume 或其他服务容器；
+- 技术设计与当前用户指令冲突，且不同选择会显著改变结果；
+- 完成原型后要将 `internal beta` 提升为生产自动执行系统。
+
+外部模型/Judge 临时不可用不会阻止所有开发：应继续使用 fake model 完成 Runtime、workflow、硬判分和前端，并只将需要真实模型的验收项保持为 `[ ]`。
