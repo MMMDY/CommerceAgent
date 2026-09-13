@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Lock
 
 
@@ -46,7 +46,7 @@ class MutationGuards:
     ) -> ConfirmationToken:
         with self._lock:
             token = self._tokens.get(token_hash)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if token is None or token.tenant_id != tenant_id or token.actor_id != actor_id:
                 raise PermissionError("confirmation token unavailable")
             if (

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -13,7 +13,7 @@ def test_confirmation_token_is_single_use_and_owner_bound() -> None:
             tenant_id="tenant-a",
             actor_id="actor-a",
             preview_hash="preview",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+            expires_at=datetime.now(UTC) + timedelta(minutes=1),
         )
     )
     consumed = guards.consume_token(
