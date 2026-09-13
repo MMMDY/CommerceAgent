@@ -1,11 +1,15 @@
 """Contracts for the immutable Phase 1 PostgreSQL migration chain."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import os
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.exc import DBAPIError
 
 from src.db import EXPECTED_ALEMBIC_REVISION
 
@@ -89,3 +93,17 @@ def test_phase1_uses_postgresql_native_types_and_active_run_constraint(engine: E
     assert "WHERE" in index_definition
     for terminal_status in ("completed", "failed", "cancelled", "expired"):
         assert terminal_status in index_definition
+
+
+def test_active_workflow_definition_is_immutable_in_postgresql(engine: Engine) -> None:
+    workflow_id = f"workflow-{uuid4()}"
+    with engine.begin() as connection:
+        connection.execute(text("INSERT INTO domain.workflow_versions "
+            "(workflow_id, version, definition_json, definition_hash, status, created_at, activated_at) "
+            "VALUES (:workflow_id, '1', CAST(:definition AS jsonb), :hash, 'active', now(), now())"),
+            {"workflow_id": workflow_id, "definition": '{"step": 1}', "hash": str(uuid4())})
+    with pytest.raises(DBAPIError, match="immutable"):
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE domain.workflow_versions SET definition_json = CAST(:definition AS jsonb) "
+                "WHERE workflow_id = :workflow_id AND version = '1'"),
+                {"workflow_id": workflow_id, "definition": '{"step": 2}'})
