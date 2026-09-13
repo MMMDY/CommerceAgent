@@ -257,7 +257,7 @@ Repository 与事务：
 - [ ] 实现 `MemoryRepository`、`KnowledgeRepository`、`AuditRepository`，并保持接口与物理 SQL 分离。
 - [ ] 所有读写入口强制要求 `tenant_id`，禁止业务层拼接 SQL。
 - [x] 实现“事件 + checkpoint + run 行版本”的单事务提交。
-- [ ] 实现 confirmation token 条件消费与 idempotency record 同事务。
+- [x] 实现 confirmation token 条件消费与 idempotency record 同事务。
 - [ ] 实现 outbox 租约，使用 `FOR UPDATE SKIP LOCKED`。
 - [ ] 实现 schema migration 版本检查和 checkpoint state migration 接口。
 
