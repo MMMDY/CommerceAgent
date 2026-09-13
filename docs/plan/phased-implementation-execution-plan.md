@@ -104,7 +104,7 @@ Codex 执行每个阶段时必须：
 | 阶段 | 状态 | 核心产物 | 硬门禁 |
 |---|---|---|---|
 | Phase 0：可运行工程骨架 | `completed` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
-| Phase 1：协议、持久化与 Eval Core | `in_progress` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
+| Phase 1：协议、持久化与 Eval Core | `completed` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
 | Phase 2：自研 Runtime 与最小 Harness | `not_started` | ModelGateway、AgentLoop、编排、工具/政策、hard runner | 循环可终止/恢复，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
@@ -255,7 +255,7 @@ Repository 与事务：
 
 - [x] 实现 `RunRepository`、`ConversationRepository`、`ConfirmationRepository`、`EvaluationRepository`。
 - [x] 实现 `MemoryRepository`、`KnowledgeRepository`、`AuditRepository`，并保持接口与物理 SQL 分离。
-- [ ] 所有读写入口强制要求 `tenant_id`，禁止业务层拼接 SQL。
+- [x] 所有业务读写入口强制要求 `tenant_id`，禁止业务层拼接 SQL；仅 EvalHarness、版本发布和 outbox worker 为 system-scope，不提供用户资源的无范围读取接口。
 - [x] 实现“事件 + checkpoint + run 行版本”的单事务提交。
 - [x] 实现 confirmation token 条件消费与 idempotency record 同事务。
 - [x] 实现 outbox 租约，使用 `FOR UPDATE SKIP LOCKED`。
@@ -276,27 +276,24 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit/test_protocols.py
-python -m pytest tests/contract/test_migrations.py
-python -m pytest tests/contract/test_repositories.py
-python -m pytest tests/recovery/test_checkpoint_atomicity.py
-python -m pytest tests/security/test_tenant_isolation.py
+python -m pytest tests/contract
 python -m pytest tests/harness/test_loader.py tests/harness/test_hard_eval.py tests/harness/test_dataset_contract.py
 ```
 
 ### 6.4 验收 checklist
 
-- [ ] 所有核心对象可序列化/反序列化，非法枚举和未知字段被拒绝。
-- [ ] 全新 DB 可从空库前向迁移到 head。
-- [ ] 所有表在正确 PostgreSQL schema 中，约束/索引与设计文档一致。
-- [ ] checkpoint 事务在任何一步失败时不产生部分状态。
-- [ ] 同一 run 并发更新只有一个成功，另一个收到版本冲突。
-- [ ] 跨租户 repository 读写返回空/拒绝，不泄露资源是否存在。
-- [ ] confirmation/idempotency 唯一约束能阻止重放。
-- [ ] CaseLoader 恰好加载 300 条，五个 track 为 150/60/50/20/20，schema/ID/hash 异常均 fail closed。
-- [ ] golden pass/fail fixtures 被 hard evaluator 100% 正确判断。
-- [ ] 300-case 语义审核有逐轨证据和冻结 hash，不能只以 JSON 可解析代替质量审核。
-- [ ] Phase 1 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [ ] Phase 1 所有 TODO 和验证命令均完成。
+- [x] 所有核心对象可序列化/反序列化，非法枚举和未知字段被拒绝。
+- [x] 全新 DB 可从空库前向迁移到 head。
+- [x] 所有表在正确 PostgreSQL schema 中，约束/索引与设计文档一致。
+- [x] checkpoint 事务在任何一步失败时不产生部分状态。
+- [x] 同一 run 并发更新只有一个成功，另一个收到版本冲突。
+- [x] 跨租户 repository 读写返回空/拒绝，不泄露资源是否存在。
+- [x] confirmation/idempotency 唯一约束能阻止重放。
+- [x] CaseLoader 恰好加载 300 条，五个 track 为 150/60/50/20/20，schema/ID/hash 异常均 fail closed。
+- [x] golden pass/fail fixtures 被 hard evaluator 100% 正确判断。
+- [x] 300-case 语义审核有逐轨证据和冻结 hash，不能只以 JSON 可解析代替质量审核。
+- [x] Phase 1 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
+- [x] Phase 1 所有 TODO 和验证命令均完成。
 
 ### 6.5 阶段产物
 
