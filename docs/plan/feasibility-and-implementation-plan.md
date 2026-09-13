@@ -1451,7 +1451,7 @@ sequenceDiagram
 | 容器 | Docker 29.5.2，Compose v5.1.4 | 使用 Docker Compose 作为唯一本机启动方式 |
 | 宿主运行时 | Node 22.22.3、npm 10.9.8、Python 3.13.13 | Node 可本地构建前端；Python 仍以容器内 3.12 为发布基准 |
 | 数据库 | 宿主 PostgreSQL 14 在 `127.0.0.1:5432`；已有其他业务 DB 容器 | 不共用现有库；CommerceAgent 使用独立 DB 容器/卷 |
-| 端口 | 8081/8085/8088 等已被占用，18080 未占用 | Demo 默认仅绑定 `127.0.0.1:18080` |
+| 端口 | 8081/8085/8088 等已被占用；已检查 18437 未被监听 | Demo 默认仅绑定 `127.0.0.1:18437` |
 
 结论：当前服务器可运行本方案的 Demo/MVP，前提是模型与 Judge 继续使用外部 API，运行时只启动 `app + postgres`。本机不适合运行本地大模型、多 worker 高并发评测或大规模向量检索。
 
@@ -1495,7 +1495,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    B[Browser] -->|SSH tunnel / 127.0.0.1:18080| APP[commerce-agent-app\nFastAPI + React dist\n1 worker]
+    B[Browser] -->|SSH tunnel / 127.0.0.1:18437| APP[commerce-agent-app\nFastAPI + React dist\n1 worker]
     APP -->|internal network:5432| DB[(commerce-agent-db\nPostgreSQL 18)]
     APP -->|HTTPS| MODEL[External Agent/Judge API]
     APP --> DATA[/knowledge + eval files/]
@@ -1503,7 +1503,7 @@ flowchart LR
 
 | Service | 镜像/进程 | CPU 上限 | 内存上限 | 持久化 | 网络 |
 |---|---|---:|---:|---|---|
-| `app` | 项目 multi-stage image，Uvicorn 1 worker | 1.5 | 384 MiB | 只读挂载 eval/knowledge；reports 可写 | `127.0.0.1:18080:8000` |
+| `app` | 项目 multi-stage image，Uvicorn 1 worker | 1.5 | 384 MiB | 只读挂载 eval/knowledge；reports 可写 | `127.0.0.1:18437:8000` |
 | `db` | `postgres:18-alpine` | 0.75 | 256 MiB | `commerce_agent_pgdata:/var/lib/postgresql` | 仅 Compose internal network |
 
 PostgreSQL 首版参数：`shared_buffers=64MB`、`effective_cache_size=192MB`、`work_mem=2MB`、`maintenance_work_mem=32MB`、`max_connections=20`、`statement_timeout=10s`。API 数据库连接池 `pool_size=5/max_overflow=2`；Uvicorn 只运行 1 worker；EvalHarness 默认并发 1，人工可上调到 2，不允许在当前主机上开更高并发。
@@ -1519,8 +1519,8 @@ PostgreSQL 18 容器的 volume 挂载点固定为 `/var/lib/postgresql`，不沿
 ```bash
 docker compose up -d --build
 docker compose ps
-curl -fsS http://127.0.0.1:18080/health/live
-curl -fsS http://127.0.0.1:18080/health/ready
+curl -fsS http://127.0.0.1:18437/health/live
+curl -fsS http://127.0.0.1:18437/health/ready
 ```
 
 `/health/live` 只表示进程存活；`/health/ready` 必须检查 DB、migration 版本、Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不在每次健康检查中消耗模型 token。数据库健康检查使用 `pg_isready`，app 只在 migration 成功后 ready。
@@ -1534,7 +1534,7 @@ curl -fsS http://127.0.0.1:18080/health/ready
 | 变量 | 是否 secret | Demo 默认/来源 | 说明 |
 |---|---:|---|---|
 | `APP_ENV` | 否 | `demo` | `demo/test/production` |
-| `APP_BIND` | 否 | `0.0.0.0:8000` | 容器内监听；宿主映射仍限 `127.0.0.1:18080` |
+| `APP_BIND` | 否 | `0.0.0.0:8000` | 容器内监听；宿主映射仍限 `127.0.0.1:18437` |
 | `DATABASE_URL` | 是 | Compose secret 组装 | 只指向内部 `db:5432` |
 | `DATABASE_MIGRATION_URL` | 是 | Compose secret 组装 | 仅 migration 进程使用，应用 runtime 不得读取 |
 | `POSTGRES_USER` | 否 | `commerce_agent_admin` | 官方镜像初始化账号，仅 DB/bootstrap 使用，不进入 app runtime |

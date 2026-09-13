@@ -66,7 +66,7 @@ Codex 执行每个阶段时必须：
 | 质量工具 | pytest + Ruff + mypy；Vitest + ESLint + `tsc --noEmit` |
 | 运行 | Docker multi-stage build + Docker Compose |
 | 服务拓扑 | `app` 384 MiB + `db` 256 MiB，总上限 640 MiB |
-| 端口 | 宿主 `127.0.0.1:18080` 映射容器 `8000`；DB 仅内部网络 |
+| 端口 | 宿主 `127.0.0.1:18437` 映射容器 `8000`；DB 仅内部网络 |
 | RAG | PostgreSQL metadata filter + `pg_trgm` + 应用内排序；dense retrieval 默认关闭 |
 | 评测 | 自研 EvalHarness；硬判分 + Rubric Judge；默认并发 1；release 使用独立 Judge |
 
@@ -164,7 +164,7 @@ Phase 0 工程骨架
 - [x] 创建 `compose.yaml`，只含 `app` 和 `db` 默认服务。
 - [x] `app` 限制 384 MiB/1.5 CPU，`db` 限制 256 MiB/0.75 CPU。
 - [x] DB volume 挂载到 `/var/lib/postgresql`，不使用旧版 data 挂载点。
-- [x] 宿主只暴露 `127.0.0.1:18080`，PostgreSQL 不映射宿主端口。
+- [x] 宿主只暴露 `127.0.0.1:18437`，PostgreSQL 不映射宿主端口。
 - [x] 应用使用非 superuser runtime 账号，migration 权限与 runtime 权限分离。
 - [x] 提供幂等 DB bootstrap：管理账号只负责创建 migration/runtime 角色；migration 使用 `DATABASE_MIGRATION_URL`，应用只使用受限 `DATABASE_URL`。
 - [x] Compose 的 `db` 服务只用 `POSTGRES_USER/POSTGRES_PASSWORD` 初始化 admin；app 不接收 admin 凭据，只接收 `DATABASE_URL`，migration 命令只接收 `DATABASE_MIGRATION_URL`。
@@ -193,8 +193,8 @@ docker compose build
 python scripts/check_secrets.py --compose-service app
 docker compose up -d
 docker compose ps
-curl -fsS http://127.0.0.1:18080/health/live
-curl -fsS http://127.0.0.1:18080/health/ready
+curl -fsS http://127.0.0.1:18437/health/live
+curl -fsS http://127.0.0.1:18437/health/ready
 scripts/deployment_smoke.sh
 ```
 
@@ -763,8 +763,8 @@ npm --prefix apps/web test -- --run
 npm --prefix apps/web run build
 docker compose config --quiet
 docker compose up -d --build
-curl -fsS http://127.0.0.1:18080/health/live
-curl -fsS http://127.0.0.1:18080/health/ready
+curl -fsS http://127.0.0.1:18437/health/live
+curl -fsS http://127.0.0.1:18437/health/ready
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --repetitions 3 --mode release
 scripts/soak_monitor.sh --duration 24h --interval 60s --output evals/reports/release-soak.json --detach
 scripts/soak_monitor.sh --status --output evals/reports/release-soak.json

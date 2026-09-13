@@ -58,7 +58,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "127.0.0.1:18080:8000"
+      - "127.0.0.1:18437:8000"
     read_only: true
     tmpfs:
       - /tmp
