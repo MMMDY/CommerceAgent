@@ -38,7 +38,8 @@ def test_concurrent_workers_lease_each_outbox_row_once(engine: Engine) -> None:
         for outbox_id in outbox_ids:
             connection.execute(text("INSERT INTO runtime.runtime_outbox "
                 "(outbox_id, run_id, event_id, topic, payload_redacted_json, available_at, created_at) "
-                "VALUES (:outbox_id, :run_id, :event_id, :topic, CAST(:payload AS jsonb), now(), now())"),
+                "VALUES (:outbox_id, :run_id, :event_id, :topic, CAST(:payload AS jsonb), "
+                "now() - interval '1 day', now())"),
                 {"outbox_id": outbox_id, "run_id": run_id, "event_id": event["event_id"],
                  "topic": str(outbox_id), "payload": "{\"safe\":true}"})
     repository = OutboxRepository(engine)
