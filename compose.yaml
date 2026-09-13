@@ -41,6 +41,7 @@ services:
     networks: [backend]
 
   app:
+    image: commerce-agent:phase0
     build: .
     environment:
       APP_ENV: ${APP_ENV:-demo}
@@ -70,6 +71,7 @@ services:
     networks: [backend, egress]
 
   migrate:
+    image: commerce-agent:phase0
     build: .
     profiles: [maintenance]
     command: ["python", "-m", "src.migrate"]

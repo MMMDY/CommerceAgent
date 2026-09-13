@@ -40,6 +40,7 @@ def upgrade() -> None:
     )
     op.execute("GRANT USAGE ON SCHEMA conversation TO commerce_agent_runtime")
     op.execute("GRANT SELECT, INSERT, UPDATE ON conversation.conversations TO commerce_agent_runtime")
+    op.execute("GRANT SELECT ON TABLE public.alembic_version TO commerce_agent_runtime")
 
 
 def downgrade() -> None:

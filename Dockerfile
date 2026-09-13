@@ -8,6 +8,8 @@ RUN npm run build
 
 FROM python:3.12-slim AS runtime
 
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
@@ -20,7 +22,7 @@ COPY src/ ./src/
 COPY apps/ ./apps/
 COPY alembic.ini ./
 COPY infra/migrations/ ./infra/migrations/
-RUN python -m pip install .
+RUN python -m pip install --index-url "$PIP_INDEX_URL" --retries 2 --timeout 30 .
 
 COPY --from=web-builder /build/apps/web/dist ./apps/web/dist
 
