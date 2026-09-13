@@ -907,6 +907,14 @@ format/lint
   - 完成 Phase 1 全部验证命令后再标记阶段完成。
 - BLOCKED：无。
 
+### 2026-09-13 — Phase 1 — 阶段验收
+
+- 状态：completed
+- 验证：`test_protocols.py` 3 passed；独立 Compose PostgreSQL contract suite 16 passed；Eval Core/数据合同 7 passed；`ruff` 与 `mypy src` → pass。
+- 关键保证：空库前向迁移至 `20260913_0005`；run checkpoint 原子性/并发/租户隔离、confirmation/idempotency、outbox lease、版本不可变 trigger 均有 PostgreSQL 合同覆盖。
+- 阶段提交：`d3b3b13`。
+- 工作区：阶段提交后仅保留用户预存的 `AGENTS.md` 未提交修改；本阶段文件均已提交。
+
 ## 15. 停止或请求用户输入的条件
 
 Codex 应在以下情况停止扩张实现，完成仍可安全完成的检查后，向用户说明所需决策：
