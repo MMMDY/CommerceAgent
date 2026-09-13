@@ -898,12 +898,12 @@ format/lint
 - 执行验证：
   - Phase 1 协议、loader、hard evaluator、mutation safety 单测 → pass（当前累计 12 项相关测试）
   - `python -m mypy src`、`python -m ruff check` → pass
-  - 真实 PostgreSQL 前向迁移至 `20260913_0002`，新 runtime 表、索引与权限已核验
+  - 真实 PostgreSQL 空库前向迁移至 `20260913_0004`，七个 schema 共 19 张表已核验
 - 关键证据：
   - 提交：`32595e0`、`893203c`、`6a7329d`、`bad9f67`、`49c05fc`、`39f99aa`、`16dcdf7`
   - `cases.jsonl` 已验证 300 条，五轨计数为 `150/60/50/20/20`，dataset hash 可复现。
 - 剩余 TODO：
-  - 在真实 PostgreSQL 验证 `20260913_0003`，并实现 SQL repository、checkpoint 原子事务、租户隔离与 outbox lease。
+  - 实现 SQL repository、checkpoint 原子事务、租户隔离与 outbox lease。
   - 完成 300-case 语义审核清单和 `quality-audit.md`。
   - 完成 Phase 1 全部验证命令后再标记阶段完成。
 - BLOCKED：无。
