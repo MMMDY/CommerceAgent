@@ -31,7 +31,13 @@ def repository(engine: Engine) -> RunRepository:
     return RunRepository(engine)
 
 
-def _create_run(engine: Engine, *, tenant_id: str | None = None) -> tuple[UUID, str]:
+def _create_run(
+    engine: Engine,
+    *,
+    tenant_id: str | None = None,
+    status: str = "running_readonly",
+    execution_mode: str = "readonly_loop",
+) -> tuple[UUID, str]:
     """Create one isolated conversation/run using only the runtime role."""
 
     now = datetime.now(UTC)
@@ -60,8 +66,8 @@ def _create_run(engine: Engine, *, tenant_id: str | None = None) -> tuple[UUID, 
                 "workflow_id, workflow_version, policy_version, model_config_hash, "
                 "prompt_version, current_step, step_count, max_steps, deadline_at, "
                 "created_at, updated_at) "
-                "VALUES (:run_id, :conversation_id, :tenant_id, :actor_ref, 'running', "
-                "'readonly', 'contract', '1.0', 'policy-1.0', 'model-hash', 'prompt-1.0', "
+                "VALUES (:run_id, :conversation_id, :tenant_id, :actor_ref, :status, "
+                ":execution_mode, 'contract', '1.0', 'policy-1.0', 'model-hash', 'prompt-1.0', "
                 "'start', 0, 6, :deadline_at, :now, :now)"
             ),
             {
@@ -69,6 +75,8 @@ def _create_run(engine: Engine, *, tenant_id: str | None = None) -> tuple[UUID, 
                 "conversation_id": conversation_id,
                 "tenant_id": tenant,
                 "actor_ref": "contract-actor",
+                "status": status,
+                "execution_mode": execution_mode,
                 "deadline_at": now + timedelta(minutes=5),
                 "now": now,
             },
@@ -92,7 +100,7 @@ def _commit(repository: RunRepository, *, run_id: UUID, tenant_id: str, version:
         run_id=run_id,
         tenant_id=tenant_id,
         expected_version=version,
-        next_status="running",
+        next_status="running_readonly",
         next_step="contract_step",
         checkpoint={"contract": "state"},
         checkpoint_hash="checkpoint-hash",
@@ -109,7 +117,7 @@ def test_commit_step_writes_events_checkpoint_and_run_as_one_unit(
         run_id=run_id,
         tenant_id=tenant_id,
         expected_version=0,
-        next_status="running",
+        next_status="running_readonly",
         next_step="contract_step",
         checkpoint={"contract": "state"},
         checkpoint_hash="checkpoint-hash",
@@ -143,7 +151,7 @@ def test_commit_step_rolls_back_every_write_when_event_insert_fails(
         run_id=other_run_id,
         tenant_id=other_tenant_id,
         expected_version=0,
-        next_status="running",
+        next_status="running_readonly",
         next_step="contract_step",
         checkpoint={"contract": "first"},
         checkpoint_hash="checkpoint-hash",
@@ -156,7 +164,7 @@ def test_commit_step_rolls_back_every_write_when_event_insert_fails(
             run_id=run_id,
             tenant_id=tenant_id,
             expected_version=0,
-            next_status="running",
+            next_status="running_readonly",
             next_step="contract_step",
             checkpoint={"contract": "must-roll-back"},
             checkpoint_hash="checkpoint-hash",
@@ -217,7 +225,7 @@ def test_checkpoint_requires_a_domain_event(engine: Engine, repository: RunRepos
             run_id=run_id,
             tenant_id=tenant_id,
             expected_version=0,
-            next_status="running",
+            next_status="running_readonly",
             next_step="contract_step",
             checkpoint={"contract": "state"},
             checkpoint_hash="checkpoint-hash",

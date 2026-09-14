@@ -29,7 +29,7 @@ def test_concurrent_workers_lease_each_outbox_row_once(engine: Engine) -> None:
     run_id, tenant_id = _create_run(engine)
     event = _event()
     RunRepository(engine).commit_step(
-        run_id=run_id, tenant_id=tenant_id, expected_version=0, next_status="running",
+        run_id=run_id, tenant_id=tenant_id, expected_version=0, next_status="running_readonly",
         next_step="outbox", checkpoint={"outbox": True}, checkpoint_hash="checkpoint",
         events=[event],
     )

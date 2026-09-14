@@ -104,7 +104,9 @@ def _run_context(engine: Engine, *, run_id: UUID, tenant_id: str) -> RunContext:
 
 
 def test_crash_after_adapter_recovers_unknown_without_second_side_effect(engine: Engine) -> None:
-    run_id, tenant_id = _create_run(engine)
+    run_id, tenant_id = _create_run(
+        engine, status="running_workflow", execution_mode="workflow"
+    )
     intent, intent_repository = _reserved_intent(engine, run_id=run_id, tenant_id=tenant_id)
     boundary = DurableMutationBoundary(intent_repository)
     adapter_calls = 0
@@ -172,14 +174,16 @@ def test_failed_checkpoint_rolls_back_mutation_completion_and_outbox(engine: Eng
         run_id=other_run_id,
         tenant_id=other_tenant_id,
         expected_version=0,
-        next_status="running",
+        next_status="running_readonly",
         next_step="seed",
         checkpoint={"seed": True},
         checkpoint_hash="sha256:seed",
         events=[duplicate_event],
     )
 
-    run_id, tenant_id = _create_run(engine)
+    run_id, tenant_id = _create_run(
+        engine, status="running_workflow", execution_mode="workflow"
+    )
     intent, intent_repository = _reserved_intent(engine, run_id=run_id, tenant_id=tenant_id)
     claim = intent_repository.claim(intent)
     assert claim.acquired is True

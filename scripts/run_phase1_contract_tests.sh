@@ -14,6 +14,14 @@ set -a
 source .env
 set +a
 
+# The isolated contract database does not start the app, but Compose still
+# validates its required environment.  Keep the classifier profile aligned
+# with the Agent profile in this short-lived shell without writing .env.
+export CLASSIFIER_MODEL="${CLASSIFIER_MODEL:-${MODEL:?MODEL is required}}"
+export CLASSIFIER_API_BASE="${CLASSIFIER_API_BASE:-${API_BASE:?API_BASE is required}}"
+export CLASSIFIER_API_KEY="${CLASSIFIER_API_KEY:-${API_KEY:?API_KEY is required}}"
+export CLASSIFIER_TEMPERATURE="${CLASSIFIER_TEMPERATURE:-0.1}"
+
 contract_project=commerceagent_phase1_contract
 docker compose -p "$contract_project" up -d --no-build db
 

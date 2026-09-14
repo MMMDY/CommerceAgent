@@ -56,7 +56,7 @@ def _create_run(engine: Engine) -> RunContext:
                 "prompt_version, current_step, step_count, max_steps, deadline_at, "
                 "created_at, updated_at) "
                 "VALUES (:run_id, :conversation_id, :tenant_id, :actor_ref, "
-                "'running_readonly', 'readonly', 'event-replay', '1.0', 'policy-1.0', "
+                "'running_readonly', 'readonly_loop', 'event-replay', '1.0', 'policy-1.0', "
                 "'model-hash', 'prompt-1.0', 'start', 0, 6, :deadline_at, :now, :now)"
             ),
             {

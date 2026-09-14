@@ -19,6 +19,17 @@ def upgrade() -> None:
         ALTER TABLE runtime.agent_runs ALTER COLUMN workflow_id DROP NOT NULL;
         ALTER TABLE runtime.agent_runs ALTER COLUMN workflow_version DROP NOT NULL;
 
+        -- Phase 1 persisted the readonly executor under its old spelling.
+        -- Normalize existing durable runs before adding the new fail-closed
+        -- contract; no workflow/version/status values are changed.
+        UPDATE runtime.agent_runs
+          SET execution_mode = 'readonly_loop'
+          WHERE execution_mode = 'readonly';
+        UPDATE runtime.agent_runs
+          SET execution_mode = 'workflow'
+          WHERE status IN ('running_workflow', 'waiting_confirmation', 'committing', 'verifying')
+            AND execution_mode <> 'workflow';
+
         ALTER TABLE runtime.agent_runs
           ADD CONSTRAINT ck_agent_runs_dual_executor_shape CHECK (
             (execution_mode IS NULL AND workflow_id IS NULL AND workflow_version IS NULL
