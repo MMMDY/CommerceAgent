@@ -416,7 +416,7 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_intent_cla
 - [x] 数据库拒绝 run 状态与 execution_mode 不匹配、`handoff` 作为 execution_mode，以及执行器/workflow 版本在选定后的修改。
 - [x] 在相邻两轮 checkpoint 前后注入崩溃，恢复后从最新已提交 context 继续，不跳步、不重复持久化事件。
 - [x] 多步 Harness 驱动的是 `AgentLoop.run()` 而不是测试专用伪循环，并输出完整的 step/tool/termination trace。
-- [ ] Phase 2 双执行器增量完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
+- [x] Phase 2 双执行器增量完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 2 v2.5 所有新增 TODO 和验证命令均完成。
 
 ### 7.5 阶段产物
