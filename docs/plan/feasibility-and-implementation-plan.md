@@ -1,6 +1,6 @@
 # 电商客服 Agent 技术设计方案
 
-> 设计版本：v1.2
+> 设计版本：v1.3
 >
 > 更新日期：2026-09-14
 > 参考目标图：[image.png](./image.png)  
@@ -19,6 +19,7 @@
 5. **上线指标以最终业务状态和安全为主**。Intent Accuracy、Slot Accuracy 只能作为诊断指标，不能代表 Agent 真正完成了任务。
 6. **首版范围控制在**：商品搜索/详情/对比、订单查询、FAQ/政策问答、退款/退货申请、人工转接。支付、自动审批大额退款、跨账号操作暂不开放。
 7. **首版同步交付可展示 Web 页面**：一个页面完成对话、确认操作、引用展示和 run-level Trace 查看，另提供简化的 300-case 评测面板。
+8. **意图分类器复用主 Agent 模型。** 分类调用与 Agent 决策调用必须使用 `.env` 中同一组 `MODEL/API_BASE/API_KEY`，不得新增独立分类模型或分类器密钥；二者只通过调用用途、Prompt、输出 Schema 和版本哈希隔离。
 
 设计约束：
 
@@ -43,7 +44,7 @@
 flowchart TD
     U[用户/客服渠道] --> UI[Web 演示工作台]
     UI --> G[输入安全与账号上下文]
-    G --> R[意图、风险和路由]
+    G --> R[主 Agent 模型意图分类 + 代码风险路由]
     R -->|FAQ/商品/订单等只读请求| L[Readonly AgentLoop.run]
     L --> B[build_prompt]
     B --> D[模型返回一个结构化 Decision]
@@ -109,7 +110,8 @@ flowchart TD
 | `OrchestrationEngine` | 创建 run、选择执行器、获取推进 lease，并处理恢复、暂停和取消 | 不执行单轮阶段、不重复写业务 checkpoint；同一 run 串行推进，崩溃后从最后已提交 checkpoint 恢复 |
 | `WorkflowRegistry` | 注册版本化 workflow 与节点关系 | 发布后的版本不可原地修改；旧 run 可继续按旧版本执行 |
 | `RunContext` | 保存用户消息、slots、证据引用、工具结果和状态 | 结构化、可序列化、字段有来源，不保存隐藏思维链 |
-| `Router/Planner` | 意图和风险路由，只读场景生成有限动作 | 输出必须通过 schema 和 allowlist；不得直接执行工具 |
+| `IntentClassifier` | 通过 ModelGateway 复用主 Agent 模型，输出候选意图、风险提示、route、置信度和槽位 | 使用独立 Prompt/Schema，不暴露工具，不直接输出或持久化 execution_mode |
+| `Router` | 用固定 intent 映射、阈值、上下文和 ToolSpec.risk 复核候选分类，生成最终 RouteDecision | 代码拥有最终裁决权；冲突取更高风险，低置信度 fail closed |
 | `PolicyEngine` | 纯代码检查权限、资格、确认和禁止动作 | 模型无法绕过；政策判断带版本和规则 ID |
 | `ToolRegistry` | 注册强类型工具，统一调用和错误模型 | owner 校验、超时、幂等、脱敏、重试策略均为强制逻辑 |
 | `CheckpointStore` | 保存状态快照和等待点 | 状态更新与事件写入具备原子性；支持 schema migration |
@@ -212,11 +214,18 @@ EvalHarness 不依赖外部 benchmark runtime。其执行顺序固定为：加�
 
 ### 4.1 模型调用边界
 
-模型通过自研 `ModelGateway` 调用，只接收经过裁剪的 `PromptView`，并只允许返回结构化 `Decision`。模型不能访问数据库连接、内部用户 ID、租户密钥、确认 token 原文或任意网络工具。
+所有在线模型调用均通过自研 `ModelGateway`。首版只配置一个主 Agent 模型，并以两个调用 profile 复用它：
 
-模型可决定：
+- `purpose=intent_classification`：读取裁剪后的 `RoutingPromptView`，使用独立的 `intent-classifier` Prompt 和 `IntentClassification` Schema；不暴露工具，也不执行 AgentLoop。
+- `purpose=agent_decision`：只在执行器与 workflow 已由代码锁定后读取 `PromptView`，返回结构化 `Decision`。
 
-- 当前意图、候选 route 和置信度；
+两个 profile 必须解析到 `.env` 中完全相同的 `MODEL/API_BASE/API_KEY`，共享 provider、模型快照、连接池、超时与重试实现；不得定义 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY`。它们分别固定 temperature、token limit、Prompt 版本和 Schema 哈希，并在 `model_invocations` 中记录不同的 `purpose/prompt_hash`，以便独立分析分类延迟和准确率。Rubric Judge 不属于意图分类器，仍按独立 Judge 配置执行。
+
+模型不能访问数据库连接、内部用户 ID、租户密钥、确认 token 原文或任意网络工具。
+
+模型可建议：
+
+- 分类调用中的当前意图、风险提示、候选 route 和置信度；
 - 缺失的业务槽位；
 - 在当前 route 白名单内建议一个只读或 prepare 工具；prepare 仍只能由事务状态机的对应节点执行；
 - 基于可信 evidence/tool result 生成用户回复；
@@ -834,7 +843,7 @@ checkpoint 采用 append-only；更新 run 的 `last_checkpoint_seq`、插入 ch
 | `model_call_id` | VARCHAR(36) | PK | 调用 ID |
 | `run_id` | VARCHAR(36) | FK/NOT NULL | 关联 runtime run |
 | `step_id` | VARCHAR(64) | NOT NULL | 调用 step |
-| `purpose` | VARCHAR(32) | NOT NULL | route/decision/compose/summary |
+| `purpose` | VARCHAR(32) | NOT NULL | intent_classification/agent_decision/compose/summary |
 | `provider` | VARCHAR(64) | NOT NULL | 厂商稳定标识 |
 | `model` | VARCHAR(128) | NOT NULL | 实际模型/snapshot |
 | `model_config_hash` | VARCHAR(80) | NOT NULL | 温度、token 上限等哈希 |
@@ -1281,7 +1290,9 @@ Judge 输入包括 case、Agent 最终回复、脱敏 trace 摘要、实际引�
 
 ### 9.1 路由与工作流
 
-`route_intent_risk` 返回强类型 `RouteDecision`：`outcome=execute | handoff`。仅当 `outcome=execute` 时必须带 `execution_mode=readonly_loop | workflow` 和锁定的 workflow ID/version；`outcome=handoff` 直接创建 ticket 并进入 `waiting_human`，不把 `handoff` 写入 `execution_mode`。执行模式由代码根据 intent、risk 和 ToolSpec 风险复核，不能只采信模型字段；持久化非空值与 `runtime.agent_runs.execution_mode` 保持一致：
+`route_intent_risk` 先通过主 Agent 的 `ModelGateway` 发起 `purpose=intent_classification` 调用，模型只返回候选 `IntentClassification(intent, risk_hint, route_hint, confidence, required_slots)`。代码 Router 随后根据固定的 intent 映射、置信度阈值、会话状态和目标 ToolSpec 风险生成最终强类型 `RouteDecision(outcome=execute | handoff)`。
+
+仅当 `outcome=execute` 时必须带 `execution_mode=readonly_loop | workflow` 和锁定的 workflow ID/version；`outcome=handoff` 直接创建 ticket 并进入 `waiting_human`，不把 `handoff` 写入 `execution_mode`。执行模式不能只采信模型字段；持久化非空值与 `runtime.agent_runs.execution_mode` 保持一致：
 
 - `readonly_loop`：FAQ、商品、订单、物流、支付状态等只读请求；只能解析到 `read_only` 工具。
 - `workflow`：prepare、低风险写入和 commit 类动作；进入版本化 WorkflowExecutor 后，模型不能改变节点顺序。
@@ -1290,7 +1301,7 @@ Judge 输入包括 case、Agent 最终回复、脱敏 trace 摘要、实际引�
 推荐节点：
 
 - `ingress_guard`：限流、注入检测、PII 标识、渠道身份上下文。
-- `route_intent_risk`：输出 `intent`、`risk_level`、`required_slots`、`workflow_id` 和置信度。
+- `route_intent_risk`：复用主 Agent 模型生成候选分类，再由代码输出最终 `intent`、`risk_level`、`required_slots`、`workflow_id`、execution mode 和置信度。
 - `authenticate`：把已登录主体绑定到 tool context；绝不信任模型提供的 `user_id`。
 - `retrieve_policy`：按租户、地区、商品类目、政策生效时间过滤。
 - `search_catalog` / `compare_products`：结构化过滤优先，文本检索补充，所有结论附商品字段来源。
@@ -1338,7 +1349,7 @@ FAQ 和政策库与商品事实库分开：政策适合段落检索，价格、�
 
 模型层做成可替换网关，不把业务逻辑绑定到某一家模型：
 
-- 主 Agent 使用工具调用和中文指令遵循较强的模型；路由、摘要、query rewrite 可使用更便宜的小模型。
+- 主 Agent 使用工具调用和中文指令遵循较强的模型；首版意图分类器必须复用该主模型，不允许为了路由再引入第二个模型。分类使用短 Prompt、小输出 token 上限和 `temperature=0` 控制成本与延迟；摘要、query rewrite 的模型降级属于后续优化，不得改变本约束。
 - 模型仅通过自研 `ModelGateway` 接入，具体型号按 `commerce-bench-zh` 实测选择，不把任何模型部署方案绑定为 Agent 运行底座。
 - Judge 使用独立、固定版本且中文评测能力足够的模型；不要随候选 Agent 一起切换 Judge，也不要只依赖候选模型自评。开发调试允许在未配置 Judge 时复用主模型，但报告必须标记 `provisional/self_judged=true`，不得作为 release gate。
 - 首版不建议微调主 Agent。先通过强类型工具、确定性工作流、RAG 和 prompt 建立基线；积累足够失败样本后，再考虑微调 intent/slot router 或 reranker。
@@ -1451,7 +1462,9 @@ sequenceDiagram
     API->>Store: 保存 message/create run
     API->>Runtime: run(run_id)
     Runtime->>Store: load checkpoint + actor context
-    Runtime->>Runtime: route execution_mode
+    Runtime->>Model: intent_classification（复用主 Agent 模型）
+    Model-->>Runtime: IntentClassification
+    Runtime->>Runtime: 代码复核并生成 RouteDecision
     alt readonly_loop
         loop running_readonly 且预算充足
             Runtime->>Model: PromptView + readonly tools
@@ -1635,9 +1648,9 @@ Phase 0 已实现 app/Dockerfile/Compose，并在本服务器通过 `scripts/dep
 | `POSTGRES_DB` | 否 | `commerce_agent` | 独立数据库 |
 | `POSTGRES_RUNTIME_USER` | 否 | `commerce_agent_runtime` | runtime 非 superuser 角色 |
 | `POSTGRES_RUNTIME_PASSWORD` | 是 | 部署时生成 | 只用于组装 `DATABASE_URL`，不提交到仓库 |
-| `MODEL` | 否 | 现有 `.env` | Agent 模型 ID |
-| `API_BASE` | 否 | 现有 `.env` | OpenAI-compatible 格式的模型 API 根路径 |
-| `API_KEY` | 是 | 现有 `.env` | 只进入 app 进程，不进前端 |
+| `MODEL` | 否 | 现有 `.env` | 主 Agent 与意图分类器共同使用的模型 ID |
+| `API_BASE` | 否 | 现有 `.env` | 主 Agent 与意图分类器共同使用的 OpenAI-compatible API 根路径 |
+| `API_KEY` | 是 | 现有 `.env` | 主 Agent 与意图分类器共同使用；只进入 app 进程，不进前端 |
 | `JUDGE_MODEL` | 否 | 开发时未设置可复用 `MODEL` | release 必须显式配置且与候选模型独立 |
 | `JUDGE_API_BASE` | 否 | 未设置时复用 `API_BASE` | Judge 独立端点；只进入后端进程 |
 | `JUDGE_API_KEY` | 是 | 未设置时复用 `API_KEY` | Judge 独立凭据；不得记录或进入前端 |
@@ -1646,6 +1659,8 @@ Phase 0 已实现 app/Dockerfile/Compose，并在本服务器通过 `scripts/dep
 | `EVAL_CONCURRENCY` | 否 | `1` | 当前服务器不得默认超过 1 |
 | `EMBEDDING_ENABLED` | 否 | `false` | 密集检索开关；关闭时仍可运行 RAG |
 | `DEMO_MODE` | 否 | `true` | production 必须显式为 `false` |
+
+首版禁止增加任何 `CLASSIFIER_*` 环境变量；如果将来要拆分分类模型，必须先修改本设计、重新校准 150 个 intent case，并重新通过路由安全门禁。
 | `DEMO_ACTOR_ALLOWLIST` | 否 | 预置伪标识列表 | 只允许演示身份切换 |
 
 `.env.example` 只写变量名和非敏感默认值，真实 `.env` 保持在 `.gitignore`。应用启动时只记录 secret 是否存在和配置哈希，绝不记录值。
@@ -1701,10 +1716,12 @@ CommerceAgent/
 │   ├── agent/
 │   │   ├── loop.py          # AgentLoop.run() 有界 while，只负责循环控制
 │   │   ├── step_executor.py # 单轮 Decision/校验/至多一次只读工具
+│   │   ├── intent_classifier.py # 复用主 Agent 模型的分类 profile 与输出 Schema
 │   │   ├── decision.py      # 强类型 Decision 协议
 │   │   └── limits.py        # 步数、deadline、取消和预算
 │   ├── orchestration/
 │   │   ├── engine.py        # 双执行器选择、run 驱动、暂停、恢复、取消
+│   │   ├── router.py        # 分类结果的代码风险复核与 RouteDecision
 │   │   ├── pipeline.py      # 只读循环每轮固定八阶段管线
 │   │   ├── workflow_executor.py # 写操作确定性节点执行器
 │   │   ├── state_machine.py # 自研确定性事务状态机
@@ -1792,7 +1809,7 @@ CommerceAgent/
 
 ## 15. 近期可执行清单
 
-当前只推进 Phase 2 v2.3，按以下顺序闭合双执行器增量：
+当前只推进 Phase 2 v2.4，按以下顺序闭合双执行器增量：
 
 1. 冻结 `RouteDecision`、execution_mode/workflow 可空阶段与不可变规则，新增对应 migration、repository 和合同测试。
 2. 将现有 `AgentLoop.run_step()` 的单轮职责唯一迁移到 `AgentStepExecutor.execute_step()`，消除“单步 workflow 被误称为 loop”的歧义。
@@ -1800,7 +1817,7 @@ CommerceAgent/
 4. 实现有界 `AgentLoop.run()`，覆盖多轮 observation、取消、deadline、步数/token 预算、无进展、暂停和恢复。
 5. 实现 WorkflowExecutor 最小入口和确定性测试 workflow，证明 write ToolSpec 永远不会进入 AgentLoop。
 6. 将 RunDriver/fixture/trace 升级为直接驱动真实 `AgentLoop.run()` 到等待或终态，加入双只读工具的多轮 case。
-7. 执行 Phase 2 v2.3 的 unit/workflow/contract/recovery/harness 验证，全部通过后更新 checklist、执行记录并创建原子 commit；在此之前不得启动 Phase 3。
+7. 执行 Phase 2 v2.4 的 unit/workflow/contract/recovery/harness 验证，全部通过后更新 checklist、执行记录并创建原子 commit；在此之前不得启动 Phase 3。
 
 ## 16. 数据来源与许可参考
 

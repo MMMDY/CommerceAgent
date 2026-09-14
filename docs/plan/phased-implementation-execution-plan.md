@@ -1,6 +1,6 @@
 # 电商客服 Agent 分阶段实施与验收清单
 
-> 版本：v2.3
+> 版本：v2.4
 >
 > 日期：2026-09-14
 > 执行者：Codex  
@@ -48,6 +48,7 @@ Codex 执行每个阶段时必须：
 - AgentLoop、OrchestrationEngine、状态机、ToolRegistry、PolicyEngine 和 EvalHarness 全部由本项目实现。
 - 代码主目录只使用 `src/`，不创建旧的包目录名。
 - 模型只产生结构化 Decision，不直接执行工具、SQL、shell 或任意 HTTP。
+- 意图分类器必须通过同一个 ModelGateway 复用主 Agent 的 `MODEL/API_BASE/API_KEY`；禁止新增独立分类模型、端点或密钥，仅允许分类 Prompt、Schema、temperature/token limit 和版本哈希独立。
 - 只读请求进入有界 `AgentLoop.run()` while 循环；每轮只调用一次 `StepPipeline.advance()`：AgentStepExecutor 只产生单轮结果，StepPipeline 完成原子 checkpoint，AgentLoop 才能基于新 context 决定是否继续。
 - `prepare/low_write/commit` 等写操作不得进入 AgentLoop，必须进入确定性 WorkflowExecutor。
 - 写操作必须经过 `authenticate → prepare → confirm → commit → verify`。
@@ -63,7 +64,7 @@ Codex 执行每个阶段时必须：
 |---|---|
 | 后端 | Python 3.12.x、FastAPI 0.116.x、Uvicorn 0.35.x、Pydantic 2.11.x |
 | 持久化 | PostgreSQL 18.6、SQLAlchemy Core 2.0.x、psycopg 3.2.x、Alembic 1.16.x |
-| 模型调用 | 自研 ModelGateway + HTTPX 0.28.x；Agent/Judge 均从项目 `.env` 读取各自模型、端点和密钥 |
+| 模型调用 | 自研 ModelGateway + HTTPX 0.28.x；意图分类器强制复用主 Agent 的 `MODEL/API_BASE/API_KEY`，Judge 使用独立配置 |
 | 前端 | React 19.1.x、TypeScript 5.8.x、Vite 7.x、CSS Modules、原生 fetch/EventSource |
 | 质量工具 | pytest + Ruff + mypy；Vitest + ESLint + `tsc --noEmit` |
 | 运行 | Docker multi-stage build + Docker Compose |
@@ -96,7 +97,7 @@ Codex 执行每个阶段时必须：
 - [x] Phase 0 已完成 Python/API、React/Vite、Docker/Compose 与最小 conversation 骨架，并通过本机 deployment smoke。
 - [x] Phase 1 已完成核心协议、PostgreSQL migration/repository、原子 checkpoint、事件回放和 Eval Core。
 - [x] Phase 2 v2.2 已完成单步 `run_step()`、ModelGateway、工具/政策边界与最小 hard-eval Harness；这只是双执行器改造的输入基线。
-- [ ] 完成 Phase 2 v2.3：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、WorkflowExecutor、执行模式约束和多轮 Harness。
+- [ ] 完成 Phase 2 v2.4：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、复用主模型的意图分类器、WorkflowExecutor、执行模式约束和多轮 Harness。
 - [ ] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；当前 React 页面只是工程骨架。
 - [ ] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。
 - [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。
@@ -325,6 +326,9 @@ ModelGateway：
 - [x] 实现结构化 Decision 解析；不合法输出只修复一次。
 - [x] 实现 `model_invocations` 脱敏记录，不保存隐藏思维链。
 - [x] 提供 deterministic fake model，覆盖所有 Decision 分支。
+- [ ] 在同一 ModelGateway 增加 `purpose=intent_classification` profile；必须与 `purpose=agent_decision` 解析到相同的 `MODEL/API_BASE/API_KEY`，且不得读取任何 `CLASSIFIER_*` 配置。
+- [ ] 为分类 profile 固定独立的 `RoutingPromptView`、`IntentClassification` Schema、`temperature=0`、输出 token 上限、Prompt/Schema 哈希，并在 `model_invocations` 记录 `purpose` 与脱敏延迟。
+- [ ] 提供 deterministic fake intent classifier，覆盖只读、写、低置信度、未知意图和模型输出不合法路径。
 
 工具与政策：
 
@@ -353,6 +357,7 @@ Loop 与编排：
 - [ ] 在每轮开始、模型返回后、工具调用前和进入下一轮前检查 cancellation、绝对 deadline、`max_steps` 与 token budget；usage 缺失时按保守上界扣减。
 - [ ] 实现循环无进展检测：连续等价 Decision/工具参数或重复只读错误达到上限后安全退出，禁止空转到 deadline。
 - [ ] 定义强类型 `RouteDecision(outcome=execute | handoff)`：execute 必须选择并持久化 `execution_mode=readonly_loop | workflow`；handoff 直接进入 `waiting_human` 且不能作为 execution_mode 持久化。
+- [ ] 实现 `IntentClassification → RouteDecision` 代码复核：模型只给候选意图/风险/route，最终 execution_mode 由固定 intent 映射、置信度阈值和 ToolSpec.risk 决定。
 - [ ] 新增双执行器协议、数据库 migration 和 repository 约束：created/routing/直接 handoff 允许 execution_mode/workflow 为空；选定后不可修改；run 状态与 execution_mode 必须满足设计文档第 6.4 节 CHECK。
 - [ ] 实现执行器选择与模式防火墙：AgentLoop 只接受 `read_only` 工具，任何 `prepare/low_write/commit` Decision 在副作用前拒绝并进入 `waiting_human`；同一 run 禁止原地切换 execution_mode，真正的写请求由可信 Router 创建/选择 workflow run。
 - [ ] 实现 Readonly loop 的暂停/恢复：`waiting_user/waiting_human` 立即退出；恢复时从最新 checkpoint 和创建时锁定的 model/prompt/workflow/policy/tool 版本重新进入。
@@ -375,6 +380,7 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit
+python -m pytest tests/unit/test_intent_classifier.py tests/unit/test_route_decision.py
 python -m pytest tests/workflow/test_readonly_loop.py
 python -m pytest tests/workflow/test_bounded_readonly_loop.py tests/workflow/test_executor_routing.py
 python -m pytest tests/recovery/test_readonly_loop_resume.py
@@ -384,6 +390,7 @@ python -m pytest tests/harness/test_deterministic_runtime.py tests/harness/test_
 python -m pytest tests/harness/test_multistep_runtime.py
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track intent_route --judge off
 RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gateway_live.py
+RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_intent_classifier_live.py
 ```
 
 ### 7.4 验收 checklist
@@ -398,6 +405,8 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gate
 - [x] fake model/fake tools 可跑通 complete、wait_user、wait_human、fail 和 cancel 路径。
 - [x] 最小 Harness 能筛选 case/track、隔离 fixture、驱动 Runtime 并生成 hard-eval JSON。
 - [x] 真实模型 smoke 返回合法 Decision 并记录脱敏的模型版本与延迟。
+- [ ] 分类调用与 Agent 决策调用解析到同一个 ModelGateway endpoint/model/credential source；两类调用只有 `purpose/prompt/schema/采样参数` 不同，仓库和运行环境均不存在 `CLASSIFIER_*` 必需配置。
+- [ ] 模型候选 route 与代码风险映射或 ToolSpec.risk 冲突时，以更高风险路径为准；低置信度/未知意图不进入任一自动执行器。
 - [ ] `AgentLoop.run()` 能连续执行至少两个只读工具调用，并让后一轮模型看到前一轮的脱敏 observation，最终自动到达 `completed`。
 - [ ] `waiting_user/waiting_human/completed/failed/cancelled/expired` 均立即退出 while，不发生额外模型或工具调用。
 - [ ] `max_steps/deadline/token budget/cancellation/无进展` 任一门禁触发后均有限终止，且最终状态和事件已 checkpoint。
@@ -406,12 +415,13 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gate
 - [ ] 在相邻两轮 checkpoint 前后注入崩溃，恢复后从最新已提交 context 继续，不跳步、不重复持久化事件。
 - [ ] 多步 Harness 驱动的是 `AgentLoop.run()` 而不是测试专用伪循环，并输出完整的 step/tool/termination trace。
 - [ ] Phase 2 双执行器增量完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [ ] Phase 2 v2.3 所有新增 TODO 和验证命令均完成。
+- [ ] Phase 2 v2.4 所有新增 TODO 和验证命令均完成。
 
 ### 7.5 阶段产物
 
 - `src/models/`、`src/agent/`、`src/orchestration/`
-- `src/agent/loop.py` 的有界 `run()`、`src/agent/step_executor.py` 的单轮执行，以及 `src/orchestration/workflow_executor.py`
+- `src/agent/loop.py` 的有界 `run()`、`src/agent/step_executor.py` 的单轮执行、`src/agent/intent_classifier.py` 的主模型分类 profile
+- `src/orchestration/router.py` 的代码风险复核，以及 `src/orchestration/workflow_executor.py`
 - `src/tools/registry.py`、`executor.py`
 - `src/policies/engine.py`
 - `src/telemetry/trace.py`
@@ -425,13 +435,13 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gate
 
 目标：完成 FAQ/政策、商品详情/对比、订单/物流查询三类可展示的只读链路。
 
-依赖：Phase 2 v2.3 双执行器增量验收完成。
+依赖：Phase 2 v2.4 双执行器与主模型分类器增量验收完成。
 
 ### 8.2 实现 TODO checklist
 
 业务与 RAG：
 
-- [ ] 实现 intent/risk router，输出 intent、route、confidence、required slots。
+- [ ] 在 Phase 2 Router 上配置 30 个核心电商 intent 的代码映射、置信度阈值和 required slots；分类调用继续复用主 Agent 模型，不增加第二模型。
 - [ ] 实现 slot extractor，订单号/商品号在 owner 校验前只是 unverified。
 - [ ] 实现 `knowledge.jsonl` 确定性 ingestion 和版本 hash。
 - [ ] 实现 tenant/access/effective-time/status metadata 强过滤。
@@ -968,18 +978,18 @@ format/lint
   - owner/resource binding、workflow/step/scope 解析、同步 adapter deadline、模型与 prompt 指纹审计：`795e5c4`。
   - API readiness 的无网络 registry 检查：`8035717`。
   - 五轨代表性 Runtime 执行：`f1b1813`。
-- 剩余 TODO：当时无；2026-09-14 用户确认采用双执行器后，本记录只证明 `run_step()` 单步基线，不再证明 Phase 2 v2.3 的有界 `while` 主循环已经完成。
+- 剩余 TODO：当时无；2026-09-14 用户确认采用双执行器后，本记录只证明 `run_step()` 单步基线，不再证明 Phase 2 v2.4 的有界 `while` 主循环和主模型意图分类器已经完成。
 - BLOCKED：无。
 
 ### 2026-09-14 — Phase 2 — 双执行器与有界 while 设计增量
 
 - 状态：in_progress
-- 设计决定：只读任务使用 `AgentLoop.run()` 有界 while；每轮经 StepPipeline 调用 AgentStepExecutor 并先原子 checkpoint，再决定继续。写任务使用确定性 WorkflowExecutor，禁止进入模型自由循环。
+- 设计决定：只读任务使用 `AgentLoop.run()` 有界 while；每轮经 StepPipeline 调用 AgentStepExecutor 并先原子 checkpoint，再决定继续。写任务使用确定性 WorkflowExecutor，禁止进入模型自由循环。意图分类器复用主 Agent 模型，由代码完成最终风险复核和执行器选择。
 - 文档变更：
   - `docs/plan/feasibility-and-implementation-plan.md`
   - `docs/plan/phased-implementation-execution-plan.md`
 - 已有可复用基础：八阶段单步管线、运行版本锁定、ToolExecutor 安全边界、checkpoint/recovery、最小 Harness。
-- 剩余 TODO：实现本阶段新增的 `AgentLoop.run()`、执行器选择、WorkflowExecutor 入口、多轮 fixture/trace 以及新增恢复与安全测试。
+- 剩余 TODO：实现本阶段新增的主模型意图分类 profile、`AgentLoop.run()`、执行器选择、WorkflowExecutor 入口、多轮 fixture/trace 以及新增恢复与安全测试。
 - BLOCKED：无。
 
 ## 15. 停止或请求用户输入的条件
