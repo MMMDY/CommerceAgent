@@ -29,6 +29,10 @@ class _Checkpoints:
         self.calls.append((kwargs["status"], kwargs["events"]))  # type: ignore[arg-type]
         return len(self.calls)
 
+    def resume(self, *, run_id: object, tenant_id: str) -> RunContext | None:
+        del run_id, tenant_id
+        return self.recovered if hasattr(self, "recovered") else None
+
 
 def _context() -> RunContext:
     return RunContext(
@@ -115,3 +119,21 @@ def test_engine_cancel_persists_terminal_checkpoint() -> None:
     cancelled = engine.cancel(_context())
     assert cancelled.status is RunStatus.CANCELLED
     assert checkpoints.calls[0][0] is RunStatus.CANCELLED
+
+
+def test_engine_resume_loads_context_from_checkpoint_store() -> None:
+    checkpoints = _Checkpoints()
+    checkpoints.recovered = _context()
+    engine = OrchestrationEngine(
+        loop=AgentLoop(
+            model=DeterministicFakeModel(()),
+            validator=DecisionValidator(),
+            registry=ToolRegistry(()),
+            executor=ToolExecutor({}),
+        ),
+        workflows=WorkflowRegistry((WorkflowDefinition("w", "1", ("answer",)),)),
+        checkpoints=checkpoints,
+    )
+    assert (
+        engine.resume(run_id=checkpoints.recovered.run_id, tenant_id="t") == checkpoints.recovered
+    )

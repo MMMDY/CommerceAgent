@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, cast
+from uuid import UUID
 
 from src.agent.loop import AgentLoop, LoopResult
 from src.agent.validation import DecisionBoundary
@@ -25,6 +26,10 @@ class CheckpointStore(Protocol):
         state: dict[str, object],
         events: tuple[DomainEvent, ...],
     ) -> int: ...
+
+
+class RecoveryCheckpointStore(CheckpointStore, Protocol):
+    def resume(self, *, run_id: UUID, tenant_id: str) -> RunContext | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +100,17 @@ class OrchestrationEngine:
             loop=loop,
         )
 
-    def resume(self, context: RunContext) -> RunContext:
+    def resume(self, *, run_id: UUID, tenant_id: str) -> RunContext:
+        """Reload the newest persisted context; never reconstruct it from request input."""
+
+        try:
+            context = cast(RecoveryCheckpointStore, self._checkpoints).resume(
+                run_id=run_id, tenant_id=tenant_id
+            )
+        except AttributeError as error:
+            raise RuntimeError("checkpoint store does not support recovery") from error
+        if context is None:
+            raise ValueError("run checkpoint is unavailable")
         self._workflows.get(workflow_id=context.workflow_id, version=context.workflow_version)
         return context
 
