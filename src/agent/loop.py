@@ -69,6 +69,15 @@ class AgentLoop:
         self._model_invocations = model_invocations
         self._traces = traces
 
+    @property
+    def model_config_hash(self) -> str:
+        """Return the exact model fingerprint used for run pins and invocation audit."""
+
+        value = getattr(self._model, "config_hash", None)
+        if not isinstance(value, str) or not value:
+            raise RuntimeError("model gateway does not expose a configuration fingerprint")
+        return value
+
     def run_step(
         self,
         *,
@@ -121,7 +130,7 @@ class AgentLoop:
                         prompt=prompt,
                         provider=getattr(self._model, "provider", "unknown"),
                         model=getattr(self._model, "model_name", "unknown"),
-                        config_hash=getattr(self._model, "config_hash", "unknown"),
+                        config_hash=self.model_config_hash,
                         error_code="MODEL_GATEWAY_ERROR",
                     )
                 except Exception:
@@ -148,7 +157,7 @@ class AgentLoop:
                     result=model_result,
                     provider=getattr(self._model, "provider", "unknown"),
                     model=getattr(self._model, "model_name", "unknown"),
-                    config_hash=getattr(self._model, "config_hash", "unknown"),
+                    config_hash=self.model_config_hash,
                 )
             except Exception:
                 _record_post_request_failure(stage_observer)
@@ -181,7 +190,12 @@ class AgentLoop:
                 )
         if decision.type is DecisionType.CALL_TOOL:
             try:
-                spec = self._registry.get(name=decision.tool or "", version="1")
+                spec = self._registry.resolve(
+                    name=decision.tool or "",
+                    version="1",
+                    context=tool_context,
+                    require_model_visible=True,
+                )
                 self._validator.validate(decision=decision, boundary=boundary, tool_spec=spec)
             except (DecisionValidationError, ToolRegistryError):
                 _record_stage(stage_observer, "validate", "failed")

@@ -225,6 +225,15 @@ def validate_step_inputs(
     )
     if tool_identity != trusted_identity:
         raise PipelineInputError("tool context identity does not match run context")
+    if tool_context.workflow_id is not None and tool_context.workflow_id != context.workflow_id:
+        raise PipelineInputError("tool context workflow does not match run context")
+    if (
+        tool_context.workflow_version is not None
+        and tool_context.workflow_version != context.workflow_version
+    ):
+        raise PipelineInputError("tool context workflow version does not match run context")
+    if tool_context.current_step is not None and tool_context.current_step != prompt.current_step:
+        raise PipelineInputError("tool context step does not match prompt")
     if deadline_at.tzinfo is None or deadline_at.utcoffset() is None:
         raise PipelineInputError("deadline must be timezone-aware")
 

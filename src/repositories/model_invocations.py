@@ -47,6 +47,7 @@ class ModelInvocationRepository:
             provider=provider,
             model=model,
             config_hash=config_hash,
+            prompt_version=prompt.system_policy_version,
             input_metadata=input_metadata,
             prompt_hash=prompt_hash,
             output_metadata=output_metadata,
@@ -71,6 +72,7 @@ class ModelInvocationRepository:
             provider=provider,
             model=model,
             config_hash=config_hash,
+            prompt_version=prompt.system_policy_version,
             input_metadata={
                 "workflow_id": prompt.workflow_id,
                 "workflow_version": prompt.workflow_version,
@@ -91,6 +93,7 @@ class ModelInvocationRepository:
         provider: str,
         model: str,
         config_hash: str,
+        prompt_version: str,
         input_metadata: Mapping[str, object],
         output_metadata: Mapping[str, object] | None,
         prompt_hash: str,
@@ -115,7 +118,7 @@ class ModelInvocationRepository:
                     "output_redacted_json, output_hash, status, error_code, latency_ms, "
                     "started_at, finished_at) "
                     "VALUES (:id, :run_id, :step, 'agent', :provider, :model, :config_hash, "
-                    "'phase2-v1', CAST(:input AS jsonb), :input_hash, CAST(:output AS jsonb), "
+                    ":prompt_version, CAST(:input AS jsonb), :input_hash, CAST(:output AS jsonb), "
                     ":output_hash, :status, :error_code, :latency, now(), now())"
                 ),
                 {
@@ -125,6 +128,7 @@ class ModelInvocationRepository:
                     "provider": provider,
                     "model": model,
                     "config_hash": config_hash,
+                    "prompt_version": prompt_version,
                     "input": input_json,
                     "input_hash": prompt_hash,
                     "output": output_json,

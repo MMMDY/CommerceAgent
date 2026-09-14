@@ -160,6 +160,13 @@ class RetryPolicy(Contract):
     backoff_ms: tuple[int, ...] = ()
 
 
+class ResourceBinding(Contract):
+    """Trusted resource ownership check required before an adapter call."""
+
+    argument: str = Field(min_length=1, max_length=128)
+    owner_check: str = Field(min_length=1, max_length=128)
+
+
 class ToolSpec(Contract):
     name: str = Field(min_length=1, max_length=128)
     version: str = Field(min_length=1, max_length=64)
@@ -170,6 +177,9 @@ class ToolSpec(Contract):
     timeout_ms: int = Field(ge=1, le=30_000)
     retry_policy: RetryPolicy
     model_visible: bool
+    allowed_workflows: tuple[str, ...] = ()
+    allowed_steps: tuple[str, ...] = ()
+    resource_binding: ResourceBinding | None = None
 
 
 class ToolContext(Contract):
@@ -179,6 +189,10 @@ class ToolContext(Contract):
     tenant_id: str = Field(min_length=1, max_length=64)
     actor_id: str = Field(min_length=1, max_length=128)
     scopes: tuple[str, ...]
+    workflow_id: str | None = Field(default=None, min_length=1, max_length=128)
+    workflow_version: str | None = Field(default=None, min_length=1, max_length=64)
+    current_step: str | None = Field(default=None, min_length=1, max_length=128)
+    policy_version: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class ToolErrorCode(StrEnum):

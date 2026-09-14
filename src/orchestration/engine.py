@@ -75,6 +75,8 @@ class OrchestrationEngine:
             return context
         if spec is None:
             raise ValueError("run creation spec is required for durable creation")
+        if spec.model_config_hash != self._loop.model_config_hash:
+            raise ValueError("run model configuration does not match the active gateway")
         if spec.current_step not in workflow.steps:
             raise ValueError("initial step is not in the locked workflow")
         if datetime.now(spec.deadline_at.tzinfo) >= spec.deadline_at:
@@ -177,7 +179,12 @@ class OrchestrationEngine:
             events=(DomainEvent(event_type=EventType.FAILED, payload={"reason": "cancelled"}),),
         )
         return context.model_copy(
-            update={"status": RunStatus.CANCELLED, "state": state, "checkpoint_version": version}
+            update={
+                "status": RunStatus.CANCELLED,
+                "state": state,
+                "step_count": context.step_count + 1,
+                "checkpoint_version": version,
+            }
         )
 
 

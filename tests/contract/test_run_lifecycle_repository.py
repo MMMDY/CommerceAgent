@@ -9,9 +9,11 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import Engine, create_engine, text
 
+from src.models.gateway import ModelDecision
 from src.orchestration.run_creation import ExecutionMode, RunCreationSpec
-from src.protocols import RunContext, RunStatus
+from src.protocols import Decision, DecisionType, PromptView, RunContext, RunStatus
 from src.repositories.run_lifecycle import RunLifecycleRepository
+from src.repositories.model_invocations import ModelInvocationRepository
 
 
 @pytest.fixture(scope="module")
@@ -157,3 +159,91 @@ def test_published_v2_does_not_retarget_existing_v1_run(engine: Engine) -> None:
     assert existing is not None
     assert existing.workflow_version == "1.0"
     assert existing.current_step == "v1"
+
+
+def test_model_invocation_records_actual_gateway_and_prompt_fingerprints(
+    engine: Engine,
+) -> None:
+    now = datetime.now(UTC)
+    tenant_id = f"model-audit-{uuid4()}"
+    conversation_id = uuid4()
+    context = RunContext(
+        run_id=uuid4(),
+        conversation_id=conversation_id,
+        tenant_id=tenant_id,
+        actor_id="audit-actor",
+        workflow_id="knowledge_query",
+        workflow_version="1",
+        status=RunStatus.CREATED,
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO conversation.conversations "
+                "(id, tenant_id, actor_id, client_request_id, status, created_at, updated_at) "
+                "VALUES (:id, :tenant_id, :actor_id, :request_id, 'active', :now, :now)"
+            ),
+            {
+                "id": conversation_id,
+                "tenant_id": tenant_id,
+                "actor_id": "audit-actor",
+                "request_id": str(uuid4()),
+                "now": now,
+            },
+        )
+    RunLifecycleRepository(engine).create_run(
+        context=context,
+        spec=RunCreationSpec(
+            execution_mode=ExecutionMode.READONLY_LOOP,
+            policy_version="phase2-readonly-v1",
+            model_config_hash="sha256:gateway-config",
+            prompt_version="prompt-view-v7",
+            current_step="retrieve",
+            deadline_at=now + timedelta(minutes=5),
+        ),
+    )
+    prompt = PromptView(
+        system_policy_version="prompt-view-v7",
+        workflow_id="knowledge_query",
+        workflow_version="1",
+        current_step="retrieve",
+        allowed_decisions=("respond",),
+        conversation=(),
+        known_slots={},
+        required_slots=(),
+        allowed_tools=(),
+        evidence_ids=(),
+        remaining_steps=1,
+    )
+    ModelInvocationRepository(engine).record_success(
+        context=context,
+        prompt=prompt,
+        result=ModelDecision(
+            decision=Decision(
+                type=DecisionType.RESPOND,
+                intent="knowledge_query",
+                route="knowledge_query",
+                confidence=1,
+                response="ok",
+            ),
+            latency_ms=3,
+        ),
+        provider="fake-provider",
+        model="fake-model",
+        config_hash="sha256:gateway-config",
+    )
+    with engine.connect() as connection:
+        row = connection.execute(
+            text(
+                "SELECT provider, model, model_config_hash, prompt_version, input_redacted_json "
+                "FROM runtime.model_invocations WHERE run_id = :run_id"
+            ),
+            {"run_id": context.run_id},
+        ).one()
+    assert tuple(row[:4]) == (
+        "fake-provider",
+        "fake-model",
+        "sha256:gateway-config",
+        "prompt-view-v7",
+    )
+    assert "conversation" not in row.input_redacted_json

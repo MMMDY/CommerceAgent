@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from threading import Event
+from time import monotonic
 from uuid import uuid4
+
+import pytest
 
 from src.policies.engine import FactCondition, PolicyEffect, PolicyEngine, PolicyRule
 from src.protocols import (
+    ResourceBinding,
     RetryPolicy,
     ToolContext,
     ToolError,
@@ -14,6 +19,7 @@ from src.protocols import (
 )
 from src.telemetry.trace import TraceStore
 from src.tools.executor import ToolExecutor
+from src.tools.registry import ToolRegistry, ToolRegistryError
 
 
 def _context(scopes: tuple[str, ...] = ("order:read",)) -> ToolContext:
@@ -24,6 +30,7 @@ def _context(scopes: tuple[str, ...] = ("order:read",)) -> ToolContext:
         tenant_id="t",
         actor_id="a",
         scopes=scopes,
+        policy_version="v1",
     )
 
 
@@ -169,7 +176,6 @@ def test_executor_records_only_redacted_tool_execution_metadata() -> None:
         context=_context(),
         arguments={
             "phone": "13800138000",
-            "confirmation_token": "confirmation-secret",
             "api_key": "request-secret",
         },
     )
@@ -207,3 +213,121 @@ def test_executor_records_denied_execution_without_invoking_adapter() -> None:
         "error_code": "PERMISSION_DENIED",
         "retryable": False,
     }
+
+
+def test_executor_rejects_system_fields_and_schema_before_adapter() -> None:
+    invoked = False
+
+    def adapter(_: ToolContext, __: dict[str, object]) -> ToolResult:
+        nonlocal invoked
+        invoked = True
+        return ToolResult(tool_name="read", tool_version="1", data={})
+
+    spec = _spec().model_copy(
+        update={
+            "input_schema": {
+                "properties": {"order_id": {"type": "string"}},
+                "required": ["order_id"],
+                "additionalProperties": False,
+            }
+        }
+    )
+    executor = ToolExecutor({"read": adapter})
+
+    malformed = executor.execute(spec=spec, context=_context(), arguments={})
+    system_field = executor.execute(
+        spec=spec,
+        context=_context(),
+        arguments={"order_id": "ORD-1", "tenant_id": "forged"},
+    )
+
+    assert malformed.result.error is not None
+    assert malformed.result.error.code is ToolErrorCode.INVALID_ARGUMENT
+    assert system_field.result.error is not None
+    assert system_field.result.error.code is ToolErrorCode.INVALID_ARGUMENT
+    assert not invoked
+
+
+def test_executor_requires_trusted_resource_authorizer_for_bound_resource() -> None:
+    calls: list[tuple[str, object, ToolContext]] = []
+
+    class Authorizer:
+        def authorize(
+            self, *, owner_check: str, resource_id: object, context: ToolContext
+        ) -> bool:
+            calls.append((owner_check, resource_id, context))
+            return resource_id == "ORD-SELF"
+
+    spec = _spec().model_copy(
+        update={
+            "input_schema": {"properties": {"order_id": {"type": "string"}}},
+            "resource_binding": ResourceBinding(argument="order_id", owner_check="order_owner"),
+        }
+    )
+    executor = ToolExecutor(
+        {"read": lambda _c, _a: ToolResult(tool_name="read", tool_version="1", data={})},
+        resource_authorizer=Authorizer(),
+    )
+
+    denied = executor.execute(spec=spec, context=_context(), arguments={"order_id": "ORD-OTHER"})
+    allowed = executor.execute(spec=spec, context=_context(), arguments={"order_id": "ORD-SELF"})
+
+    assert denied.result.error is not None
+    assert denied.result.error.code is ToolErrorCode.RESOURCE_NOT_FOUND
+    assert allowed.result.error is None
+    assert [(owner, resource) for owner, resource, _ in calls] == [
+        ("order_owner", "ORD-OTHER"),
+        ("order_owner", "ORD-SELF"),
+    ]
+
+
+def test_executor_returns_at_deadline_when_a_sync_adapter_blocks() -> None:
+    release = Event()
+    calls: list[str] = []
+
+    def blocked(_: ToolContext, __: dict[str, object]) -> ToolResult:
+        calls.append("called")
+        release.wait(timeout=1)
+        return ToolResult(tool_name="read", tool_version="1", data={})
+
+    started = monotonic()
+    readonly = ToolExecutor({"read": blocked}).execute(
+        spec=_spec().model_copy(update={"timeout_ms": 20}),
+        context=_context(),
+        arguments={},
+    )
+    elapsed = monotonic() - started
+    release.set()
+
+    assert readonly.result.error is not None
+    assert readonly.result.error.code is ToolErrorCode.UPSTREAM_TIMEOUT
+    assert readonly.attempts == 2
+    assert len(calls) == 2
+    assert elapsed < 0.25
+
+
+def test_registry_resolve_enforces_model_visibility_workflow_step_and_scope() -> None:
+    spec = _spec().model_copy(
+        update={
+            "allowed_workflows": ("orders@1",),
+            "allowed_steps": ("lookup",),
+        }
+    )
+    registry = ToolRegistry((spec,))
+    context = _context().model_copy(
+        update={"workflow_id": "orders", "workflow_version": "1", "current_step": "lookup"}
+    )
+
+    assert registry.resolve(
+        name="read", version="1", context=context, require_model_visible=True
+    ) == spec
+    with pytest.raises(ToolRegistryError):
+        registry.resolve(
+            name="read",
+            version="1",
+            context=context.model_copy(update={"current_step": "commit"}),
+        )
+    with pytest.raises(ToolRegistryError):
+        registry.resolve(
+            name="read", version="1", context=context.model_copy(update={"scopes": ()})
+        )

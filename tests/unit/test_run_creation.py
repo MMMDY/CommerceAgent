@@ -46,7 +46,7 @@ def _spec(*, current_step: str = "v1_start") -> RunCreationSpec:
     return RunCreationSpec(
         execution_mode=ExecutionMode.WORKFLOW,
         policy_version="policy-v1",
-        model_config_hash=f"sha256:{'1' * 64}",
+        model_config_hash="sha256:deterministic_fake",
         prompt_version="prompt-v1",
         current_step=current_step,
         max_steps=5,
@@ -82,6 +82,16 @@ def test_engine_create_durably_uses_the_exact_selected_workflow_version() -> Non
     assert engine.create(context, spec=spec) is context
     assert creations.calls == [(context, spec)]
     assert creations.calls[0][0].workflow_version == "1"
+
+
+def test_engine_create_rejects_a_model_fingerprint_other_than_the_active_gateway() -> None:
+    creations = _RunCreations()
+    mismatched = _spec().model_copy(update={"model_config_hash": "sha256:other"})
+
+    with pytest.raises(ValueError, match="model configuration"):
+        _engine(creations=creations).create(_context(), spec=mismatched)
+
+    assert creations.calls == []
 
 
 def test_engine_create_keeps_the_original_in_memory_call_compatible() -> None:
