@@ -222,7 +222,17 @@ class AgentStepExecutor:
                     require_model_visible=True,
                 )
                 if spec.risk is not ToolRisk.READ_ONLY:
-                    raise DecisionValidationError("write tool is forbidden in readonly loop")
+                    _record_stage(stage_observer, "validate", "failed")
+                    _record_stage(stage_observer, "execute", "skipped")
+                    _record_stage(stage_observer, "observe", "completed")
+                    return LoopResult(
+                        status=StepStatus.WAIT_HUMAN,
+                        response=None,
+                        decision_type=decision.type,
+                        decision=decision,
+                        reason="readonly_write_tool_forbidden",
+                        usage_tokens=model_result.usage_tokens,
+                    )
                 self._validator.validate(decision=decision, boundary=boundary, tool_spec=spec)
             except (DecisionValidationError, ToolRegistryError):
                 _record_stage(stage_observer, "validate", "failed")

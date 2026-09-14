@@ -249,7 +249,8 @@ def test_readonly_loop_rejects_a_write_tool_before_adapter_side_effect() -> None
         deadline_at=datetime.now(UTC) + timedelta(seconds=1),
     )
 
-    assert result.reason == "decision_rejected"
+    assert result.status is StepStatus.WAIT_HUMAN
+    assert result.reason == "readonly_write_tool_forbidden"
     assert calls == 0
 
 

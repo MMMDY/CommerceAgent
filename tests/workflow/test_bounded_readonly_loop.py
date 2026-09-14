@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
+
 from src.agent.loop import AgentLoop
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.models.gateway import DeterministicFakeModel
@@ -298,3 +300,169 @@ def test_cancellation_after_model_response_prevents_tool_side_effect() -> None:
     assert result.context.status is RunStatus.CANCELLED
     assert len(model.prompts) == 1
     assert adapter.calls == []
+
+
+@pytest.mark.parametrize(
+    "status",
+    (
+        RunStatus.WAITING_USER,
+        RunStatus.WAITING_HUMAN,
+        RunStatus.COMPLETED,
+        RunStatus.FAILED,
+        RunStatus.CANCELLED,
+        RunStatus.EXPIRED,
+    ),
+)
+def test_non_running_status_exits_without_another_model_or_tool_call(status: RunStatus) -> None:
+    context = _context().model_copy(update={"status": status})
+    model = DeterministicFakeModel(())
+    adapter = DeterministicFakeToolAdapter(())
+    loop = AgentLoop(
+        model=model,
+        validator=DecisionValidator(),
+        registry=ToolRegistry((_spec("tool_a"),)),
+        executor=ToolExecutor({"tool_a": adapter}),
+    )
+    checkpoints = _Checkpoints()
+    result = loop.run(
+        context=context,
+        pipeline=StepPipeline(
+            step_executor=loop.step_executor,
+            checkpoints=checkpoints,
+            prompt_builder=_PromptBuilder(),
+        ),
+        boundary=DecisionBoundary(
+            route="readonly",
+            allowed_types=frozenset({DecisionType.CALL_TOOL, DecisionType.RESPOND}),
+            allowed_tools=frozenset({"tool_a", "tool_b"}),
+            trusted_evidence_ids=frozenset(),
+        ),
+        tool_context=lambda current: ToolContext(
+            request_id=uuid4(),
+            run_id=current.run_id,
+            conversation_id=current.conversation_id,
+            tenant_id=current.tenant_id,
+            actor_id=current.actor_id,
+            scopes=("read",),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=2),
+    )
+
+    assert result.context is context
+    assert result.steps == ()
+    assert model.prompts == []
+    assert adapter.calls == []
+    assert checkpoints.calls == []
+
+
+@pytest.mark.parametrize(
+    ("context_update", "cancelled", "reason", "expected_status"),
+    (
+        ({"step_count": 6}, lambda: False, "max_steps_exceeded", RunStatus.WAITING_HUMAN),
+        ({}, lambda: False, "deadline_exceeded", RunStatus.WAITING_HUMAN),
+        ({}, lambda: True, "cancelled", RunStatus.CANCELLED),
+    ),
+)
+def test_outer_loop_gates_checkpoint_a_safe_stop_before_model(
+    context_update: dict[str, object],
+    cancelled: object,
+    reason: str,
+    expected_status: RunStatus,
+) -> None:
+    context = _context().model_copy(update=context_update)
+    model = DeterministicFakeModel(())
+    loop = AgentLoop(
+        model=model,
+        validator=DecisionValidator(),
+        registry=ToolRegistry((_spec("tool_a"),)),
+        executor=ToolExecutor({"tool_a": DeterministicFakeToolAdapter(())}),
+    )
+    checkpoints = _Checkpoints()
+    deadline = (
+        datetime.now(UTC) - timedelta(seconds=1)
+        if reason == "deadline_exceeded"
+        else datetime.now(UTC) + timedelta(seconds=2)
+    )
+    result = loop.run(
+        context=context,
+        pipeline=StepPipeline(
+            step_executor=loop.step_executor,
+            checkpoints=checkpoints,
+            prompt_builder=_PromptBuilder(),
+        ),
+        boundary=DecisionBoundary(
+            route="readonly",
+            allowed_types=frozenset({DecisionType.CALL_TOOL, DecisionType.RESPOND}),
+            allowed_tools=frozenset({"tool_a", "tool_b"}),
+            trusted_evidence_ids=frozenset(),
+        ),
+        tool_context=lambda current: ToolContext(
+            request_id=uuid4(),
+            run_id=current.run_id,
+            conversation_id=current.conversation_id,
+            tenant_id=current.tenant_id,
+            actor_id=current.actor_id,
+            scopes=("read",),
+        ),
+        deadline_at=deadline,
+        cancelled=cancelled,  # type: ignore[arg-type]
+    )
+
+    assert result.context.status is expected_status
+    assert result.context.state["last_step_reason"] == reason
+    assert len(model.prompts) == 0
+    assert len(checkpoints.calls) == 1
+
+
+def test_equivalent_consecutive_readonly_actions_handoff_without_a_third_model_call() -> None:
+    context = _context()
+    decision = Decision(
+        type=DecisionType.CALL_TOOL,
+        intent="lookup",
+        route="readonly",
+        confidence=1,
+        tool="tool_a",
+        args={},
+    )
+    model = DeterministicFakeModel((decision, decision))
+    adapter = DeterministicFakeToolAdapter(
+        (
+            ToolResult(tool_name="tool_a", tool_version="1", data={}),
+            ToolResult(tool_name="tool_a", tool_version="1", data={}),
+        )
+    )
+    loop = AgentLoop(
+        model=model,
+        validator=DecisionValidator(),
+        registry=ToolRegistry((_spec("tool_a"),)),
+        executor=ToolExecutor({"tool_a": adapter}),
+    )
+    checkpoints = _Checkpoints()
+    result = loop.run(
+        context=context,
+        pipeline=StepPipeline(
+            step_executor=loop.step_executor,
+            checkpoints=checkpoints,
+            prompt_builder=_PromptBuilder(),
+        ),
+        boundary=DecisionBoundary(
+            route="readonly",
+            allowed_types=frozenset({DecisionType.CALL_TOOL, DecisionType.RESPOND}),
+            allowed_tools=frozenset({"tool_a", "tool_b"}),
+            trusted_evidence_ids=frozenset(),
+        ),
+        tool_context=lambda current: ToolContext(
+            request_id=uuid4(),
+            run_id=current.run_id,
+            conversation_id=current.conversation_id,
+            tenant_id=current.tenant_id,
+            actor_id=current.actor_id,
+            scopes=("read",),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=2),
+    )
+
+    assert result.context.status is RunStatus.WAITING_HUMAN
+    assert result.context.state["last_step_reason"] == "readonly_loop_no_progress"
+    assert len(model.prompts) == len(adapter.calls) == 2
+    assert len(checkpoints.calls) == 3
