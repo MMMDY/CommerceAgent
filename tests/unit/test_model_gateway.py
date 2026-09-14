@@ -75,6 +75,38 @@ def test_gateway_normalizes_http_errors_without_provider_payload() -> None:
         gateway.decide(_prompt())
 
 
+def test_gateway_retries_a_recoverable_5xx_once() -> None:
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(503)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"type":"respond","intent":"x","route":"r",'
+                                '"confidence":1,"response":"ok"}'
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    gateway = OpenAICompatibleGateway(
+        Settings(model="m", api_base="https://example.test/v1", api_key="secret"),
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    assert gateway.decide(_prompt()).decision.response == "ok"
+    assert calls == 2
+
+
 def test_gateway_constrains_legacy_envelope_to_trusted_prompt_route() -> None:
     client = httpx.Client(
         transport=httpx.MockTransport(

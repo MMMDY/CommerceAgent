@@ -63,6 +63,7 @@ class OpenAICompatibleGateway(ModelGateway):
         self._api_key = settings.api_key.get_secret_value()
         self._timeout = settings.model_timeout_seconds
         self._max_tokens = settings.model_max_tokens
+        self._retry_attempts = settings.model_retry_attempts
         self._client = client or httpx.Client(timeout=self._timeout)
         self.provider = "openai_compatible"
         self.model_name = self._model
@@ -72,6 +73,7 @@ class OpenAICompatibleGateway(ModelGateway):
                 "model": self._model,
                 "max_tokens": self._max_tokens,
                 "timeout_seconds": self._timeout,
+                "retry_attempts": self._retry_attempts,
                 "temperature": 0,
             },
             sort_keys=True,
@@ -97,27 +99,41 @@ class OpenAICompatibleGateway(ModelGateway):
         instruction = "Return only a JSON object matching the Decision schema."
         if repair:
             instruction += " Repair the prior format failure; do not add prose."
-        response = self._client.post(
-            f"{self._base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self._api_key}"},
-            json={
-                "model": self._model,
-                "temperature": 0,
-                "max_tokens": self._max_tokens,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": instruction},
-                    {"role": "user", "content": prompt.model_dump_json()},
-                ],
-            },
-        )
-        response.raise_for_status()
+        payload = {
+            "model": self._model,
+            "temperature": 0,
+            "max_tokens": self._max_tokens,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": instruction},
+                {"role": "user", "content": prompt.model_dump_json()},
+            ],
+        }
+        response = self._post(payload)
         content = response.json()["choices"][0]["message"]["content"]
         return ModelDecision(
             decision=self._parse_decision(content, prompt),
             latency_ms=round((perf_counter() - started) * 1000),
             repaired=repair,
         )
+
+    def _post(self, payload: dict[str, object]) -> httpx.Response:
+        for attempt in range(self._retry_attempts):
+            try:
+                response = self._client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json=payload,
+                )
+                response.raise_for_status()
+                return response
+            except (httpx.TimeoutException, httpx.TransportError):
+                if attempt + 1 == self._retry_attempts:
+                    raise
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code < 500 or attempt + 1 == self._retry_attempts:
+                    raise
+        raise RuntimeError("unreachable retry state")
 
     @staticmethod
     def _parse_decision(content: str, prompt: PromptView) -> Decision:
