@@ -406,16 +406,16 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_intent_cla
 - [x] fake model/fake tools 可跑通 complete、wait_user、wait_human、fail 和 cancel 路径。
 - [x] 最小 Harness 能筛选 case/track、隔离 fixture、驱动 Runtime 并生成 hard-eval JSON。
 - [x] 真实模型 smoke 返回合法 Decision 并记录脱敏的模型版本与延迟。
-- [ ] 分类调用与 Agent 决策调用解析到相同的 endpoint、model 和 API Key；分类配置使用独立变量名，温度恰好为 0.1，差异仅限 `purpose/prompt/schema/采样参数`。
-- [ ] Classifier 与 Agent 的模型、端点或 Key 任一不相等，或 `CLASSIFIER_TEMPERATURE != 0.1` 时，readiness fail closed；日志、trace 和错误响应不包含配置原值。
-- [ ] 模型候选 route 与代码风险映射或 ToolSpec.risk 冲突时，以更高风险路径为准；低置信度/未知意图不进入任一自动执行器。
-- [ ] `AgentLoop.run()` 能连续执行至少两个只读工具调用，并让后一轮模型看到前一轮的脱敏 observation，最终自动到达 `completed`。
-- [ ] `waiting_user/waiting_human/completed/failed/cancelled/expired` 均立即退出 while，不发生额外模型或工具调用。
-- [ ] `max_steps/deadline/token budget/cancellation/无进展` 任一门禁触发后均有限终止，且最终状态和事件已 checkpoint。
-- [ ] AgentLoop 遇到 `prepare/low_write/commit` 工具建议时副作用次数为 0；相同请求由 WorkflowExecutor 按确定性节点处理。
-- [ ] 数据库拒绝 run 状态与 execution_mode 不匹配、`handoff` 作为 execution_mode，以及执行器/workflow 版本在选定后的修改。
-- [ ] 在相邻两轮 checkpoint 前后注入崩溃，恢复后从最新已提交 context 继续，不跳步、不重复持久化事件。
-- [ ] 多步 Harness 驱动的是 `AgentLoop.run()` 而不是测试专用伪循环，并输出完整的 step/tool/termination trace。
+- [x] 分类调用与 Agent 决策调用解析到相同的 endpoint、model 和 API Key；分类配置使用独立变量名，温度恰好为 0.1，差异仅限 `purpose/prompt/schema/采样参数`。
+- [x] Classifier 与 Agent 的模型、端点或 Key 任一不相等，或 `CLASSIFIER_TEMPERATURE != 0.1` 时，readiness fail closed；日志、trace 和错误响应不包含配置原值。
+- [x] 模型候选 route 与代码风险映射或 ToolSpec.risk 冲突时，以更高风险路径为准；低置信度/未知意图不进入任一自动执行器。
+- [x] `AgentLoop.run()` 能连续执行至少两个只读工具调用，并让后一轮模型看到前一轮的脱敏 observation，最终自动到达 `completed`。
+- [x] `waiting_user/waiting_human/completed/failed/cancelled/expired` 均立即退出 while，不发生额外模型或工具调用。
+- [x] `max_steps/deadline/token budget/cancellation/无进展` 任一门禁触发后均有限终止，且最终状态和事件已 checkpoint。
+- [x] AgentLoop 遇到 `prepare/low_write/commit` 工具建议时副作用次数为 0；相同请求由 WorkflowExecutor 按确定性节点处理。
+- [x] 数据库拒绝 run 状态与 execution_mode 不匹配、`handoff` 作为 execution_mode，以及执行器/workflow 版本在选定后的修改。
+- [x] 在相邻两轮 checkpoint 前后注入崩溃，恢复后从最新已提交 context 继续，不跳步、不重复持久化事件。
+- [x] 多步 Harness 驱动的是 `AgentLoop.run()` 而不是测试专用伪循环，并输出完整的 step/tool/termination trace。
 - [ ] Phase 2 双执行器增量完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 2 v2.5 所有新增 TODO 和验证命令均完成。
 
@@ -1020,6 +1020,13 @@ format/lint
 - 验证证据：`98` unit、`9` workflow、`1` readonly recovery、`20` Harness 测试均通过；隔离 PostgreSQL 的 dual-executor/recovery/event/mutation 合同 `14 passed`；150 条 `intent_route` static hard-eval 为 `150/150 passed`。真实模型测试仍严格由 `RUN_LIVE_MODEL_TEST=1` 显式开启，本次未调用外部模型。
 - 剩余 TODO：将 Route selection 接入后续 Phase 3 message API；补齐 Phase 2 checklist 的最终全量质量门禁、清理工作区并执行阶段完成审计。
 - BLOCKED：无。
+
+### 2026-09-14 — Phase 2 — 收尾审计增量
+
+- 状态：`in_progress`。
+- 已完成：写工具建议在只读循环中改为 `waiting_human`（副作用为 0）；增加终态/等待态无额外调用、max-step/deadline/cancellation/no-progress checkpoint 的专项回归；分类与决策 profile 连接一致性测试；分类调用的脱敏 `model_invocations.purpose=intent_classification` 审计；Engine 通过 `IntentClassifier → IntentRouter → RouteSelectionStore` 完成代码化路由持久化。
+- 关键提交：`88751a0`、`c711e5d`、`8f6c6dd`、`e13c3db`、`1f4e5f2`。
+- 已确认配置阻塞：不读取或输出任何密钥的本地配置检查显示主 Agent 已配置、`CLASSIFIER_*` 未配置；因此 `/health/ready` 和 Compose 按 fail-closed 设计拒绝启动，两个 `RUN_LIVE_MODEL_TEST=1` 命令未执行。待用户将 `.env` 中四个 `CLASSIFIER_*` 填为与主 Agent 相同的 model/base/key 和 `0.1` 后，才能完成真实端点验证和 Phase 2 最终验收。
 
 ## 15. 停止或请求用户输入的条件
 
