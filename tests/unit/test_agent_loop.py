@@ -126,3 +126,45 @@ def test_loop_maps_fake_decision_to_complete() -> None:
         ).status
         is StepStatus.COMPLETE
     )
+
+
+def test_loop_fails_closed_on_invalid_decision_and_token_budget() -> None:
+    model = DeterministicFakeModel(
+        (
+            Decision(
+                type=DecisionType.RESPOND, intent="x", route="wrong", confidence=1, response="ok"
+            ),
+        )
+    )
+    loop = AgentLoop(
+        model=model,
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
+    )
+    boundary = DecisionBoundary("r", frozenset({DecisionType.RESPOND}), frozenset(), frozenset())
+    tools = ToolContext(
+        request_id=uuid4(),
+        run_id=uuid4(),
+        conversation_id=uuid4(),
+        tenant_id="t",
+        actor_id="a",
+        scopes=(),
+    )
+    rejected = loop.run_step(
+        context=_context(),
+        prompt=_prompt(),
+        boundary=boundary,
+        tool_context=tools,
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+    )
+    assert rejected.reason == "decision_rejected"
+    exhausted = loop.run_step(
+        context=_context(),
+        prompt=_prompt(),
+        boundary=boundary,
+        tool_context=tools,
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+        token_budget_remaining=0,
+    )
+    assert exhausted.reason == "token_budget_exhausted"
