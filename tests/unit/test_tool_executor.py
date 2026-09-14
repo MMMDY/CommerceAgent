@@ -127,6 +127,30 @@ def test_executor_rejects_an_untrusted_adapter_result_before_observation() -> No
     assert malformed.result.error is not None
 
 
+def test_executor_maps_adapter_timeout_by_risk_and_never_retries_writes() -> None:
+    ticks = iter((0.0, 0.002, 1.0, 1.002, 2.0, 2.002))
+    calls: list[str] = []
+
+    def adapter(_: ToolContext, __: dict[str, object]) -> ToolResult:
+        calls.append("called")
+        return ToolResult(tool_name="read", tool_version="1", data={})
+
+    readonly = ToolExecutor({"read": adapter}, clock=lambda: next(ticks)).execute(
+        spec=_spec(), context=_context(), arguments={}
+    )
+    assert readonly.attempts == 2
+    assert readonly.result.error is not None
+    assert readonly.result.error.code is ToolErrorCode.UPSTREAM_TIMEOUT
+
+    commit = ToolExecutor({"read": adapter}, clock=lambda: next(ticks)).execute(
+        spec=_spec(ToolRisk.COMMIT), context=_context(), arguments={}
+    )
+    assert commit.attempts == 1
+    assert commit.result.error is not None
+    assert commit.result.error.code is ToolErrorCode.STATUS_UNKNOWN
+    assert len(calls) == 3
+
+
 def test_executor_records_only_redacted_tool_execution_metadata() -> None:
     traces = TraceStore()
     executor = ToolExecutor(

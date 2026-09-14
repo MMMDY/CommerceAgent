@@ -150,7 +150,10 @@ class AgentLoop:
                     reason="decision_rejected",
                 )
             execution = self._executor.execute(
-                spec=spec, context=tool_context, arguments=decision.args
+                spec=spec,
+                context=tool_context,
+                arguments=decision.args,
+                deadline_at=deadline_at,
             )
             return LoopResult(
                 status=StepStatus.CONTINUE,

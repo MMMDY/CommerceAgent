@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from time import monotonic
 from typing import Any
 
 from src.policies.engine import PolicyEffect, PolicyEngine
@@ -26,10 +28,12 @@ class ToolExecutor:
         *,
         policy: PolicyEngine | None = None,
         traces: TraceStore | None = None,
+        clock: Callable[[], float] = monotonic,
     ) -> None:
         self._adapters = dict(adapters)
         self._policy = policy
         self._traces = traces
+        self._clock = clock
 
     def execute(
         self,
@@ -38,7 +42,12 @@ class ToolExecutor:
         context: ToolContext,
         arguments: dict[str, object],
         policy_facts: dict[str, Any] | None = None,
+        deadline_at: datetime | None = None,
     ) -> ExecutionOutcome:
+        if deadline_at is not None and datetime.now(deadline_at.tzinfo) >= deadline_at:
+            return self._record(
+                spec, ExecutionOutcome(self._error(spec, ToolErrorCode.UPSTREAM_TIMEOUT, False), 0)
+            )
         if not set(spec.required_scopes).issubset(context.scopes):
             return self._record(
                 spec, ExecutionOutcome(self._error(spec, ToolErrorCode.PERMISSION_DENIED, False), 0)
@@ -66,7 +75,15 @@ class ToolExecutor:
         attempts = 0
         max_attempts = spec.retry_policy.max_attempts if spec.risk is ToolRisk.READ_ONLY else 1
         while attempts < max_attempts:
+            if deadline_at is not None and datetime.now(deadline_at.tzinfo) >= deadline_at:
+                return self._record(
+                    spec,
+                    ExecutionOutcome(
+                        self._error(spec, ToolErrorCode.UPSTREAM_TIMEOUT, False), attempts
+                    ),
+                )
             attempts += 1
+            started = self._clock()
             try:
                 result = adapter(context, arguments)
             except Exception:
@@ -76,6 +93,13 @@ class ToolExecutor:
                         self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
                     ),
                 )
+            if (self._clock() - started) * 1000 > spec.timeout_ms:
+                code = (
+                    ToolErrorCode.UPSTREAM_TIMEOUT
+                    if spec.risk is ToolRisk.READ_ONLY
+                    else ToolErrorCode.STATUS_UNKNOWN
+                )
+                result = self._error(spec, code, retryable=spec.risk is ToolRisk.READ_ONLY)
             if result.tool_name != spec.name or result.tool_version != spec.version:
                 return self._record(
                     spec,
