@@ -129,7 +129,11 @@ def execute_low_risk(
         target = (
             RunStatus.COMPLETED
             if completion.status is MutationExecutionStatus.SUCCEEDED
-            else RunStatus.WAITING_HUMAN
+            else (
+                RunStatus.WAITING_HUMAN
+                if completion.status is MutationExecutionStatus.UNKNOWN
+                else RunStatus.FAILED
+            )
         )
         events = (
             DomainEvent(
@@ -165,11 +169,21 @@ def execute_low_risk(
             handoffs=handoffs,
             audit=audit,
         )
-        final_state = {**completion_state, "low_risk_status": "unknown"}
+        final_state = {
+            **(completion_state or state),
+            "low_risk_status": outcome.status.value,
+        }
         if ticket_id:
             final_state["handoff_ticket_id"] = str(ticket_id)
         final_version = checkpoints.checkpoint(
-            context=context.model_copy(update={"status": RunStatus.VERIFYING, "checkpoint_version": outcome_version["value"]}),
+            context=context.model_copy(
+                update={
+                    "status": RunStatus.VERIFYING,
+                    "checkpoint_version": outcome_version.get(
+                        "value", context.checkpoint_version
+                    ),
+                }
+            ),
             status=RunStatus.WAITING_HUMAN,
             next_step="terminal",
             state=final_state,
@@ -186,8 +200,27 @@ def execute_low_risk(
             context=context.model_copy(update={"status": RunStatus.WAITING_HUMAN, "state": final_state, "step_count": context.step_count + 2, "checkpoint_version": final_version}),
             business_reference=None,
         )
+    if outcome.status is MutationExecutionStatus.FAILED:
+        return LowRiskResult(
+            context=context.model_copy(
+                update={
+                    "status": RunStatus.FAILED,
+                    "state": completion_state or state,
+                    "step_count": context.step_count + 1,
+                    "checkpoint_version": outcome_version.get(
+                        "value", context.checkpoint_version
+                    ),
+                }
+            ),
+            business_reference=None,
+        )
     completed = context.model_copy(
-        update={"status": RunStatus.COMPLETED, "state": completion_state, "step_count": context.step_count + 1, "checkpoint_version": outcome_version["value"]}
+        update={
+            "status": RunStatus.COMPLETED,
+            "state": completion_state or state,
+            "step_count": context.step_count + 1,
+            "checkpoint_version": outcome_version.get("value", context.checkpoint_version),
+        }
     )
     return LowRiskResult(context=completed, business_reference=outcome.business_reference)
 

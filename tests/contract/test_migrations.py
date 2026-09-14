@@ -18,6 +18,7 @@ EXPECTED_TABLES = {
     "runtime": {
         "agent_runs",
         "confirmation_tokens",
+        "handoff_tickets",
         "idempotency_records",
         "model_invocations",
         "run_checkpoints",

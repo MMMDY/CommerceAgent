@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -93,3 +94,39 @@ def test_wrong_actor_or_fingerprint_conflict_cannot_consume_or_replace(
             expires_at=None,
         )
     assert first.reused is False
+
+
+def test_concurrent_confirmation_consumption_has_one_winner(
+    engine: Engine, repository: ConfirmationRepository
+) -> None:
+    token_hash, tenant_id = _issue(repository, engine)
+
+    def consume() -> str:
+        try:
+            result = repository.consume_and_reserve(
+                token_hash=token_hash,
+                tenant_id=tenant_id,
+                actor_ref="contract-actor",
+                expected_token_version=0,
+                operation="refund",
+                idempotency_key_hash=f"concurrent-{uuid4()}",
+                request_fingerprint="fingerprint-concurrent",
+                expires_at=None,
+            )
+        except ConfirmationUnavailableError:
+            return "lost"
+        return "won" if not result.reused else "replayed"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = tuple(executor.map(lambda _: consume(), range(2)))
+    assert outcomes.count("won") == 1
+    assert outcomes.count("lost") == 1
+    with engine.connect() as connection:
+        row = connection.execute(
+            text(
+                "SELECT status, row_version FROM runtime.confirmation_tokens "
+                "WHERE token_hash = :token_hash"
+            ),
+            {"token_hash": token_hash},
+        ).one()
+    assert tuple(row) == ("consumed", 1)

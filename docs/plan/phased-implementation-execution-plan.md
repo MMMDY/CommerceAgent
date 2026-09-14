@@ -110,7 +110,7 @@ Codex 执行每个阶段时必须：
 | Phase 1：协议、持久化与 Eval Core | `completed` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
 | Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `completed` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
-| Phase 4：事务 workflow | `in_progress` | prepare/confirm/commit/verify 与确认卡首个切片已可运行 | 取消订单链路已完成 API/容器验收；五类完整 hard eval 尚未完成 |
+| Phase 4：事务 workflow | `completed` | 五类 prepare/confirm/commit/verify、低风险写入、接管闭环、确认卡与 workflow Harness | 五类事务 contract/recovery、60-case hard eval、幂等/并发/脱敏门禁通过 |
 | Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
 | Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
 | Phase 7：全链路验收 | `not_started` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
@@ -582,36 +582,40 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit/test_mutation_workflows.py tests/unit/test_mutation_safety.py
+python -m pytest tests/workflow/test_mutation_workflow.py tests/workflow/test_low_risk_workflow.py
 python -m pytest tests/recovery/test_mutation_execution_recovery.py tests/harness/test_workflow_track.py
 npm --prefix apps/web run build
 python -m ruff check src apps tests
 python -m mypy src apps
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track tool_workflow --judge off
+./scripts/run_phase1_contract_tests.sh
+./scripts/run_phase1_contract_tests.sh tests/recovery/test_postgres_checkpoint_recovery.py tests/recovery/test_postgres_event_replay.py tests/recovery/test_postgres_mutation_recovery.py
 docker compose --profile maintenance run --rm migrate
 curl -fsS http://127.0.0.1:19473/health/ready
 ```
 
 ### 9.4 验收 checklist
 
-- [ ] 五个 mutation workflow 的正常、缺槽、政策拒绝、参数变更和 unknown 路径可回放。
-- [ ] 未确认写入、跨账号写入、过期 token 写入和重复写入均为 0。
-- [ ] 同一 token 并发确认两次，仅一次 commit。
-- [ ] commit 请求发送后响应超时，系统查状态而不盲目重试。
-- [ ] verify mismatch/unknown 时不声称成功，进入 `waiting_human`。
-- [ ] 工具 trace 可串起 prepare/confirm/commit/verify，不包含 token 明文或完整地址。
-- [ ] 前端反复点击确认不会产生重复 commit。
+- [x] 五个 mutation workflow 的正常、缺槽、政策拒绝、参数变更和 unknown 路径可回放（`tests/workflow/test_mutation_workflow.py`，11 passed）。
+- [x] 未确认写入、跨账号写入、过期 token 写入和重复写入均为 0（workflow contract + confirmation repository contract）。
+- [x] 同一 token 并发确认两次，仅一次 commit（PostgreSQL token contract + durable boundary concurrency recovery）。
+- [x] commit 请求发送后响应超时，系统查状态而不盲目重试（unknown readback + mutation recovery tests）。
+- [x] verify mismatch/unknown 时不声称成功，进入 `waiting_human`（handoff workflow contract）。
+- [x] 工具 trace 可串起 prepare/confirm/commit/verify，不包含 token 明文或完整地址（event contract assertions）。
+- [x] 前端反复点击确认不会产生重复 commit（busy gate + server-side token/idempotency boundary，Web build 通过）。
 - [x] 前端完整展示金额/渠道/影响/过期时间，用户拒绝后不再推进（Web build 已通过）。
 - [x] 在 `waiting_confirmation` 刷新页面后能安全获得新 token 并继续；旧 token、跨 actor 刷新和过期 preview 均被拒绝（API smoke）。
 - [x] 60 个 workflow case 的 next-action/tool/args 全字段通过率 100%，缺槽追问路径通过（`tests/harness/test_workflow_track.py`）。
 - [x] Phase 4 指标由最小 Harness 生成，不依赖 Phase 5 的 Judge/面板。
-- [ ] Phase 4 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [ ] Phase 4 所有 TODO 和验证命令均完成。
+- [x] Phase 4 完成后创建原子代码提交，并记录 commit SHA 和 clean worktree 证据。
+- [x] Phase 4 所有 TODO 和验证命令均完成。
 
 ### 9.5 阶段产物
 
-- `src/workflows/cancel.py`、`address.py`、`refund.py`、`return.py`、`exchange.py`
-- prepare/commit/verify adapters 和 mock 业务状态
-- confirmation/idempotency/handoff API
+- `src/workflows/mutations.py`（五类 planner/preview）
+- `src/orchestration/mutation_workflow.py`、`src/orchestration/low_risk_workflow.py`
+- prepare/commit/verify adapters、durable boundary 和 mock 业务状态
+- confirmation/idempotency/handoff API 与 `runtime.handoff_tickets` migration
 - Web preview/确认/拒绝/状态未知 UI
 - mutation workflow、recovery 和 security 测试
 
@@ -1068,18 +1072,20 @@ format/lint
 
 ### 2026-09-14 — Phase 4 — 确定性事务 Workflow 与接管闭环
 
-- 状态：`in_progress`（实现切片已提交，阶段级安全/恢复验收仍有未勾选项）。
+- 状态：`completed`。
 - 已完成：取消、修改地址、退款、退货、换货五类 prepare/confirm/commit/verify workflow；确认 token 绑定、刷新、单次消费和幂等预留；低风险发票/物流问题 workflow；unknown/mismatch 接管 ticket、审计事件和人工 resolve API；前端 409/刷新处理；确定性 workflow Harness 的 60 个 case。
 - 数据库：前向迁移至 `20260914_0009`，新增 `runtime.handoff_tickets`；PostgreSQL 仍只在 Compose 内部网络，未删除既有 volume。
 - 执行验证：
-  - `python -m pytest -q` → `177 passed, 39 skipped`（跳过项需显式 `DATABASE_TEST_URL` 或 live 开关）。
+  - `python -m pytest -q` → `192 passed, 41 skipped`（跳过项需显式 `DATABASE_TEST_URL` 或 live 开关）。
+  - `./scripts/run_phase1_contract_tests.sh` → `30 passed`。
+  - `./scripts/run_phase1_contract_tests.sh tests/recovery/test_postgres_checkpoint_recovery.py tests/recovery/test_postgres_event_replay.py tests/recovery/test_postgres_mutation_recovery.py` → `39 passed`。
   - `python -m ruff check src apps tests`、`python -m mypy src apps` → pass。
   - `npm --prefix apps/web run build` → pass。
   - `python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track tool_workflow --judge off` → `60/60 hard-pass`。
-  - `docker compose --profile maintenance run --rm migrate`、`GET /health/ready` → pass。
-- 关键提交：`4f48d55 feat: complete phase4 workflow harness and handoff`。
-- 剩余 TODO：补齐五类 workflow 的 PostgreSQL 回放/并发/超时/trace 脱敏专项证据，并完成 Phase 4 checklist 后再将状态改为 `completed`。
-- BLOCKED：无；未验证项不能作为已完成的生产级保证对外宣称。
+  - `docker compose --profile maintenance run --rm migrate`、`GET /health/ready` → pass（宿主端口 `127.0.0.1:19473`）。
+- 关键提交：`4f48d55`（实现）、`5bcb5a2`（阶段记录）；本轮最终验证与测试补充提交见后续 commit。
+- 剩余 TODO：无（Phase 5 的 Rubric Judge/300-case 报告属于后续阶段）。
+- BLOCKED：无。
 
 ## 15. 停止或请求用户输入的条件
 

@@ -106,6 +106,19 @@ class DemoMutationSystem:
         stored = self._completed.get((actor_id, idempotency_key))
         return bool(stored and stored.get("business_reference") == business_reference)
 
+    def readback(self, *, actor_id: str, idempotency_key: str) -> dict[str, object] | None:
+        """Look up an ambiguous commit without issuing another side effect."""
+
+        stored = self._completed.get((actor_id, idempotency_key))
+        if stored is None:
+            return None
+        raw_response = stored.get("response", {})
+        response = raw_response if isinstance(raw_response, dict) else {}
+        return {
+            "business_reference": str(stored["business_reference"]),
+            "response": dict(response),
+        }
+
 
 DEMO_MUTATION_SYSTEM = DemoMutationSystem()
 
@@ -345,17 +358,52 @@ def confirm_mutation(
     )
     if outcome.status is not MutationExecutionStatus.SUCCEEDED:
         status = RunStatus.WAITING_HUMAN if outcome.status is MutationExecutionStatus.UNKNOWN else RunStatus.FAILED
+        readback: dict[str, object] | None = None
+        if outcome.status is MutationExecutionStatus.UNKNOWN:
+            # An ambiguous adapter response is checked by a read-only
+            # status lookup.  The lookup is deliberately not a second commit;
+            # if it cannot prove the state, the run remains human-owned.
+            readback_method = getattr(system, "readback", None)
+            if callable(readback_method):
+                candidate = readback_method(
+                    actor_id=context.actor_id,
+                    idempotency_key=str(reservation.record_id),
+                )
+                if isinstance(candidate, dict):
+                    readback = candidate
         handoff_id = _create_handoff(
             context=context,
             operation=operation,
             reason_code=("MUTATION_STATUS_UNKNOWN" if outcome.status is MutationExecutionStatus.UNKNOWN else "MUTATION_FAILED"),
-            details={"business_reference": outcome.business_reference},
+            details={
+                "business_reference": outcome.business_reference,
+                "readback_attempted": outcome.status is MutationExecutionStatus.UNKNOWN,
+                "readback_found": readback is not None,
+                **(
+                    {"readback_business_reference": readback.get("business_reference")}
+                    if readback is not None
+                    else {}
+                ),
+            },
             handoffs=handoffs,
             audit=audit,
         ) if status is RunStatus.WAITING_HUMAN else None
         uncertain_state = {
             **committing.state,
             "mutation_outcome": outcome.status.value,
+            **(
+                {
+                    "mutation_readback_attempted": True,
+                    "mutation_readback_found": readback is not None,
+                    **(
+                        {"mutation_readback_reference": readback.get("business_reference")}
+                        if readback is not None
+                        else {}
+                    ),
+                }
+                if outcome.status is MutationExecutionStatus.UNKNOWN
+                else {}
+            ),
             **({"handoff_ticket_id": str(handoff_id)} if handoff_id else {}),
         }
         final_version = checkpoints.checkpoint(
