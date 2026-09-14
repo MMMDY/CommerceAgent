@@ -83,6 +83,9 @@ class PolicyEngine:
         self._allowed_facts = allowed_facts
         self._rules = tuple(rules)
 
+    def __len__(self) -> int:
+        return len(self._rules)
+
     def evaluate(self, *, action: str, facts: dict[str, Any]) -> PolicyDecision:
         unknown = set(facts).difference(self._allowed_facts)
         if unknown:

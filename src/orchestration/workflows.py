@@ -27,3 +27,6 @@ class WorkflowRegistry:
             return self._definitions[(workflow_id, version)]
         except KeyError as error:
             raise WorkflowRegistryError("workflow version is unavailable") from error
+
+    def __len__(self) -> int:
+        return len(self._definitions)

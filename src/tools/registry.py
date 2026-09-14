@@ -24,3 +24,6 @@ class ToolRegistry:
 
     def model_visible_names(self) -> frozenset[str]:
         return frozenset(spec.name for spec in self._entries.values() if spec.model_visible)
+
+    def __len__(self) -> int:
+        return len(self._entries)
