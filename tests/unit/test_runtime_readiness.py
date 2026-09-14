@@ -1,5 +1,6 @@
 from src.config import Settings
 from src.orchestration.readiness import RuntimeRegistrationContainer, check_runtime_ready
+from src.orchestration.runtime_bootstrap import build_runtime_registrations
 from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.policies.engine import FactCondition, PolicyEffect, PolicyEngine, PolicyRule
 from src.protocols import RetryPolicy, ToolRisk, ToolSpec
@@ -83,3 +84,11 @@ def test_unconfigured_runtime_container_fails_closed() -> None:
     )
 
     assert container.check() == (False, "tool_registry_incomplete")
+
+
+def test_phase2_bootstrap_registers_a_complete_local_runtime_catalog() -> None:
+    container = build_runtime_registrations(
+        settings=Settings(model="m", api_base="https://provider.test", api_key="key")
+    )
+
+    assert container.check() == (True, "ready")

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from src.config import get_settings
 from src.db import check_ready
 from src.orchestration.readiness import RuntimeRegistrationContainer
+from src.orchestration.runtime_bootstrap import build_runtime_registrations
 
 ReadinessProbe = Callable[[], tuple[bool, str]]
 
@@ -21,11 +22,11 @@ class ReadinessDependencies:
 
     @classmethod
     def default(cls) -> ReadinessDependencies:
-        """Build a fail-closed container until real Runtime bootstrap is supplied."""
+        """Build the static runtime catalog without creating external clients."""
 
         return cls(
             database=check_ready,
-            runtime=RuntimeRegistrationContainer.unconfigured(settings=get_settings()),
+            runtime=build_runtime_registrations(settings=get_settings()),
         )
 
     def check(self) -> tuple[bool, str]:
