@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from src.agent.validation import DecisionBoundary, DecisionValidationError, DecisionValidator
 from src.models.gateway import ModelDecision, ModelGateway, ModelGatewayError
@@ -12,6 +12,9 @@ from src.protocols import Decision, DecisionType, PromptView, RunContext, StepSt
 from src.telemetry.trace import TraceStore
 from src.tools.executor import ExecutionOutcome, ToolExecutor
 from src.tools.registry import ToolRegistry, ToolRegistryError
+
+if TYPE_CHECKING:
+    from src.orchestration.pipeline import StageObserver
 
 
 class ModelInvocationRecorder(Protocol):
@@ -76,12 +79,15 @@ class AgentLoop:
         deadline_at: datetime,
         cancelled: bool = False,
         token_budget_remaining: int | None = None,
+        stage_observer: StageObserver | None = None,
     ) -> LoopResult:
         if cancelled:
+            _record_skipped_action(stage_observer)
             return LoopResult(
                 status=StepStatus.FAIL, response=None, decision_type=None, reason="cancelled"
             )
         if context.step_count >= 6:
+            _record_skipped_action(stage_observer)
             return LoopResult(
                 status=StepStatus.FAIL,
                 response=None,
@@ -89,6 +95,7 @@ class AgentLoop:
                 reason="max_steps_exceeded",
             )
         if token_budget_remaining is not None and token_budget_remaining <= 0:
+            _record_skipped_action(stage_observer)
             return LoopResult(
                 status=StepStatus.FAIL,
                 response=None,
@@ -96,6 +103,7 @@ class AgentLoop:
                 reason="token_budget_exhausted",
             )
         if datetime.now(deadline_at.tzinfo) >= deadline_at:
+            _record_skipped_action(stage_observer)
             return LoopResult(
                 status=StepStatus.FAIL,
                 response=None,
@@ -105,6 +113,7 @@ class AgentLoop:
         try:
             model_result = self._model.decide(prompt)
         except ModelGatewayError:
+            _record_stage(stage_observer, "request_decision", "failed")
             if self._model_invocations is not None:
                 try:
                     self._model_invocations.record_failure(
@@ -116,18 +125,21 @@ class AgentLoop:
                         error_code="MODEL_GATEWAY_ERROR",
                     )
                 except Exception:
+                    _record_post_request_failure(stage_observer)
                     return LoopResult(
                         status=StepStatus.FAIL,
                         response=None,
                         decision_type=None,
                         reason="model_audit_failed",
                     )
+            _record_post_request_failure(stage_observer)
             return LoopResult(
                 status=StepStatus.FAIL,
                 response=None,
                 decision_type=None,
                 reason="model_unavailable",
             )
+        _record_stage(stage_observer, "request_decision", "completed")
         if self._model_invocations is not None:
             try:
                 self._model_invocations.record_success(
@@ -139,6 +151,7 @@ class AgentLoop:
                     config_hash=getattr(self._model, "config_hash", "unknown"),
                 )
             except Exception:
+                _record_post_request_failure(stage_observer)
                 return LoopResult(
                     status=StepStatus.FAIL,
                     response=None,
@@ -159,6 +172,7 @@ class AgentLoop:
                     },
                 )
             except Exception:
+                _record_post_request_failure(stage_observer)
                 return LoopResult(
                     status=StepStatus.FAIL,
                     response=None,
@@ -170,6 +184,9 @@ class AgentLoop:
                 spec = self._registry.get(name=decision.tool or "", version="1")
                 self._validator.validate(decision=decision, boundary=boundary, tool_spec=spec)
             except (DecisionValidationError, ToolRegistryError):
+                _record_stage(stage_observer, "validate", "failed")
+                _record_stage(stage_observer, "execute", "skipped")
+                _record_stage(stage_observer, "observe", "completed")
                 return LoopResult(
                     status=StepStatus.FAIL,
                     response=None,
@@ -177,12 +194,26 @@ class AgentLoop:
                     decision=decision,
                     reason="decision_rejected",
                 )
-            execution = self._executor.execute(
-                spec=spec,
-                context=tool_context,
-                arguments=decision.args,
-                deadline_at=deadline_at,
-            )
+            _record_stage(stage_observer, "validate", "completed")
+            try:
+                execution = self._executor.execute(
+                    spec=spec,
+                    context=tool_context,
+                    arguments=decision.args,
+                    deadline_at=deadline_at,
+                )
+            except Exception:
+                _record_stage(stage_observer, "execute", "failed")
+                _record_stage(stage_observer, "observe", "completed")
+                return LoopResult(
+                    status=StepStatus.FAIL,
+                    response=None,
+                    decision_type=decision.type,
+                    decision=decision,
+                    reason="tool_execution_failed",
+                )
+            _record_stage(stage_observer, "execute", "completed")
+            _record_stage(stage_observer, "observe", "completed")
             return LoopResult(
                 status=StepStatus.CONTINUE,
                 response=None,
@@ -193,6 +224,9 @@ class AgentLoop:
         try:
             self._validator.validate(decision=decision, boundary=boundary)
         except DecisionValidationError:
+            _record_stage(stage_observer, "validate", "failed")
+            _record_stage(stage_observer, "execute", "skipped")
+            _record_stage(stage_observer, "observe", "completed")
             return LoopResult(
                 status=StepStatus.FAIL,
                 response=None,
@@ -200,6 +234,9 @@ class AgentLoop:
                 decision=decision,
                 reason="decision_rejected",
             )
+        _record_stage(stage_observer, "validate", "completed")
+        _record_stage(stage_observer, "execute", "skipped")
+        _record_stage(stage_observer, "observe", "completed")
         if decision.type is DecisionType.ASK_USER:
             return LoopResult(
                 StepStatus.WAIT_USER, decision.response, decision.type, decision=decision
@@ -215,3 +252,21 @@ class AgentLoop:
         return LoopResult(
             StepStatus.FAIL, None, decision.type, decision=decision, reason="unsupported_decision"
         )
+
+
+def _record_stage(observer: StageObserver | None, stage: str, outcome: str) -> None:
+    if observer is not None:
+        observer.record(stage, outcome=outcome)
+
+
+def _record_skipped_action(observer: StageObserver | None) -> None:
+    _record_stage(observer, "request_decision", "skipped")
+    _record_stage(observer, "validate", "skipped")
+    _record_stage(observer, "execute", "skipped")
+    _record_stage(observer, "observe", "completed")
+
+
+def _record_post_request_failure(observer: StageObserver | None) -> None:
+    _record_stage(observer, "validate", "skipped")
+    _record_stage(observer, "execute", "skipped")
+    _record_stage(observer, "observe", "completed")

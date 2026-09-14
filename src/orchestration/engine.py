@@ -9,6 +9,7 @@ from uuid import UUID
 
 from src.agent.loop import AgentLoop, LoopResult
 from src.agent.validation import DecisionBoundary
+from src.orchestration.pipeline import StageObserver, reduce_step, validate_step_inputs
 from src.orchestration.state_machine import require_transition
 from src.orchestration.workflows import WorkflowRegistry
 from src.protocols import DomainEvent, EventType, PromptView, RunContext, RunStatus, ToolContext
@@ -62,8 +63,20 @@ class OrchestrationEngine:
         deadline_at: datetime,
         cancelled: bool = False,
         token_budget_remaining: int | None = None,
+        stage_observer: StageObserver | None = None,
     ) -> AdvanceResult:
-        self._workflows.get(workflow_id=context.workflow_id, version=context.workflow_version)
+        workflow = self._workflows.get(
+            workflow_id=context.workflow_id, version=context.workflow_version
+        )
+        validate_step_inputs(
+            context=context,
+            prompt=prompt,
+            boundary=boundary,
+            tool_context=tool_context,
+            deadline_at=deadline_at,
+        )
+        if prompt.current_step not in workflow.steps:
+            raise ValueError("prompt step is not in the locked workflow")
         loop = self._loop.run_step(
             context=context,
             prompt=prompt,
@@ -72,27 +85,36 @@ class OrchestrationEngine:
             deadline_at=deadline_at,
             cancelled=cancelled,
             token_budget_remaining=token_budget_remaining,
+            stage_observer=stage_observer,
         )
-        target = _target_status(context.status, loop)
-        require_transition(context.status, target)
-        state = dict(context.state)
-        state["last_step_status"] = loop.status.value
-        if loop.reason is not None:
-            state["last_step_reason"] = loop.reason
-        next_step = (
-            prompt.current_step
-            if target in {RunStatus.RUNNING_READONLY, RunStatus.RUNNING_WORKFLOW}
-            else "terminal"
-        )
-        events = (_event_for(loop),)
-        version = self._checkpoints.checkpoint(
-            context=context, status=target, next_step=next_step, state=state, events=events
-        )
+        try:
+            reduced = reduce_step(context=context, prompt=prompt, result=loop)
+            require_transition(context.status, reduced.status)
+        except Exception:
+            _record_stage(stage_observer, "reduce", "failed")
+            _record_stage(stage_observer, "checkpoint", "skipped")
+            _record_stage(stage_observer, "terminate", "skipped")
+            raise
+        _record_stage(stage_observer, "reduce", "completed")
+        try:
+            version = self._checkpoints.checkpoint(
+                context=context,
+                status=reduced.status,
+                next_step=reduced.next_step,
+                state=reduced.state,
+                events=reduced.events,
+            )
+        except Exception:
+            _record_stage(stage_observer, "checkpoint", "failed")
+            _record_stage(stage_observer, "terminate", "skipped")
+            raise
+        _record_stage(stage_observer, "checkpoint", "completed")
+        _record_stage(stage_observer, "terminate", "completed")
         return AdvanceResult(
             context=context.model_copy(
                 update={
-                    "status": target,
-                    "state": state,
+                    "status": reduced.status,
+                    "state": reduced.state,
                     "step_count": context.step_count + 1,
                     "checkpoint_version": version,
                 }
@@ -130,27 +152,6 @@ class OrchestrationEngine:
         )
 
 
-def _target_status(current: RunStatus, result: LoopResult) -> RunStatus:
-    if result.reason == "cancelled":
-        return RunStatus.CANCELLED
-    if result.status.value == "continue":
-        return current
-    if result.status.value == "wait_user":
-        return RunStatus.WAITING_USER
-    if result.status.value == "wait_human":
-        return RunStatus.WAITING_HUMAN
-    if result.status.value == "complete":
-        return RunStatus.COMPLETED
-    return RunStatus.FAILED
-
-
-def _event_for(result: LoopResult) -> DomainEvent:
-    if result.status.value == "wait_user":
-        return DomainEvent(event_type=EventType.WAITING_FOR_USER, payload={})
-    if result.status.value == "continue":
-        return DomainEvent(event_type=EventType.STEP_COMPLETED, payload={"tool_called": True})
-    if result.status.value == "fail":
-        return DomainEvent(
-            event_type=EventType.FAILED, payload={"reason": result.reason or "failed"}
-        )
-    return DomainEvent(event_type=EventType.STEP_COMPLETED, payload={"status": result.status.value})
+def _record_stage(observer: StageObserver | None, stage: str, outcome: str) -> None:
+    if observer is not None:
+        observer.record(stage, outcome=outcome)
