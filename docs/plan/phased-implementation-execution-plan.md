@@ -994,6 +994,24 @@ format/lint
 - 剩余 TODO：实现本阶段新增的主模型意图分类 profile、`AgentLoop.run()`、执行器选择、WorkflowExecutor 入口、多轮 fixture/trace 以及新增恢复与安全测试。
 - BLOCKED：无。
 
+### 2026-09-14 — Phase 2 — 双执行器首批实现切片
+
+- 状态：partial
+- 已完成：
+  - Classifier 显式配置、与主 Agent 模型/端点/Key 的安全一致性校验，以及 `CLASSIFIER_TEMPERATURE=0.1` 的 readiness fail-closed。
+  - `IntentClassification`、fake classifier 和代码拥有最终裁决权的 `IntentRouter/RouteDecision`。
+  - `AgentStepExecutor.execute_step()` 单轮原语、兼容 `run_step()` 入口，以及基于每轮新 checkpoint context 的有界 `AgentLoop.run()`。
+  - 只读 loop 写工具防火墙、重复等价只读动作安全 handoff、确定性 `WorkflowExecutor` 最小入口。
+  - Harness 在存在 Pipeline 的计划下直接驱动多轮 `AgentLoop.run()`，并聚合完整工具 trace。
+  - 双执行器数据库 migration `20260914_0006`：允许路由前状态为空、选定后不可变，并约束 mode/status 组合。
+- 关键提交：`c4d4102`、`dc85345`、`2239fe4`、`ca541fa`、`f8d1852`、`4536ae7`、`f2ca959`、`1cea071`、`74bf37b`。
+- 执行验证：
+  - `python -m pytest tests/unit tests/workflow tests/harness` → `131 passed`。
+  - `python -m mypy src apps` → pass；`python -m ruff check src apps tests` → pass。
+  - migration 单元检查 → `2 passed`；PostgreSQL contract tests 因未设置 `DATABASE_TEST_URL` 跳过。
+- 剩余 TODO：完成真实 PostgreSQL dual-executor contract、跨轮 cancellation/token/no-progress 恢复、执行器选择接入 OrchestrationEngine/API、fixture 的通用多轮 schema，以及 Phase 2 全部验证/验收项。
+- BLOCKED：无。
+
 ## 15. 停止或请求用户输入的条件
 
 Codex 应在以下情况停止扩张实现，完成仍可安全完成的检查后，向用户说明所需决策：
