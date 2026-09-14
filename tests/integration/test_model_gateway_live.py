@@ -28,6 +28,10 @@ def test_live_gateway_returns_a_structured_decision() -> None:
         evidence_ids=(),
         remaining_steps=1,
     )
-    result = OpenAICompatibleGateway(get_settings()).decide(prompt)
+    settings = get_settings()
+    gateway = OpenAICompatibleGateway(settings)
+    result = gateway.decide(prompt)
     assert result.latency_ms >= 0
     assert isinstance(result.decision.type, DecisionType)
+    assert gateway.model_name == settings.model
+    assert gateway.config_hash.startswith("sha256:")
