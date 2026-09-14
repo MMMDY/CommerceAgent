@@ -10,6 +10,7 @@ from uuid import UUID
 from src.agent.loop import AgentLoop, LoopResult
 from src.agent.validation import DecisionBoundary
 from src.orchestration.pipeline import StageObserver, reduce_step, validate_step_inputs
+from src.orchestration.run_creation import RunCreationSpec, RunCreationStore
 from src.orchestration.state_machine import require_transition
 from src.orchestration.workflows import WorkflowRegistry
 from src.protocols import DomainEvent, EventType, PromptView, RunContext, RunStatus, ToolContext
@@ -41,16 +42,44 @@ class AdvanceResult:
 
 class OrchestrationEngine:
     def __init__(
-        self, *, loop: AgentLoop, workflows: WorkflowRegistry, checkpoints: CheckpointStore
+        self,
+        *,
+        loop: AgentLoop,
+        workflows: WorkflowRegistry,
+        checkpoints: CheckpointStore,
+        run_creation_store: RunCreationStore | None = None,
     ) -> None:
         self._loop = loop
         self._workflows = workflows
         self._checkpoints = checkpoints
+        self._run_creation_store = run_creation_store
 
-    def create(self, context: RunContext) -> RunContext:
-        self._workflows.get(workflow_id=context.workflow_id, version=context.workflow_version)
+    def create(self, context: RunContext, *, spec: RunCreationSpec | None = None) -> RunContext:
+        """Validate a new run and durably freeze its selected configuration.
+
+        Keeping the store optional preserves the original in-memory composition.
+        Supplying only one of a store/spec pair fails closed so production code
+        cannot accidentally believe an unpersisted run was created.
+        """
+
+        workflow = self._workflows.get(
+            workflow_id=context.workflow_id, version=context.workflow_version
+        )
         if context.status is not RunStatus.CREATED:
             raise ValueError("a new run must start in created status")
+        if context.step_count != 0 or context.checkpoint_version != 0:
+            raise ValueError("a new run must not contain completed steps")
+        if self._run_creation_store is None:
+            if spec is not None:
+                raise RuntimeError("run creation store is unavailable")
+            return context
+        if spec is None:
+            raise ValueError("run creation spec is required for durable creation")
+        if spec.current_step not in workflow.steps:
+            raise ValueError("initial step is not in the locked workflow")
+        if datetime.now(spec.deadline_at.tzinfo) >= spec.deadline_at:
+            raise ValueError("run deadline must be in the future")
+        self._run_creation_store.create_run(context=context, spec=spec)
         return context
 
     def advance(
