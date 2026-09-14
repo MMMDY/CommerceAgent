@@ -366,6 +366,7 @@ class AgentLoop:
 
         current = context
         steps: list[LoopResult] = []
+        previous_signature: tuple[object, ...] | None = None
         is_cancelled = cancelled or (lambda: False)
         while current.status is RunStatus.RUNNING_READONLY:
             current_tool_context = (
@@ -385,6 +386,16 @@ class AgentLoop:
                 return AgentRunResult(
                     context=current, exit_reason=current.status.value, steps=tuple(steps)
                 )
+            signature = _decision_signature(result.advance.loop)
+            if signature is not None and signature == previous_signature:
+                handoff = pipeline.handoff(context=current, reason="readonly_loop_no_progress")
+                steps.append(handoff.loop)
+                return AgentRunResult(
+                    context=handoff.context,
+                    exit_reason=handoff.context.status.value,
+                    steps=tuple(steps),
+                )
+            previous_signature = signature
         return AgentRunResult(context=current, exit_reason=current.status.value, steps=tuple(steps))
 
 
@@ -404,3 +415,16 @@ def _record_post_request_failure(observer: StageObserver | None) -> None:
     _record_stage(observer, "validate", "skipped")
     _record_stage(observer, "execute", "skipped")
     _record_stage(observer, "observe", "completed")
+
+
+def _decision_signature(result: LoopResult) -> tuple[object, ...] | None:
+    """Compare only stable structured action fields; never inspect hidden model output."""
+
+    decision = result.decision
+    if decision is None or result.status is not StepStatus.CONTINUE:
+        return None
+    return (
+        decision.type.value,
+        decision.tool,
+        tuple(sorted(decision.args.items())),
+    )

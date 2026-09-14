@@ -121,6 +121,26 @@ def test_engine_cancel_persists_terminal_checkpoint() -> None:
     assert checkpoints.calls[0][0] is RunStatus.CANCELLED
 
 
+def test_engine_handoff_persists_a_safe_loop_guard_exit() -> None:
+    checkpoints = _Checkpoints()
+    engine = OrchestrationEngine(
+        loop=AgentLoop(
+            model=DeterministicFakeModel(()),
+            validator=DecisionValidator(),
+            registry=ToolRegistry(()),
+            executor=ToolExecutor({}),
+        ),
+        workflows=WorkflowRegistry((WorkflowDefinition("w", "1", ("answer",)),)),
+        checkpoints=checkpoints,
+    )
+
+    result = engine.handoff(context=_context(), reason="readonly_loop_no_progress")
+
+    assert result.context.status is RunStatus.WAITING_HUMAN
+    assert result.context.state["last_step_reason"] == "readonly_loop_no_progress"
+    assert checkpoints.calls[0][0] is RunStatus.WAITING_HUMAN
+
+
 def test_engine_resume_loads_context_from_checkpoint_store() -> None:
     checkpoints = _Checkpoints()
     checkpoints.recovered = _context()

@@ -13,7 +13,15 @@ from src.orchestration.pipeline import StageObserver, reduce_step, validate_step
 from src.orchestration.run_creation import RunCreationSpec, RunCreationStore
 from src.orchestration.state_machine import require_transition
 from src.orchestration.workflows import WorkflowRegistry
-from src.protocols import DomainEvent, EventType, PromptView, RunContext, RunStatus, ToolContext
+from src.protocols import (
+    DomainEvent,
+    EventType,
+    PromptView,
+    RunContext,
+    RunStatus,
+    StepStatus,
+    ToolContext,
+)
 
 
 class CheckpointStore(Protocol):
@@ -185,6 +193,37 @@ class OrchestrationEngine:
                 "step_count": context.step_count + 1,
                 "checkpoint_version": version,
             }
+        )
+
+    def handoff(self, *, context: RunContext, reason: str) -> AdvanceResult:
+        """Atomically freeze a readonly run when a loop safety guard triggers."""
+
+        require_transition(context.status, RunStatus.WAITING_HUMAN)
+        state = dict(context.state)
+        state["last_step_reason"] = reason
+        version = self._checkpoints.checkpoint(
+            context=context,
+            status=RunStatus.WAITING_HUMAN,
+            next_step="terminal",
+            state=state,
+            events=(DomainEvent(event_type=EventType.FAILED, payload={"reason": reason}),),
+        )
+        next_context = context.model_copy(
+            update={
+                "status": RunStatus.WAITING_HUMAN,
+                "state": state,
+                "step_count": context.step_count + 1,
+                "checkpoint_version": version,
+            }
+        )
+        return AdvanceResult(
+            context=next_context,
+            loop=LoopResult(
+                status=StepStatus.WAIT_HUMAN,
+                response=None,
+                decision_type=None,
+                reason=reason,
+            ),
         )
 
 

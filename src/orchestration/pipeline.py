@@ -186,6 +186,11 @@ class StepPipeline:
         journal.require_complete()
         return StepPipelineResult(advance=advance, stages=journal.records())
 
+    def handoff(self, *, context: RunContext, reason: str) -> AdvanceResult:
+        """Persist a safe readonly-loop stop after a completed checkpoint."""
+
+        return self._engine.handoff(context=context, reason=reason)
+
 
 def validate_step_inputs(
     *,
@@ -284,6 +289,8 @@ def _target_status(current: RunStatus, result: LoopResult) -> RunStatus:
         return RunStatus.WAITING_HUMAN
     if result.status is StepStatus.COMPLETE:
         return RunStatus.COMPLETED
+    if result.reason in {"max_steps_exceeded", "token_budget_exhausted", "deadline_exceeded"}:
+        return RunStatus.WAITING_HUMAN
     return RunStatus.FAILED
 
 
