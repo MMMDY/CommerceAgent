@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from src.agent.loop import AgentLoop
 from src.agent.validation import DecisionBoundary
@@ -17,6 +17,9 @@ from src.harness.hard_eval import evaluate
 from src.harness.runtime import FixtureManager, RuntimeTrace, TraceAdapter
 from src.harness.schema import EvalCase, HardEvalResult, NormalizedTrace, RuntimeCaseInput
 from src.protocols import PromptView, RunContext, StepStatus, ToolContext
+
+if TYPE_CHECKING:
+    from src.orchestration.pipeline import StepPipeline
 
 
 class CaseRuntime(Protocol):
@@ -41,6 +44,7 @@ class AgentLoopPlan:
     deadline_at: datetime
     token_budget_remaining: int | None = None
     trace_next_action: str | None = None
+    pipeline: StepPipeline | None = None
 
 
 class CasePlanner(Protocol):
@@ -65,6 +69,31 @@ class AgentLoopCaseRuntime:
         cancelled: Callable[[], bool],
     ) -> RuntimeTrace:
         plan = self._planner.plan(case=case, fixture=fixture, timeout_seconds=timeout_seconds)
+        if plan.pipeline is not None:
+            run = self._loop.run(
+                context=plan.context,
+                pipeline=plan.pipeline,
+                boundary=plan.boundary,
+                tool_context=plan.tool_context,
+                deadline_at=plan.deadline_at,
+                cancelled=cancelled,
+                token_budget_remaining=plan.token_budget_remaining,
+            )
+            last = run.steps[-1] if run.steps else None
+            decisions = tuple(step.decision for step in run.steps if step.decision is not None)
+            return RuntimeTrace(
+                route=last.decision.route if last and last.decision else None,
+                intent=last.decision.intent if last and last.decision else None,
+                next_action=plan.trace_next_action
+                or (last.decision.type.value if last and last.decision else None),
+                args=dict(last.decision.args) if last and last.decision else {},
+                tools_called=tuple(
+                    decision.tool for decision in decisions if decision.tool is not None
+                ),
+                evidence_ids=last.decision.evidence_ids if last and last.decision else (),
+                response=last.response if last and last.response else "",
+                status=_run_trace_status(run.exit_reason),
+            )
         result = self._loop.run_step(
             context=plan.context,
             prompt=plan.prompt,
@@ -152,3 +181,14 @@ def _trace_status(status: StepStatus) -> str:
         StepStatus.CONTINUE: "complete",
         StepStatus.FAIL: "fail",
     }[status]
+
+
+def _run_trace_status(exit_reason: str) -> str:
+    return {
+        "completed": "complete",
+        "waiting_user": "wait_user",
+        "waiting_human": "wait_human",
+        "failed": "fail",
+        "cancelled": "fail",
+        "expired": "fail",
+    }.get(exit_reason, "fail")

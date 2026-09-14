@@ -22,6 +22,9 @@ from src.harness.run_driver import AgentLoopCaseRuntime, AgentLoopPlan
 from src.harness.runtime import RuntimeTrace
 from src.harness.schema import RuntimeCaseInput
 from src.models.gateway import DeterministicFakeModel
+from src.orchestration.engine import OrchestrationEngine
+from src.orchestration.pipeline import PromptBuilder, StepPipeline
+from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     Contract,
     Decision,
@@ -157,7 +160,7 @@ class DeterministicRuntimeFactory:
         )
         runtime = AgentLoopCaseRuntime(
             loop=loop,
-            planner=_FixturePlanner(definition.plan),
+            planner=_FixturePlanner(definition.plan, loop=loop),
         )
         return runtime.execute_case(
             case=case,
@@ -167,9 +170,29 @@ class DeterministicRuntimeFactory:
         )
 
 
+class _FixtureCheckpoints:
+    def __init__(self) -> None:
+        self.sequence = 0
+
+    def checkpoint(self, **_: object) -> int:
+        self.sequence += 1
+        return self.sequence
+
+
+class _FixturePromptBuilder(PromptBuilder):
+    def __init__(self, prompt: PromptView) -> None:
+        self._prompt = prompt
+
+    def build(self, *, context: RunContext) -> PromptView:
+        return self._prompt.model_copy(
+            update={"remaining_steps": max(0, 6 - context.step_count)}
+        )
+
+
 class _FixturePlanner:
-    def __init__(self, plan: RuntimePlanFixture) -> None:
+    def __init__(self, plan: RuntimePlanFixture, *, loop: AgentLoop) -> None:
         self._plan = plan
+        self._loop = loop
 
     def plan(
         self,
@@ -211,6 +234,22 @@ class _FixturePlanner:
             evidence_ids=self._plan.trusted_evidence_ids,
             remaining_steps=6,
         )
+        pipeline = StepPipeline(
+            engine=OrchestrationEngine(
+                loop=self._loop,
+                workflows=WorkflowRegistry(
+                    (
+                        WorkflowDefinition(
+                            self._plan.workflow_id,
+                            self._plan.workflow_version,
+                            (self._plan.current_step,),
+                        ),
+                    )
+                ),
+                checkpoints=_FixtureCheckpoints(),
+            ),
+            prompt_builder=_FixturePromptBuilder(prompt),
+        )
         return AgentLoopPlan(
             context=context,
             prompt=prompt,
@@ -231,6 +270,7 @@ class _FixturePlanner:
             deadline_at=datetime.now(UTC) + timedelta(seconds=timeout_seconds),
             token_budget_remaining=self._plan.token_budget_remaining,
             trace_next_action=self._plan.trace_next_action,
+            pipeline=pipeline,
         )
 
 
