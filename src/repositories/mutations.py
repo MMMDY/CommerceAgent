@@ -55,6 +55,24 @@ class IdempotencyReservation:
     reused: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ConfirmationTokenRecord:
+    token_id: UUID
+    token_hash: str
+    run_id: UUID
+    tenant_id: str
+    actor_ref: str
+    mutation_type: str
+    resource_ref: str
+    preview_hash: str
+    arguments_hash: str
+    policy_version: str
+    workflow_version: str
+    status: str
+    expires_at: datetime
+    row_version: int
+
+
 class ConfirmationRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -75,6 +93,107 @@ class ConfirmationRepository:
                 {**asdict(token), "token_id": token_id},
             )
         return token_id
+
+    def load_for_run(
+        self, *, run_id: UUID, tenant_id: str, actor_ref: str, token_hash: str | None = None
+    ) -> ConfirmationTokenRecord | None:
+        predicate = "AND token_hash = :token_hash" if token_hash is not None else ""
+        with self._engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT token_id, token_hash, run_id, tenant_id, actor_ref, mutation_type, "
+                    "resource_ref, preview_hash, arguments_hash, policy_version, workflow_version, "
+                    "status, expires_at, row_version FROM runtime.confirmation_tokens "
+                    "WHERE run_id = :run_id AND tenant_id = :tenant_id AND actor_ref = :actor_ref "
+                    + predicate + " ORDER BY created_at DESC LIMIT 1"
+                ),
+                {
+                    "run_id": run_id,
+                    "tenant_id": tenant_id,
+                    "actor_ref": actor_ref,
+                    "token_hash": token_hash,
+                },
+            ).one_or_none()
+        return ConfirmationTokenRecord(**dict(row._mapping)) if row is not None else None
+
+    def invalidate_waiting(
+        self, *, run_id: UUID, tenant_id: str, actor_ref: str, expected_preview_hash: str
+    ) -> None:
+        with self._engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE runtime.confirmation_tokens SET status = 'invalidated', row_version = row_version + 1 "
+                    "WHERE run_id = :run_id AND tenant_id = :tenant_id AND actor_ref = :actor_ref "
+                    "AND preview_hash = :preview_hash AND status = 'waiting'"
+                ),
+                {
+                    "run_id": run_id,
+                    "tenant_id": tenant_id,
+                    "actor_ref": actor_ref,
+                    "preview_hash": expected_preview_hash,
+                },
+            )
+
+    def rotate_waiting(
+        self,
+        *,
+        run_id: UUID,
+        tenant_id: str,
+        actor_ref: str,
+        expected_preview_hash: str,
+        token: ConfirmationTokenInput,
+    ) -> UUID:
+        """Invalidate and issue a replacement token in one database transaction."""
+
+        token_id = uuid4()
+        with self._engine.begin() as connection:
+            changed = connection.execute(
+                text(
+                    "UPDATE runtime.confirmation_tokens SET status = 'invalidated', row_version = row_version + 1 "
+                    "WHERE run_id = :run_id AND tenant_id = :tenant_id AND actor_ref = :actor_ref "
+                    "AND preview_hash = :preview_hash AND status = 'waiting' AND expires_at > now()"
+                ),
+                {
+                    "run_id": run_id,
+                    "tenant_id": tenant_id,
+                    "actor_ref": actor_ref,
+                    "preview_hash": expected_preview_hash,
+                },
+            )
+            if changed.rowcount != 1:
+                raise ConfirmationUnavailableError("confirmation token unavailable")
+            connection.execute(
+                text(
+                    "INSERT INTO runtime.confirmation_tokens "
+                    "(token_id, token_hash, run_id, tenant_id, actor_ref, mutation_type, "
+                    "resource_ref, preview_hash, arguments_hash, policy_version, workflow_version, "
+                    "status, expires_at, created_at) VALUES (:token_id, :token_hash, :run_id, "
+                    ":tenant_id, :actor_ref, :mutation_type, :resource_ref, :preview_hash, "
+                    ":arguments_hash, :policy_version, :workflow_version, 'waiting', :expires_at, now())"
+                ),
+                {**asdict(token), "token_id": token_id},
+            )
+        return token_id
+
+    def reject(
+        self, *, token_hash: str, tenant_id: str, actor_ref: str, expected_version: int
+    ) -> None:
+        with self._engine.begin() as connection:
+            changed = connection.execute(
+                text(
+                    "UPDATE runtime.confirmation_tokens SET status = 'rejected', row_version = row_version + 1 "
+                    "WHERE token_hash = :token_hash AND tenant_id = :tenant_id AND actor_ref = :actor_ref "
+                    "AND status = 'waiting' AND expires_at > now() AND row_version = :expected_version"
+                ),
+                {
+                    "token_hash": token_hash,
+                    "tenant_id": tenant_id,
+                    "actor_ref": actor_ref,
+                    "expected_version": expected_version,
+                },
+            )
+        if changed.rowcount != 1:
+            raise ConfirmationUnavailableError("confirmation token unavailable")
 
     def consume_and_reserve(
         self,

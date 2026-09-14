@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -24,6 +25,13 @@ from src.db import get_engine
 from src.memory.session import build_session_memory
 from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
 from src.orchestration.api_runtime import execute_readonly_run
+from src.orchestration.mutation_workflow import (
+    MutationWorkflowError,
+    confirm_mutation,
+    mutation_type_for_route,
+    prepare_mutation,
+    reject_mutation,
+)
 from src.orchestration.persistence import RepositoryCheckpointStore
 from src.orchestration.route_catalog import DEFAULT_INTENT_ROUTE_RULES
 from src.orchestration.router import IntentRouter, RouteDecision, RouteOutcome
@@ -34,8 +42,10 @@ from src.repositories.knowledge import KnowledgeRepository
 from src.repositories.memory import MemoryRepository, MemoryValidationError
 from src.repositories.messages import MessageConflictError, MessageRecord, MessageRepository
 from src.repositories.model_invocations import ModelInvocationRepository
+from src.repositories.mutations import ConfirmationRepository, MutationExecutionRepository
 from src.repositories.run_lifecycle import RunLifecycleRepository, RunRoutingRepository
 from src.repositories.runs import RunRepository, RunSnapshot
+from src.workflows.mutations import extract_arguments, hash_secret
 
 DEMO_TENANT_ID = "demo-tenant"
 
@@ -95,6 +105,35 @@ class MessageSendResponse(BaseModel):
     run_status: str
     assistant_response: str | None = None
     waiting_action: str | None = None
+    confirmation_token: str | None = None
+    preview: dict[str, object] | None = None
+    confirmation_expires_at: str | None = None
+    token_refresh_required: bool = False
+
+
+class ConfirmationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str = Field(pattern="^(accept|reject)$")
+    confirmation_token: str = Field(min_length=20, max_length=256)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class ConfirmationRefreshResponse(BaseModel):
+    run_id: UUID
+    run_status: str
+    confirmation_token: str
+    preview: dict[str, object]
+    expires_at: str
+
+
+class ConfirmationResponse(BaseModel):
+    run_id: UUID
+    run_status: str
+    accepted: bool
+    assistant_response: str | None = None
+    preview: dict[str, object] | None = None
+    token_refresh_required: bool = False
 
 
 class PreferenceCreateRequest(BaseModel):
@@ -131,6 +170,9 @@ class RunResponse(BaseModel):
     step_count: int
     last_checkpoint_seq: int
     terminal_reason: str | None = None
+    preview: dict[str, object] | None = None
+    confirmation_expires_at: str | None = None
+    token_refresh_required: bool = False
 
 
 def _message_repository() -> MessageRepository:
@@ -141,7 +183,14 @@ def _run_repository() -> RunRepository:
     return RunRepository(get_engine())
 
 
-def _run_response(snapshot: RunSnapshot, *, run_id: UUID, conversation_id: UUID) -> RunResponse:
+def _run_response(
+    snapshot: RunSnapshot,
+    *,
+    run_id: UUID,
+    conversation_id: UUID,
+    preview: dict[str, object] | None = None,
+    confirmation_expires_at: str | None = None,
+) -> RunResponse:
     # Keep this conversion local so the API never exposes checkpoint internals.
     return RunResponse(
         run_id=run_id,
@@ -151,7 +200,26 @@ def _run_response(snapshot: RunSnapshot, *, run_id: UUID, conversation_id: UUID)
         step_count=snapshot.step_count,
         last_checkpoint_seq=snapshot.last_checkpoint_seq,
         terminal_reason=snapshot.terminal_reason,
+        preview=preview if snapshot.status == RunStatus.WAITING_CONFIRMATION.value else None,
+        confirmation_expires_at=(
+            confirmation_expires_at if snapshot.status == RunStatus.WAITING_CONFIRMATION.value else None
+        ),
+        token_refresh_required=snapshot.status == RunStatus.WAITING_CONFIRMATION.value,
     )
+
+
+def _checkpoint_context(*, run_id: UUID, actor_id: str) -> RunContext:
+    repository = RunRepository(get_engine())
+    state = repository.load_latest_checkpoint(run_id=run_id, tenant_id=DEMO_TENANT_ID)
+    if state is None:
+        raise HTTPException(status_code=409, detail="run_checkpoint_unavailable")
+    try:
+        context = RunContext.model_validate(state)
+    except ValueError as error:
+        raise HTTPException(status_code=500, detail="run_checkpoint_invalid") from error
+    if context.actor_id != actor_id or context.tenant_id != DEMO_TENANT_ID:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return context
 
 
 def get_demo_actor(
@@ -341,6 +409,10 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
     ) -> MessageSendResponse:
         run_id = uuid4()
         assistant_response: str | None = None
+        confirmation_token: str | None = None
+        preview: dict[str, object] | None = None
+        confirmation_expires_at: str | None = None
+        token_refresh_required = False
         try:
             message = messages.append_user(
                 conversation_id=conversation_id,
@@ -367,6 +439,8 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             waiting_action = (
                 "human_handoff" if run_status == RunStatus.WAITING_HUMAN.value else None
             )
+            if run_status == RunStatus.WAITING_CONFIRMATION.value:
+                token_refresh_required = True
         else:
             settings = get_settings()
             fingerprint = "|".join(
@@ -463,24 +537,54 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                                 "human_handoff",
                             )
                     elif run_status == RunStatus.RUNNING_WORKFLOW.value:
-                        # Write workflows are introduced in Phase 4. Keep the
-                        # route durable but pause before any side effect.
                         try:
-                            RepositoryCheckpointStore(RunRepository(get_engine())).checkpoint(
+                            mutation_type = mutation_type_for_route(routed.workflow_id)
+                            if mutation_type is None:
+                                raise MutationWorkflowError("UNKNOWN_MUTATION", "暂不支持该操作")
+                            prepared_context, prepared_preview, token = prepare_mutation(
                                 context=routed_context,
-                                status=RunStatus.WAITING_HUMAN,
-                                next_step="terminal",
-                                state={"route_reason": "phase4_workflow_pending"},
-                                events=(
-                                    DomainEvent(
-                                        event_type=EventType.FAILED,
-                                        payload={"reason": "phase4_workflow_pending"},
-                                    ),
-                                ),
+                                mutation_type=mutation_type,
+                                arguments=extract_arguments(mutation_type, payload.content),
+                                confirmations=ConfirmationRepository(get_engine()),
+                                checkpoints=RepositoryCheckpointStore(RunRepository(get_engine())),
                             )
-                        except Exception:
-                            pass
-                        run_status, waiting_action = RunStatus.WAITING_HUMAN.value, "human_handoff"
+                            run_status = prepared_context.status.value
+                            preview = prepared_preview.as_public()
+                            confirmation_token = token
+                            confirmation_expires_at = str(
+                                prepared_context.state.get("mutation_expires_at", "")
+                            ) or None
+                            waiting_action = "confirmation_required"
+                        except MutationWorkflowError as error:
+                            state = dict(routed_context.state)
+                            state.update({"mutation_error": error.code, "mutation_message": str(error)})
+                            target_status = (
+                                RunStatus.WAITING_USER
+                                if error.code == "MISSING_SLOTS"
+                                else RunStatus.WAITING_HUMAN
+                            )
+                            next_step = "collect_slots" if target_status is RunStatus.WAITING_USER else "terminal"
+                            event_type = (
+                                EventType.WAITING_FOR_USER
+                                if target_status is RunStatus.WAITING_USER
+                                else EventType.FAILED
+                            )
+                            try:
+                                RepositoryCheckpointStore(RunRepository(get_engine())).checkpoint(
+                                    context=routed_context,
+                                    status=target_status,
+                                    next_step=next_step,
+                                    state=state,
+                                    events=(DomainEvent(event_type=event_type, payload={"reason": error.code}),),
+                                )
+                            except Exception:
+                                pass
+                            run_status = target_status.value
+                            waiting_action = (
+                                "collect_slots"
+                                if target_status is RunStatus.WAITING_USER
+                                else "human_handoff"
+                            )
             except ModelGatewayError:
                 RunRoutingRepository(get_engine()).select_route(
                     context=context.model_copy(update={"status": RunStatus.ROUTING}),
@@ -495,7 +599,134 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             run_status=run_status,
             assistant_response=assistant_response,
             waiting_action=waiting_action,
+            confirmation_token=confirmation_token,
+            preview=preview,
+            confirmation_expires_at=confirmation_expires_at,
+            token_refresh_required=token_refresh_required,
         )
+
+    @app.post("/v1/runs/{run_id}/confirmations", response_model=ConfirmationResponse)
+    def confirm_run(
+        run_id: UUID,
+        payload: ConfirmationRequest,
+        actor_id: str = Depends(get_demo_actor),
+        messages: MessageRepository = Depends(_message_repository),
+    ) -> ConfirmationResponse:
+        runs = RunRepository(get_engine())
+        snapshot = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        if snapshot.status != RunStatus.WAITING_CONFIRMATION.value:
+            raise HTTPException(status_code=409, detail="run_not_waiting_confirmation")
+        context = _checkpoint_context(run_id=run_id, actor_id=actor_id)
+        confirmations = ConfirmationRepository(get_engine())
+        checkpoints = RepositoryCheckpointStore(runs)
+        try:
+            if payload.decision == "reject":
+                updated = reject_mutation(
+                    context=context,
+                    confirmations=confirmations,
+                    checkpoints=checkpoints,
+                    token_hash=hash_secret(payload.confirmation_token),
+                )
+                response_text = "已取消该操作，未产生任何业务变更。"
+                accepted = False
+            else:
+                updated = confirm_mutation(
+                    context=context,
+                    token_plaintext=payload.confirmation_token,
+                    idempotency_key=payload.idempotency_key,
+                    confirmations=confirmations,
+                    executions=MutationExecutionRepository(get_engine()),
+                    checkpoints=checkpoints,
+                )
+                accepted = updated.status is RunStatus.COMPLETED
+                response_text = (
+                    "操作已提交并完成状态校验。"
+                    if accepted
+                    else "操作状态暂时无法确认，已转人工处理。"
+                )
+        except MutationWorkflowError as error:
+            status_code = 409 if error.code in {"CONFIRMATION_UNAVAILABLE", "CONFIRMATION_CONFLICT", "PREVIEW_CHANGED"} else 400
+            raise HTTPException(status_code=status_code, detail=error.code) from error
+        try:
+            messages.append_assistant(
+                conversation_id=context.conversation_id,
+                tenant_id=DEMO_TENANT_ID,
+                actor_id=actor_id,
+                content=response_text,
+                run_id=run_id,
+            )
+        except Exception:
+            # The durable run remains authoritative even if message projection
+            # is temporarily unavailable.
+            pass
+        return ConfirmationResponse(
+            run_id=run_id,
+            run_status=updated.status.value,
+            accepted=accepted,
+            assistant_response=response_text,
+        )
+
+    @app.post("/v1/runs/{run_id}/confirmations/refresh", response_model=ConfirmationRefreshResponse)
+    def refresh_confirmation(
+        run_id: UUID,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> ConfirmationRefreshResponse:
+        from src.orchestration.mutation_workflow import refresh_mutation_token
+
+        runs = RunRepository(get_engine())
+        snapshot = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        if snapshot.status != RunStatus.WAITING_CONFIRMATION.value:
+            raise HTTPException(status_code=409, detail="run_not_waiting_confirmation")
+        context = _checkpoint_context(run_id=run_id, actor_id=actor_id)
+        try:
+            token, expires_at, public_preview = refresh_mutation_token(
+                context=context,
+                confirmations=ConfirmationRepository(get_engine()),
+                checkpoints=RepositoryCheckpointStore(runs),
+            )
+        except MutationWorkflowError as error:
+            raise HTTPException(status_code=409, detail=error.code) from error
+        return ConfirmationRefreshResponse(
+            run_id=run_id,
+            run_status=RunStatus.WAITING_CONFIRMATION.value,
+            confirmation_token=token,
+            preview=public_preview,
+            expires_at=expires_at,
+        )
+
+    @app.post("/v1/runs/{run_id}/cancel", response_model=RunResponse)
+    def cancel_run(
+        run_id: UUID,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> RunResponse:
+        runs = RunRepository(get_engine())
+        snapshot = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        context = _checkpoint_context(run_id=run_id, actor_id=actor_id)
+        if context.status not in {RunStatus.WAITING_CONFIRMATION, RunStatus.WAITING_USER}:
+            raise HTTPException(status_code=409, detail="run_not_cancellable")
+        state = dict(context.state)
+        state["mutation_outcome"] = "cancelled"
+        checkpoints = RepositoryCheckpointStore(runs)
+        version = checkpoints.checkpoint(
+            context=context,
+            status=RunStatus.CANCELLED,
+            next_step="terminal",
+            state=state,
+            events=(DomainEvent(event_type=EventType.FAILED, payload={"reason": "cancelled_by_user"}),),
+        )
+        updated = replace(
+            snapshot,
+            status=RunStatus.CANCELLED.value,
+            step_count=snapshot.step_count + 1,
+            row_version=version,
+        )
+        return _run_response(updated, run_id=run_id, conversation_id=snapshot.conversation_id or context.conversation_id)
 
     @app.get("/v1/runs/{run_id}", response_model=RunResponse)
     def get_run(
@@ -508,7 +739,18 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="run_not_found")
         if snapshot.conversation_id is None:
             raise HTTPException(status_code=500, detail="run_data_invalid")
-        return _run_response(snapshot, run_id=run_id, conversation_id=snapshot.conversation_id)
+        checkpoint = runs.load_latest_checkpoint(run_id=run_id, tenant_id=DEMO_TENANT_ID)
+        raw_preview = checkpoint.get("state", {}).get("mutation_preview") if checkpoint else None
+        preview = raw_preview if isinstance(raw_preview, dict) else None
+        raw_expiry = checkpoint.get("state", {}).get("mutation_expires_at") if checkpoint else None
+        expiry = raw_expiry if isinstance(raw_expiry, str) else None
+        return _run_response(
+            snapshot,
+            run_id=run_id,
+            conversation_id=snapshot.conversation_id,
+            preview=preview,
+            confirmation_expires_at=expiry,
+        )
 
     @app.get("/v1/runs/{run_id}/events")
     def get_run_events(

@@ -133,6 +133,43 @@
   opacity: 0.55;
 }
 
+.confirmationCard {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #f2c94c;
+  border-radius: 0.75rem;
+  background: #fffaf0;
+}
+
+.confirmationCard h3,
+.confirmationCard p {
+  margin: 0;
+}
+
+.confirmationActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.confirmationActions button,
+.confirmationCard > button {
+  border: 1px solid #c68a00;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #614600;
+  cursor: pointer;
+  padding: 0.6rem 0.8rem;
+}
+
+.confirmationActions button:first-child {
+  background: #235bd6;
+  border-color: #235bd6;
+  color: #fff;
+}
+
 .traceEvent {
   display: grid;
   gap: 0.2rem;

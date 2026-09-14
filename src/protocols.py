@@ -153,6 +153,11 @@ class EventType(StrEnum):
     TOOL_OBSERVED = "tool_observed"
     WAITING_FOR_USER = "waiting_for_user"
     FAILED = "failed"
+    MUTATION_PREPARED = "mutation_prepared"
+    USER_CONFIRMED = "user_confirmed"
+    COMMIT_STARTED = "commit_started"
+    COMMIT_OBSERVED = "commit_observed"
+    STATE_VERIFIED = "state_verified"
 
 
 class DomainEvent(Contract):

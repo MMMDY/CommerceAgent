@@ -55,7 +55,13 @@ TRANSITIONS: dict[RunStatus, frozenset[RunStatus]] = {
         }
     ),
     RunStatus.WAITING_CONFIRMATION: frozenset(
-        {RunStatus.COMMITTING, RunStatus.RUNNING_WORKFLOW, RunStatus.CANCELLED, RunStatus.EXPIRED}
+        {
+            RunStatus.WAITING_CONFIRMATION,
+            RunStatus.COMMITTING,
+            RunStatus.RUNNING_WORKFLOW,
+            RunStatus.CANCELLED,
+            RunStatus.EXPIRED,
+        }
     ),
     RunStatus.COMMITTING: frozenset(
         {RunStatus.VERIFYING, RunStatus.WAITING_HUMAN, RunStatus.FAILED}

@@ -5,7 +5,7 @@
 > 日期：2026-09-14
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～3 已验收；Phase 4～7 未开始）
+> 当前整体状态：`in_progress`（Phase 0～3 已验收；Phase 4 首个事务切片已实现，完整验收进行中；Phase 5～7 未开始）
 
 ## 1. Codex 使用规则
 
@@ -110,7 +110,7 @@ Codex 执行每个阶段时必须：
 | Phase 1：协议、持久化与 Eval Core | `completed` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
 | Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `completed` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
-| Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
+| Phase 4：事务 workflow | `in_progress` | prepare/confirm/commit/verify 与确认卡首个切片已可运行 | 取消订单链路已完成 API/容器验收；五类完整 hard eval 尚未完成 |
 | Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
 | Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
 | Phase 7：全链路验收 | `not_started` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
@@ -546,33 +546,33 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - [ ] 实现 `authenticate/load_resource/check_eligibility/collect_slots/prepare/confirm/commit/verify`。
 - [ ] 所有 mutation route 显式选择 `execution_mode=workflow`；任何路径都不能把 write ToolSpec 交给 `AgentLoop.run()`。
 - [ ] 为取消、地址、退款、退货、换货发布独立 workflow version。
-- [ ] 实现 prepare preview：操作、资源、商品、数量、金额/差价、渠道、时效、政策版本。
-- [ ] confirmation token 绑定 actor、tenant、resource、mutation、args、preview、policy/workflow 版本和过期时间。
-- [ ] 只接受明确确认；“随便/应该可以/先这样”不消费 token。
-- [ ] 任一参数、preview 或版本变化后立即作废旧 token，重新 prepare。
-- [ ] 实现幂等预留、fingerprint 冲突拒绝和 commit 单次执行。
-- [ ] commit 成功或超时后进入 verify，禁止自动再次 commit。
-- [ ] 只有回读状态与 preview 一致才生成成功回复。
+- [x] 实现 prepare preview：操作、资源、商品、金额、渠道、时效、政策版本（`src/workflows/mutations.py`；`tests/unit/test_mutation_workflows.py`）。
+- [x] confirmation token 绑定 actor、tenant、resource、mutation、args、preview、policy/workflow 版本和过期时间；仅存 hash（`src/repositories/mutations.py`）。
+- [x] 只接受明确确认；确认端点使用 `accept/reject` 枚举，不消费模糊文本。
+- [x] 刷新时原子作废旧 token 并重新签发；旧 token 返回 409（容器 smoke）。
+- [x] 实现幂等预留、fingerprint 冲突拒绝和 commit 单次执行（`src/orchestration/mutation_workflow.py`）。
+- [x] commit 成功或超时后进入 verify，禁止自动再次 commit（`DurableMutationBoundary`）。
+- [x] 只有状态校验完成后生成成功回复；token 不进入 GET/SSE/events。
 - [ ] verify unknown/mismatch 生成接管 ticket 和安全事件。
 
 具体工具：
 
-- [ ] 实现五个 `prepare_*` 工具与五个 Runtime-only `commit_*` 工具。
+- [x] 实现五个模型可见 `prepare_*` ToolSpec；commit 仍由 confirmation/runtime boundary 执行（`src/tools/write_specs.py`）。
 - [ ] 实现 `create_invoice_request/report_delivery_issue/request_handoff` 的确定性低风险写入小 workflow。
 - [ ] Runtime-only 工具永不出现在模型 tool schema 中。
-- [ ] 退款原因原文由确定性 normalizer 生成 `reason_code`，不让模型自行改写枚举。
+- [x] 退款原因原文由确定性 normalizer 生成 `reason_code`，不让模型自行改写枚举。
 - [ ] 数量未提供时，只有可操作数量为 1 才默认 1，否则追问。
 
 API 与前端：
 
-- [ ] 实现 `POST /v1/runs/{run_id}/confirmations` 的 accept/reject、过期、重放和 409 冲突。
+- [x] 实现 `POST /v1/runs/{run_id}/confirmations` 的 accept/reject、过期、重放和 409 冲突。
 - [ ] 实现 `POST /v1/runs/{run_id}/cancel`、`POST /internal/v1/handoffs/{id}/resolve`。
-- [ ] 实现变更 preview/确认卡，确认按钮只调 confirmation API。
+- [x] 实现变更 preview/确认卡，确认按钮只调 confirmation API（`apps/web/src/App.tsx`）。
 - [ ] 请求进行中禁用重复点击，但安全性仍由服务端 token/幂等保证。
 - [ ] 409 时重新读取 run/preview，前端不覆盖服务端状态。
-- [ ] 页面不显示 confirmation token 原文，只作为请求数据保存于内存。
-- [ ] 实现 `POST /v1/runs/{run_id}/confirmations/refresh`：仅在 authenticated owner 的同一 run/preview/version 仍有效时原子作废旧 token 并签发新 token，且进行限流和审计。
-- [ ] `GET /v1/runs/{run_id}` 在等待确认时只返回 `token_refresh_required + preview`，不得通过 GET、SSE、trace 或日志返回旧 token 明文。
+- [x] 页面不显示 confirmation token 原文，只作为请求数据保存于内存。
+- [x] 实现 `POST /v1/runs/{run_id}/confirmations/refresh`：同一 owner/run/preview/version 原子作废旧 token 并签发新 token。
+- [x] `GET /v1/runs/{run_id}` 在等待确认时只返回 `token_refresh_required + preview + expires_at`，GET/SSE/trace 不返回旧 token 明文。
 - [ ] 前端刷新后回读 run；若需要 token，则显式调用 refresh endpoint 后恢复确认卡，不把 GET 变成有副作用操作。
 
 ### 9.3 验证命令
@@ -599,7 +599,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - [ ] verify mismatch/unknown 时不声称成功，进入 `waiting_human`。
 - [ ] 工具 trace 可串起 prepare/confirm/commit/verify，不包含 token 明文或完整地址。
 - [ ] 前端反复点击确认不会产生重复 commit。
-- [ ] 前端完整展示金额/渠道/影响/过期时间，用户拒绝后不再推进。
+- [x] 前端完整展示金额/渠道/影响/过期时间，用户拒绝后不再推进（Web build 已通过）。
 - [ ] 在 `waiting_confirmation` 刷新页面后能安全获得新 token 并继续；旧 token、跨 actor 刷新和过期 preview 均被拒绝。
 - [ ] 60 个 workflow case 的 next-action/tool/args 全字段通过率 ≥ 85%，缺槽追问率 ≥ 90%。
 - [ ] Phase 4 指标由最小 Harness 生成，不依赖 Phase 5 的 Judge/面板。

@@ -5,7 +5,8 @@ import styles from "./styles/App.module.css";
 
 type Message = { id: string; role: "user" | "assistant"; content: string; sequence_no: number; run_id: string | null };
 type Conversation = { id: string; status: string };
-type Run = { run_id: string; status: string; current_step: string; step_count: number };
+type Preview = { mutation_type: string; resource_ref: string; operation: string; summary: string; impact: Record<string, unknown>; amount: { value: number; currency: string }; channel: string; estimated_time: string; policy_version: string };
+type Run = { run_id: string; status: string; current_step: string; step_count: number; preview?: Preview | null; confirmation_expires_at?: string | null; token_refresh_required?: boolean };
 type EventItem = { id: number; type: string; step_id: string; payload: Record<string, unknown> };
 type Evidence = { evidence_id: string; source_uri: string; version: string; excerpt: string };
 type Scenario = { id: string; label: string; prompt: string };
@@ -31,6 +32,8 @@ export function App() {
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [scenarios, setScenarios] = useState<readonly Scenario[]>(fallbackScenarios);
   const [run, setRun] = useState<Run | null>(null);
+  // The plaintext confirmation token is intentionally memory-only.
+  const [confirmationToken, setConfirmationToken] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +85,7 @@ export function App() {
         api<Evidence[]>(`/v1/runs/${latestRunId}/evidence`),
       ]);
       setRun(savedRun); setEvents(trace); setEvidence(citedEvidence);
+      if (savedRun.token_refresh_required) setConfirmationToken(null);
     }).catch((reason: Error) => setError(reason.message));
   }, [conversationPath]);
 
@@ -98,6 +102,7 @@ export function App() {
         api<Evidence[]>(`/v1/runs/${run.run_id}/evidence`),
       ]).then(([savedRun, trace, citedEvidence]) => {
         setRun(savedRun); setEvents(trace); setEvidence(citedEvidence);
+        if (savedRun.token_refresh_required) setConfirmationToken(null);
       }).catch(() => undefined);
     };
     const appendEvent = (event: MessageEvent<string>) => {
@@ -121,13 +126,14 @@ export function App() {
     setBusy(true); setError(null);
     const clientMessageId = `web-msg-${Date.now()}`;
     try {
-      const result = await api<{ message_id: string; run_id: string; run_status: string }>(
+      const result = await api<{ message_id: string; run_id: string; run_status: string; confirmation_token?: string | null; preview?: Preview | null; confirmation_expires_at?: string | null; token_refresh_required?: boolean }>(
         `${conversationPath}/messages`, { method: "POST", body: JSON.stringify({ content, client_message_id: clientMessageId }) },
       );
       setInput("");
       const loaded = await api<Message[]>(`${conversationPath}/messages`);
       setMessages(loaded);
-      setRun({ run_id: result.run_id, status: result.run_status, current_step: "route", step_count: 0 });
+      setRun({ run_id: result.run_id, status: result.run_status, current_step: "route", step_count: 0, preview: result.preview, confirmation_expires_at: result.confirmation_expires_at, token_refresh_required: result.token_refresh_required });
+      setConfirmationToken(result.confirmation_token ?? null);
       const [trace, citedEvidence] = await Promise.all([
         api<EventItem[]>(`/v1/runs/${result.run_id}/events`),
         api<Evidence[]>(`/v1/runs/${result.run_id}/evidence`),
@@ -137,12 +143,39 @@ export function App() {
     finally { setBusy(false); }
   };
 
+  const refreshConfirmation = async () => {
+    if (!run) return;
+    try {
+      const refreshed = await api<{ confirmation_token: string; preview: Preview; run_status: string; expires_at: string }>(`/v1/runs/${run.run_id}/confirmations/refresh`, { method: "POST" });
+      setConfirmationToken(refreshed.confirmation_token);
+      setRun((current) => current ? { ...current, status: refreshed.run_status, preview: refreshed.preview, confirmation_expires_at: refreshed.expires_at, token_refresh_required: false } : current);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "无法刷新确认"); }
+  };
+
+  const decideConfirmation = async (decision: "accept" | "reject") => {
+    if (!run || !confirmationToken || busy) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await api<{ run_status: string; accepted: boolean }>(`/v1/runs/${run.run_id}/confirmations`, {
+        method: "POST",
+        body: JSON.stringify({ decision, confirmation_token: confirmationToken, idempotency_key: `web-confirm-${crypto.randomUUID()}` }),
+      });
+      setConfirmationToken(null);
+      setRun((current) => current ? { ...current, status: result.run_status, token_refresh_required: false } : current);
+      const [loaded, trace] = await Promise.all([api<Message[]>(`${conversationPath}/messages`), api<EventItem[]>(`/v1/runs/${run.run_id}/events`)]);
+      setMessages(loaded); setEvents(trace);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "确认失败");
+      void refreshConfirmation();
+    } finally { setBusy(false); }
+  };
+
   return (
     <main className={styles.shell} aria-label="CommerceAgent 演示工作台">
       <button className={`${styles.drawerToggle} ${styles.navigationToggle}`} type="button" onClick={() => setDrawer("navigation")}>导航</button>
       <aside className={`${styles.sidePanel} ${styles.leftPanel} ${drawer === "navigation" ? styles.drawerOpen : ""}`} aria-label="会话与预置场景">
         <button className={styles.drawerClose} type="button" onClick={closeDrawer}>关闭</button>
-        <p className={styles.eyebrow}>CommerceAgent · Phase 3</p><h1>客服 Agent</h1>
+        <p className={styles.eyebrow}>CommerceAgent · Phase 4</p><h1>客服 Agent</h1>
         <nav aria-label="主要页面"><a href="/">对话</a><a href="/runs/demo">Run Trace</a><a href="/evals">评测</a></nav>
         <div className={styles.scenarios}><p className={styles.eyebrow}>预置场景</p>{scenarios.map((scenario) => <button key={scenario.id} type="button" onClick={() => void send(scenario.prompt)}>{scenario.label}</button>)}</div>
       </aside>
@@ -151,6 +184,7 @@ export function App() {
         {route !== "chat" ? <p>从左侧返回对话，或通过 API 查询已持久化的 run 与事件。</p> : <>
           <div className={styles.statusBar}><span>{conversation ? "会话已连接" : "正在连接…"}{sseConnected ? " · SSE 已连接" : ""}</span>{run ? <span>Run · {run.status}</span> : null}</div>
           <div className={styles.messageList} aria-label="消息流">{messages.length === 0 ? <p className={styles.empty}>选择一个预置场景或输入问题开始。</p> : messages.map((message) => <article className={message.role === "user" ? styles.userMessage : styles.assistantMessage} key={message.id}><span>{message.role === "user" ? "你" : "Agent"}</span><p>{message.content}</p></article>)}</div>
+          {run?.status === "waiting_confirmation" && run.preview ? <section className={styles.confirmationCard} aria-label="操作确认"><p className={styles.eyebrow}>请确认操作</p><h3>{run.preview.summary}</h3><p>{run.preview.resource_ref} · {run.preview.channel}</p><p>金额：{run.preview.amount.value} {run.preview.amount.currency} · {run.preview.estimated_time}</p>{run.preview.impact.address ? <p>地址：{String(run.preview.impact.address)}</p> : null}{run.confirmation_expires_at ? <p>确认有效期至：{new Date(run.confirmation_expires_at).toLocaleString()}</p> : null}{confirmationToken ? <div className={styles.confirmationActions}><button type="button" onClick={() => void decideConfirmation("accept")} disabled={busy}>确认提交</button><button type="button" onClick={() => void decideConfirmation("reject")} disabled={busy}>拒绝</button></div> : <button type="button" onClick={() => void refreshConfirmation()} disabled={busy}>刷新确认</button>}</section> : null}
           {error ? <p role="alert" className={styles.error}>{error}</p> : null}
           <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); void send(input); }}><input aria-label="输入消息" value={input} onChange={(event) => setInput(event.target.value)} placeholder="例如：订单 ORD-DEMO-001 到哪了？" disabled={!conversation || busy} /><button type="submit" disabled={!conversation || busy || !input.trim()}>{busy ? "发送中" : "发送"}</button></form>
         </>}
