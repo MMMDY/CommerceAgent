@@ -52,6 +52,19 @@ def test_gateway_parses_decision_without_exposing_authorization() -> None:
     assert seen["path"] == "/v1/chat/completions"
 
 
+def test_gateway_config_hash_does_not_depend_on_api_key() -> None:
+    first = OpenAICompatibleGateway(
+        Settings(model="m", api_base="https://example.test/v1", api_key="first"),
+        httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(500))),
+    )
+    second = OpenAICompatibleGateway(
+        Settings(model="m", api_base="https://example.test/v1", api_key="second"),
+        httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(500))),
+    )
+    assert first.config_hash == second.config_hash
+    assert "first" not in first.config_hash
+
+
 def test_gateway_constrains_legacy_envelope_to_trusted_prompt_route() -> None:
     client = httpx.Client(
         transport=httpx.MockTransport(

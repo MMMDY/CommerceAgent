@@ -6,6 +6,7 @@ import json
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
+from hashlib import sha256
 from time import perf_counter
 
 import httpx
@@ -36,6 +37,9 @@ class DeterministicFakeModel(ModelGateway):
     def __init__(self, decisions: Sequence[Decision]) -> None:
         self._decisions = deque(decisions)
         self.prompts: list[PromptView] = []
+        self.provider = "deterministic_fake"
+        self.model_name = "deterministic_fake"
+        self.config_hash = "sha256:deterministic_fake"
 
     def decide(self, prompt: PromptView) -> ModelDecision:
         started = perf_counter()
@@ -60,6 +64,20 @@ class OpenAICompatibleGateway(ModelGateway):
         self._timeout = settings.model_timeout_seconds
         self._max_tokens = settings.model_max_tokens
         self._client = client or httpx.Client(timeout=self._timeout)
+        self.provider = "openai_compatible"
+        self.model_name = self._model
+        fingerprint = json.dumps(
+            {
+                "api_base": self._base_url,
+                "model": self._model,
+                "max_tokens": self._max_tokens,
+                "timeout_seconds": self._timeout,
+                "temperature": 0,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        self.config_hash = f"sha256:{sha256(fingerprint.encode()).hexdigest()}"
 
     def decide(self, prompt: PromptView) -> ModelDecision:
         try:
