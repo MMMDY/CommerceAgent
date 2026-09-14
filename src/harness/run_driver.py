@@ -81,12 +81,20 @@ class AgentLoopCaseRuntime:
             )
             last = run.steps[-1] if run.steps else None
             decisions = tuple(step.decision for step in run.steps if step.decision is not None)
+            tool_args = next(
+                (
+                    dict(decision.args)
+                    for decision in reversed(decisions)
+                    if decision.type.value == "call_tool"
+                ),
+                {},
+            )
             return RuntimeTrace(
                 route=last.decision.route if last and last.decision else None,
                 intent=last.decision.intent if last and last.decision else None,
                 next_action=plan.trace_next_action
                 or (last.decision.type.value if last and last.decision else None),
-                args=dict(last.decision.args) if last and last.decision else {},
+                args=tool_args or (dict(last.decision.args) if last and last.decision else {}),
                 tools_called=tuple(
                     decision.tool for decision in decisions if decision.tool is not None
                 ),

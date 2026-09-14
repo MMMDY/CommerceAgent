@@ -11,6 +11,12 @@ type EventItem = { id: number; type: string; step_id: string; payload: Record<st
 type Evidence = { evidence_id: string; source_uri: string; version: string; excerpt: string };
 type Scenario = { id: string; label: string; prompt: string };
 
+class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 const fallbackScenarios: Scenario[] = [
   { id: "order_status", label: "查订单", prompt: "查询我的订单状态" },
   { id: "product_info", label: "查商品", prompt: "TAH6206 支持什么蓝牙版本？" },
@@ -19,7 +25,7 @@ const fallbackScenarios: Scenario[] = [
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
-  if (!response.ok) throw new Error(`请求失败（${response.status}）`);
+  if (!response.ok) throw new ApiError(response.status, `请求失败（${response.status}）`);
   return response.json() as Promise<T>;
 }
 
@@ -166,7 +172,18 @@ export function App() {
       setMessages(loaded); setEvents(trace);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "确认失败");
-      void refreshConfirmation();
+      if (reason instanceof ApiError && reason.status === 409) {
+        try {
+          const current = await api<Run>(`/v1/runs/${run.run_id}`);
+          setRun(current);
+          setConfirmationToken(null);
+          if (current.status === "waiting_confirmation" && current.token_refresh_required) {
+            await refreshConfirmation();
+          }
+        } catch (reloadError) {
+          setError(reloadError instanceof Error ? reloadError.message : "无法刷新服务端状态");
+        }
+      }
     } finally { setBusy(false); }
   };
 

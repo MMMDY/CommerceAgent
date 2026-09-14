@@ -64,6 +64,7 @@ class DemoOrder:
     item_id: str
     item_title: str
     amount: int
+    quantity: int = 1
     currency: str = "CNY"
 
 
@@ -135,6 +136,10 @@ class MutationPlanner:
         if order is None or order.owner_id != actor_id:
             # Do not reveal whether another actor's resource exists.
             raise MutationPlanningError("RESOURCE_NOT_FOUND", "未找到可操作的订单")
+        quantity_value = normalized.get("quantity", 1)
+        if not isinstance(quantity_value, int) or isinstance(quantity_value, bool) or quantity_value != 1:
+            raise MutationPlanningError("INVALID_QUANTITY", "当前演示订单仅支持操作可操作数量为 1 的商品")
+        normalized["quantity"] = 1
         self._check_eligibility(mutation_type, order)
         reason_code = str(normalized.get("reason_code", "other"))
         item_id = str(normalized.get("item_id", order.item_id))
@@ -142,28 +147,28 @@ class MutationPlanner:
             raise MutationPlanningError("ITEM_NOT_FOUND", "订单中没有该商品")
         if mutation_type == "change_order":
             address = str(normalized["new_address"])
-            impact = {"address": _mask_address(address), "address_version": "v1"}
+            impact = {"address": _mask_address(address), "address_version": "v1", "quantity": 1}
             amount = {"value": 0, "currency": order.currency}
             channel, eta = "原配送渠道", "预计 1 个工作日内生效"
             summary = f"修改订单 {order.order_id} 的收货地址"
         elif mutation_type == "cancel_order":
-            impact = {"order_status": "cancelled", "item_id": order.item_id}
+            impact = {"order_status": "cancelled", "item_id": order.item_id, "quantity": 1}
             amount = {"value": order.amount, "currency": order.currency}
             channel, eta = "原支付渠道", "预计 1-3 个工作日到账"
             summary = f"取消订单 {order.order_id}"
         elif mutation_type == "request_refund":
-            impact = {"refund_status": "requested", "item_id": item_id, "reason_code": reason_code}
+            impact = {"refund_status": "requested", "item_id": item_id, "reason_code": reason_code, "quantity": 1}
             amount = {"value": order.amount, "currency": order.currency}
             channel, eta = "原支付渠道", "预计 3-7 个工作日到账"
             summary = f"申请订单 {order.order_id} 的退款"
         elif mutation_type == "return_product":
-            impact = {"return_status": "requested", "item_id": item_id, "reason_code": reason_code}
+            impact = {"return_status": "requested", "item_id": item_id, "reason_code": reason_code, "quantity": 1}
             amount = {"value": order.amount, "currency": order.currency}
             channel, eta = "原支付渠道", "收到退回商品后 3-7 个工作日"
             summary = f"申请退回订单 {order.order_id} 的商品"
         else:
             replacement = str(normalized["replacement_sku"])
-            impact = {"exchange_status": "requested", "item_id": item_id, "replacement_sku": replacement}
+            impact = {"exchange_status": "requested", "item_id": item_id, "replacement_sku": replacement, "quantity": 1}
             amount = {"value": 0, "currency": order.currency}
             channel, eta = "原配送渠道", "预计 3-5 个工作日"
             summary = f"申请将订单 {order.order_id} 的商品换为 {replacement}"

@@ -22,6 +22,8 @@ from src.mutation_safety import (
 from src.orchestration.mutation_execution import DurableMutationBoundary
 from src.orchestration.persistence import RepositoryCheckpointStore
 from src.protocols import DomainEvent, EventType, RunContext, RunStatus
+from src.repositories.audit import AuditRepository
+from src.repositories.handoffs import HandoffRepository
 from src.repositories.mutations import (
     ConfirmationRepository,
     ConfirmationTokenInput,
@@ -97,6 +99,12 @@ class DemoMutationSystem:
             business_reference=reference,
             response_redacted=response,
         )
+
+    def verify(self, *, actor_id: str, idempotency_key: str, business_reference: str) -> bool:
+        """Read back the demo business state; never infer success from commit alone."""
+
+        stored = self._completed.get((actor_id, idempotency_key))
+        return bool(stored and stored.get("business_reference") == business_reference)
 
 
 DEMO_MUTATION_SYSTEM = DemoMutationSystem()
@@ -232,6 +240,9 @@ def confirm_mutation(
     confirmations: ConfirmationRepository,
     executions: MutationExecutionRepository,
     checkpoints: RepositoryCheckpointStore,
+    handoffs: HandoffRepository | None = None,
+    audit: AuditRepository | None = None,
+    mutation_system: DemoMutationSystem | None = None,
 ) -> RunContext:
     """Consume confirmation, commit once, then verify the fixture state."""
 
@@ -288,6 +299,7 @@ def confirm_mutation(
         request_fingerprint=fingerprint,
     )
     outcome_version: dict[str, int] = {}
+    completion_state: dict[str, object] = {}
 
     def checkpoint_completion(completion: MutationCompletion) -> None:
         state_after = dict(committing.state)
@@ -315,11 +327,14 @@ def confirm_mutation(
         )
         outcome_version["value"] = version
         outcome_version["status"] = status.value  # type: ignore[assignment]
+        completion_state.clear()
+        completion_state.update(state_after)
 
+    system = mutation_system or DEMO_MUTATION_SYSTEM
     boundary = DurableMutationBoundary(executions)
     outcome = boundary.execute(
         intent=intent,
-        adapter=lambda key: DEMO_MUTATION_SYSTEM.commit(
+        adapter=lambda key: system.commit(
             operation=operation,
             actor_id=context.actor_id,
             resource_ref=str(state.get("mutation_resource_ref", "")),
@@ -330,18 +345,102 @@ def confirm_mutation(
     )
     if outcome.status is not MutationExecutionStatus.SUCCEEDED:
         status = RunStatus.WAITING_HUMAN if outcome.status is MutationExecutionStatus.UNKNOWN else RunStatus.FAILED
+        handoff_id = _create_handoff(
+            context=context,
+            operation=operation,
+            reason_code=("MUTATION_STATUS_UNKNOWN" if outcome.status is MutationExecutionStatus.UNKNOWN else "MUTATION_FAILED"),
+            details={"business_reference": outcome.business_reference},
+            handoffs=handoffs,
+            audit=audit,
+        ) if status is RunStatus.WAITING_HUMAN else None
+        uncertain_state = {
+            **committing.state,
+            "mutation_outcome": outcome.status.value,
+            **({"handoff_ticket_id": str(handoff_id)} if handoff_id else {}),
+        }
         final_version = checkpoints.checkpoint(
             context=committing.model_copy(update={"status": RunStatus.VERIFYING, "checkpoint_version": outcome_version["value"]}),
             status=status,
             next_step="terminal",
-            state={**committing.state, "mutation_outcome": outcome.status.value},
-            events=(DomainEvent(event_type=EventType.FAILED, payload={"reason": "mutation_status_unknown"}),),
+            state=uncertain_state,
+            events=(
+                DomainEvent(
+                    event_type=(
+                        EventType.MUTATION_UNCERTAIN
+                        if status is RunStatus.WAITING_HUMAN
+                        else EventType.FAILED
+                    ),
+                    payload={
+                        "reason": "mutation_status_unknown"
+                        if status is RunStatus.WAITING_HUMAN
+                        else "mutation_failed",
+                        **({"handoff_ticket_id": str(handoff_id)} if handoff_id else {}),
+                    },
+                ),
+                *(
+                    (
+                        DomainEvent(
+                            event_type=EventType.HANDOFF_CREATED,
+                            payload={"handoff_ticket_id": str(handoff_id)},
+                        ),
+                    )
+                    if handoff_id
+                    else ()
+                ),
+            ),
         )
-        return committing.model_copy(update={"status": status, "step_count": committing.step_count + 2, "checkpoint_version": final_version})
+        return committing.model_copy(update={"status": status, "state": uncertain_state, "step_count": committing.step_count + 2, "checkpoint_version": final_version})
+    verifying_state = dict(completion_state or committing.state)
+    verifying_state["mutation_outcome"] = "succeeded"
     verifying = committing.model_copy(
-        update={"status": RunStatus.VERIFYING, "state": {**committing.state, "mutation_outcome": "succeeded"}, "step_count": committing.step_count + 1, "checkpoint_version": outcome_version["value"]}
+        update={"status": RunStatus.VERIFYING, "state": verifying_state, "step_count": committing.step_count + 1, "checkpoint_version": outcome_version["value"]}
     )
     final_state = dict(verifying.state)
+    business_reference = str(final_state.get("business_reference", ""))
+    if not system.verify(
+        actor_id=context.actor_id,
+        idempotency_key=str(reservation.record_id),
+        business_reference=business_reference,
+    ):
+        handoff_id = _create_handoff(
+            context=context,
+            operation=operation,
+            reason_code="VERIFY_MISMATCH",
+            details={"business_reference": business_reference},
+            handoffs=handoffs,
+            audit=audit,
+        )
+        final_state["mutation_outcome"] = "verification_mismatch"
+        if handoff_id:
+            final_state["handoff_ticket_id"] = str(handoff_id)
+        final_version = checkpoints.checkpoint(
+            context=verifying,
+            status=RunStatus.WAITING_HUMAN,
+            next_step="terminal",
+            state=final_state,
+            events=(
+                DomainEvent(
+                    event_type=EventType.MUTATION_UNCERTAIN,
+                    payload={
+                        "reason": "verify_mismatch",
+                        **({"handoff_ticket_id": str(handoff_id)} if handoff_id else {}),
+                    },
+                ),
+                *(
+                    (
+                        DomainEvent(
+                            event_type=EventType.HANDOFF_CREATED,
+                            payload={"handoff_ticket_id": str(handoff_id)},
+                        ),
+                    )
+                    if handoff_id
+                    else ()
+                ),
+            ),
+        )
+        return verifying.model_copy(
+            update={"status": RunStatus.WAITING_HUMAN, "state": final_state, "step_count": verifying.step_count + 1, "checkpoint_version": final_version}
+        )
     final_state["verified_state"] = {"operation": operation, "status": "applied"}
     final_version = checkpoints.checkpoint(
         context=verifying,
@@ -353,6 +452,43 @@ def confirm_mutation(
     return verifying.model_copy(
         update={"status": RunStatus.COMPLETED, "state": final_state, "step_count": verifying.step_count + 1, "checkpoint_version": final_version}
     )
+
+
+def _create_handoff(
+    *,
+    context: RunContext,
+    operation: str,
+    reason_code: str,
+    details: dict[str, object],
+    handoffs: HandoffRepository | None,
+    audit: AuditRepository | None,
+) -> object | None:
+    ticket_id = (
+        handoffs.create(
+            run_id=context.run_id,
+            tenant_id=context.tenant_id,
+            actor_ref=context.actor_id,
+            reason_code=reason_code,
+            operation=operation,
+            details=details,
+        )
+        if handoffs is not None
+        else None
+    )
+    if audit is not None:
+        audit.append(
+            tenant_id=context.tenant_id,
+            actor_ref=context.actor_id,
+            event_type="mutation_handoff_created",
+            payload={
+                "run_id": str(context.run_id),
+                "reason_code": reason_code,
+                "operation": operation,
+                **({"ticket_id": str(ticket_id)} if ticket_id else {}),
+            },
+            payload_hash=hash_secret(f"{context.run_id}:{reason_code}:{operation}"),
+        )
+    return ticket_id
 
 
 def refresh_mutation_token(

@@ -41,7 +41,7 @@ DEFAULT_INTENT_ROUTE_RULES: tuple[IntentRouteRule, ...] = tuple(
         ("product_information", _READONLY, "catalog_query"),
         ("product_issue", _READONLY, "product_query"),
         ("pay", _WORKFLOW, "checkout"),
-        ("payment_issue", _WORKFLOW, "payment_issue"),
+        ("payment_issue", _READONLY, "payment_query"),
         ("payment_methods", _READONLY, "payment_policy"),
         ("customer_service", _READONLY, "customer_service"),
         ("technical_issue", _READONLY, "technical_support"),

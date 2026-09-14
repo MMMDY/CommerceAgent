@@ -10,6 +10,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
@@ -25,6 +26,12 @@ from src.db import get_engine
 from src.memory.session import build_session_memory
 from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
 from src.orchestration.api_runtime import execute_readonly_run
+from src.orchestration.low_risk_workflow import (
+    LOW_RISK_ROUTES,
+    LowRiskWorkflowError,
+    execute_low_risk,
+    extract_low_risk_arguments,
+)
 from src.orchestration.mutation_workflow import (
     MutationWorkflowError,
     confirm_mutation,
@@ -37,7 +44,9 @@ from src.orchestration.route_catalog import DEFAULT_INTENT_ROUTE_RULES
 from src.orchestration.router import IntentRouter, RouteDecision, RouteOutcome
 from src.orchestration.run_creation import RunCreationSpec
 from src.protocols import DomainEvent, EventType, Message, RoutingPromptView, RunContext, RunStatus
+from src.repositories.audit import AuditRepository
 from src.repositories.conversations import Conversation, ConversationRepository
+from src.repositories.handoffs import HandoffRepository
 from src.repositories.knowledge import KnowledgeRepository
 from src.repositories.memory import MemoryRepository, MemoryValidationError
 from src.repositories.messages import MessageConflictError, MessageRecord, MessageRepository
@@ -134,6 +143,22 @@ class ConfirmationResponse(BaseModel):
     assistant_response: str | None = None
     preview: dict[str, object] | None = None
     token_refresh_required: bool = False
+
+
+class HandoffResolveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: Literal["verified_success", "verified_failure"]
+    resolution_note: str = Field(min_length=1, max_length=500)
+
+
+class HandoffResponse(BaseModel):
+    ticket_id: UUID
+    run_id: UUID
+    status: str
+    run_status: str
+    reason_code: str
+    resolution: str | None = None
 
 
 class PreferenceCreateRequest(BaseModel):
@@ -539,23 +564,56 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                     elif run_status == RunStatus.RUNNING_WORKFLOW.value:
                         try:
                             mutation_type = mutation_type_for_route(routed.workflow_id)
-                            if mutation_type is None:
+                            if mutation_type is not None:
+                                prepared_context, prepared_preview, token = prepare_mutation(
+                                    context=routed_context,
+                                    mutation_type=mutation_type,
+                                    arguments=extract_arguments(mutation_type, payload.content),
+                                    confirmations=ConfirmationRepository(get_engine()),
+                                    checkpoints=RepositoryCheckpointStore(RunRepository(get_engine())),
+                                )
+                                run_status = prepared_context.status.value
+                                preview = prepared_preview.as_public()
+                                confirmation_token = token
+                                confirmation_expires_at = str(
+                                    prepared_context.state.get("mutation_expires_at", "")
+                                ) or None
+                                waiting_action = "confirmation_required"
+                            elif routed.workflow_id in LOW_RISK_ROUTES:
+                                low_risk_context = execute_low_risk(
+                                    context=routed_context,
+                                    route=routed.workflow_id,
+                                    arguments=extract_low_risk_arguments(
+                                        routed.workflow_id,
+                                        payload.content,
+                                        intent=routed.intent,
+                                    ),
+                                    executions=MutationExecutionRepository(get_engine()),
+                                    checkpoints=RepositoryCheckpointStore(RunRepository(get_engine())),
+                                    handoffs=HandoffRepository(get_engine()),
+                                    audit=AuditRepository(get_engine()),
+                                ).context
+                                run_status = low_risk_context.status.value
+                                waiting_action = (
+                                    "human_handoff"
+                                    if low_risk_context.status is RunStatus.WAITING_HUMAN
+                                    else None
+                                )
+                                assistant_response = (
+                                    "已提交请求，系统已记录。"
+                                    if low_risk_context.status is RunStatus.COMPLETED
+                                    else "请求状态暂时无法确认，已转人工处理。"
+                                )
+                                messages.append_assistant(
+                                    conversation_id=conversation_id,
+                                    tenant_id=DEMO_TENANT_ID,
+                                    actor_id=actor_id,
+                                    content=assistant_response,
+                                    run_id=run_id,
+                                )
+                            else:
                                 raise MutationWorkflowError("UNKNOWN_MUTATION", "暂不支持该操作")
-                            prepared_context, prepared_preview, token = prepare_mutation(
-                                context=routed_context,
-                                mutation_type=mutation_type,
-                                arguments=extract_arguments(mutation_type, payload.content),
-                                confirmations=ConfirmationRepository(get_engine()),
-                                checkpoints=RepositoryCheckpointStore(RunRepository(get_engine())),
-                            )
-                            run_status = prepared_context.status.value
-                            preview = prepared_preview.as_public()
-                            confirmation_token = token
-                            confirmation_expires_at = str(
-                                prepared_context.state.get("mutation_expires_at", "")
-                            ) or None
-                            waiting_action = "confirmation_required"
-                        except MutationWorkflowError as error:
+                        except (MutationWorkflowError, LowRiskWorkflowError) as error:
                             state = dict(routed_context.state)
                             state.update({"mutation_error": error.code, "mutation_message": str(error)})
                             target_status = (
@@ -639,6 +697,8 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                     confirmations=confirmations,
                     executions=MutationExecutionRepository(get_engine()),
                     checkpoints=checkpoints,
+                    handoffs=HandoffRepository(get_engine()),
+                    audit=AuditRepository(get_engine()),
                 )
                 accepted = updated.status is RunStatus.COMPLETED
                 response_text = (
@@ -698,6 +758,73 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             expires_at=expires_at,
         )
 
+    @app.post("/internal/v1/handoffs/{ticket_id}/resolve", response_model=HandoffResponse)
+    def resolve_handoff(
+        ticket_id: UUID,
+        payload: HandoffResolveRequest,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> HandoffResponse:
+        handoffs = HandoffRepository(get_engine())
+        ticket = handoffs.get_for_actor(
+            ticket_id=ticket_id, tenant_id=DEMO_TENANT_ID, actor_ref=actor_id
+        )
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="handoff_not_found")
+        if ticket.status != "open":
+            raise HTTPException(status_code=409, detail="handoff_already_resolved")
+        runs = RunRepository(get_engine())
+        snapshot = runs.load_run(
+            run_id=ticket.run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id
+        )
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        context = _checkpoint_context(run_id=ticket.run_id, actor_id=actor_id)
+        if context.status is not RunStatus.WAITING_HUMAN:
+            raise HTTPException(status_code=409, detail="run_not_waiting_human")
+        target = (
+            RunStatus.COMPLETED
+            if payload.outcome == "verified_success"
+            else RunStatus.FAILED
+        )
+        state = dict(context.state)
+        state["handoff_resolution"] = payload.outcome
+        state["handoff_resolution_note"] = payload.resolution_note
+        state["mutation_outcome"] = payload.outcome
+        RepositoryCheckpointStore(runs).checkpoint(
+            context=context,
+            status=target,
+            next_step="terminal",
+            state=state,
+            events=(
+                DomainEvent(
+                    event_type=EventType.HANDOFF_RESOLVED,
+                    payload={"ticket_id": str(ticket_id), "outcome": payload.outcome},
+                ),
+            ),
+        )
+        resolved = handoffs.resolve(
+            ticket_id=ticket_id,
+            tenant_id=DEMO_TENANT_ID,
+            resolution=payload.resolution_note,
+        )
+        if resolved is None:
+            raise HTTPException(status_code=409, detail="handoff_resolution_conflict")
+        AuditRepository(get_engine()).append(
+            tenant_id=DEMO_TENANT_ID,
+            actor_ref=actor_id,
+            event_type="mutation_handoff_resolved",
+            payload={"ticket_id": str(ticket_id), "run_id": str(ticket.run_id), "outcome": payload.outcome},
+            payload_hash=hash_secret(f"{ticket_id}:{payload.outcome}:{payload.resolution_note}"),
+        )
+        return HandoffResponse(
+            ticket_id=ticket_id,
+            run_id=ticket.run_id,
+            status=resolved.status,
+            run_status=target.value,
+            reason_code=ticket.reason_code,
+            resolution=resolved.resolution,
+        )
+
     @app.post("/v1/runs/{run_id}/cancel", response_model=RunResponse)
     def cancel_run(
         run_id: UUID,
@@ -712,6 +839,19 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="run_not_cancellable")
         state = dict(context.state)
         state["mutation_outcome"] = "cancelled"
+        preview_hash_value = state.get("mutation_preview_hash")
+        if isinstance(preview_hash_value, str):
+            try:
+                ConfirmationRepository(get_engine()).invalidate_waiting(
+                    run_id=run_id,
+                    tenant_id=DEMO_TENANT_ID,
+                    actor_ref=actor_id,
+                    expected_preview_hash=preview_hash_value,
+                )
+            except Exception:
+                # The run checkpoint is authoritative; a consumed/expired
+                # token is already unable to advance the cancelled run.
+                pass
         checkpoints = RepositoryCheckpointStore(runs)
         version = checkpoints.checkpoint(
             context=context,

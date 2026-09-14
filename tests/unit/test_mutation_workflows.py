@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.mutation_safety import MutationAdapterStatus
+from src.orchestration.mutation_workflow import DemoMutationSystem
 from src.workflows.mutations import (
     MutationPlanner,
     MutationPlanningError,
@@ -71,3 +73,25 @@ def test_reason_is_normalized_and_extractor_keeps_order_id_untrusted() -> None:
     )
     assert preview.normalized_args["reason_code"] == "quality_issue"
     assert arguments_hash(preview.normalized_args).startswith("sha256:")
+
+
+def test_demo_business_boundary_requires_readback_identity() -> None:
+    system = DemoMutationSystem()
+    outcome = system.commit(
+        operation="commit_cancel_order",
+        actor_id="demo-user-001",
+        resource_ref="ORD-DEMO-CANCEL-001",
+        arguments={},
+        idempotency_key="intent-1",
+    )
+    assert outcome.status is MutationAdapterStatus.SUCCEEDED
+    assert system.verify(
+        actor_id="demo-user-001",
+        idempotency_key="intent-1",
+        business_reference=str(outcome.business_reference),
+    )
+    assert not system.verify(
+        actor_id="demo-user-001",
+        idempotency_key="intent-2",
+        business_reference=str(outcome.business_reference),
+    )

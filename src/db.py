@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_settings
 
-EXPECTED_ALEMBIC_REVISION = "20260914_0008"
+EXPECTED_ALEMBIC_REVISION = "20260914_0009"
 
 
 @lru_cache(maxsize=1)

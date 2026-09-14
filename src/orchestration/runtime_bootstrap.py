@@ -14,7 +14,7 @@ from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.policies.engine import FactCondition, PolicyEffect, PolicyEngine, PolicyRule
 from src.tools.readonly_specs import readonly_tool_specs
 from src.tools.registry import ToolRegistry
-from src.tools.write_specs import prepare_tool_specs
+from src.tools.write_specs import low_risk_tool_specs, prepare_tool_specs
 
 
 def build_runtime_registrations(*, settings: Settings) -> RuntimeRegistrationContainer:
@@ -25,7 +25,7 @@ def build_runtime_registrations(*, settings: Settings) -> RuntimeRegistrationCon
     then, any attempt to execute it has no adapter and fails closed.
     """
 
-    tools = readonly_tool_specs() + prepare_tool_specs()
+    tools = readonly_tool_specs() + prepare_tool_specs() + low_risk_tool_specs()
     policy = PolicyEngine(
         version="phase2-readonly-v1",
         allowed_facts=frozenset({"request.authenticated"}),
@@ -42,7 +42,15 @@ def build_runtime_registrations(*, settings: Settings) -> RuntimeRegistrationCon
         for rule in DEFAULT_INTENT_ROUTE_RULES
     }
     workflows.add(("knowledge_query", "1"))
-    write_workflow_ids = {"cancel_order", "change_order", "refund", "return", "exchange"}
+    write_workflow_ids = {
+        "cancel_order",
+        "change_order",
+        "refund",
+        "return",
+        "exchange",
+        "invoice_request",
+        "delivery_issue",
+    }
     definitions: list[WorkflowDefinition] = []
     for workflow_id, version in sorted(workflows):
         steps: tuple[str, ...]

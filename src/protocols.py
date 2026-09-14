@@ -158,6 +158,9 @@ class EventType(StrEnum):
     COMMIT_STARTED = "commit_started"
     COMMIT_OBSERVED = "commit_observed"
     STATE_VERIFIED = "state_verified"
+    MUTATION_UNCERTAIN = "mutation_uncertain"
+    HANDOFF_CREATED = "handoff_created"
+    HANDOFF_RESOLVED = "handoff_resolved"
 
 
 class DomainEvent(Contract):

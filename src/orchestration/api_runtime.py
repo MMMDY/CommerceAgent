@@ -50,6 +50,7 @@ ROUTE_TOOLS: dict[str, tuple[str, ...]] = {
     # write capability.
     "order_query": ("list_my_orders", "get_order_status", "get_delivery_tracking"),
     "delivery_query": ("get_delivery_tracking",),
+    "payment_query": ("get_payment_status",),
     "refund_query": ("get_refund_status",),
     "shipping_policy": ("retrieve_knowledge",),
     "refund_policy": ("retrieve_knowledge",),

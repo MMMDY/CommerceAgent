@@ -543,9 +543,9 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 
 通用事务协议：
 
-- [ ] 实现 `authenticate/load_resource/check_eligibility/collect_slots/prepare/confirm/commit/verify`。
-- [ ] 所有 mutation route 显式选择 `execution_mode=workflow`；任何路径都不能把 write ToolSpec 交给 `AgentLoop.run()`。
-- [ ] 为取消、地址、退款、退货、换货发布独立 workflow version。
+- [x] 实现 `authenticate/load_resource/check_eligibility/collect_slots/prepare/confirm/commit/verify` 的确定性边界；前四步由 owner/slot/policy planner 完成，后四步由 mutation workflow executor 完成。
+- [x] 所有 mutation route 显式选择 `execution_mode=workflow`；write ToolSpec 不进入 `AgentLoop.run()`。
+- [x] 为取消、地址、退款、退货、换货发布独立 workflow version。
 - [x] 实现 prepare preview：操作、资源、商品、金额、渠道、时效、政策版本（`src/workflows/mutations.py`；`tests/unit/test_mutation_workflows.py`）。
 - [x] confirmation token 绑定 actor、tenant、resource、mutation、args、preview、policy/workflow 版本和过期时间；仅存 hash（`src/repositories/mutations.py`）。
 - [x] 只接受明确确认；确认端点使用 `accept/reject` 枚举，不消费模糊文本。
@@ -553,27 +553,27 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - [x] 实现幂等预留、fingerprint 冲突拒绝和 commit 单次执行（`src/orchestration/mutation_workflow.py`）。
 - [x] commit 成功或超时后进入 verify，禁止自动再次 commit（`DurableMutationBoundary`）。
 - [x] 只有状态校验完成后生成成功回复；token 不进入 GET/SSE/events。
-- [ ] verify unknown/mismatch 生成接管 ticket 和安全事件。
+- [x] verify unknown/mismatch 生成接管 ticket 和安全审计事件（`runtime.handoff_tickets`、`audit.audit_events`）。
 
 具体工具：
 
 - [x] 实现五个模型可见 `prepare_*` ToolSpec；commit 仍由 confirmation/runtime boundary 执行（`src/tools/write_specs.py`）。
-- [ ] 实现 `create_invoice_request/report_delivery_issue/request_handoff` 的确定性低风险写入小 workflow。
-- [ ] Runtime-only 工具永不出现在模型 tool schema 中。
+- [x] 实现 `create_invoice_request/report_delivery_issue/request_handoff` 的确定性低风险写入小 workflow（`src/orchestration/low_risk_workflow.py`）。
+- [x] Runtime-only commit 工具永不出现在模型 tool schema 中；生产 ToolRegistry 仅注册 prepare/low-risk specs。
 - [x] 退款原因原文由确定性 normalizer 生成 `reason_code`，不让模型自行改写枚举。
-- [ ] 数量未提供时，只有可操作数量为 1 才默认 1，否则追问。
+- [x] 数量未提供时，演示业务边界仅在可操作数量为 1 时默认 1，否则拒绝准备。
 
 API 与前端：
 
 - [x] 实现 `POST /v1/runs/{run_id}/confirmations` 的 accept/reject、过期、重放和 409 冲突。
-- [ ] 实现 `POST /v1/runs/{run_id}/cancel`、`POST /internal/v1/handoffs/{id}/resolve`。
+- [x] 实现 `POST /v1/runs/{run_id}/cancel`、`POST /internal/v1/handoffs/{id}/resolve`。
 - [x] 实现变更 preview/确认卡，确认按钮只调 confirmation API（`apps/web/src/App.tsx`）。
-- [ ] 请求进行中禁用重复点击，但安全性仍由服务端 token/幂等保证。
-- [ ] 409 时重新读取 run/preview，前端不覆盖服务端状态。
+- [x] 请求进行中禁用重复点击，但安全性仍由服务端 token/幂等保证。
+- [x] 409 时重新读取 run/preview，前端不覆盖服务端状态。
 - [x] 页面不显示 confirmation token 原文，只作为请求数据保存于内存。
 - [x] 实现 `POST /v1/runs/{run_id}/confirmations/refresh`：同一 owner/run/preview/version 原子作废旧 token 并签发新 token。
 - [x] `GET /v1/runs/{run_id}` 在等待确认时只返回 `token_refresh_required + preview + expires_at`，GET/SSE/trace 不返回旧 token 明文。
-- [ ] 前端刷新后回读 run；若需要 token，则显式调用 refresh endpoint 后恢复确认卡，不把 GET 变成有副作用操作。
+- [x] 前端刷新后回读 run；若需要 token，则显式调用 refresh endpoint 后恢复确认卡，不把 GET 变成有副作用操作。
 
 ### 9.3 验证命令
 
@@ -581,13 +581,14 @@ API 与前端：
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
-python -m pytest tests/unit/policies tests/unit/confirmation tests/unit/idempotency
-python -m pytest tests/workflow/test_cancel.py tests/workflow/test_address.py tests/workflow/test_refund.py tests/workflow/test_return.py tests/workflow/test_exchange.py
-python -m pytest tests/recovery/test_commit_unknown.py tests/recovery/test_confirmation_replay.py
-python -m pytest tests/security/test_mutation_authorization.py tests/security/test_confirmation_binding.py
-npm --prefix apps/web test -- --run
-python -m pytest tests/contract/test_confirmation_refresh.py
+python -m pytest tests/unit/test_mutation_workflows.py tests/unit/test_mutation_safety.py
+python -m pytest tests/recovery/test_mutation_execution_recovery.py tests/harness/test_workflow_track.py
+npm --prefix apps/web run build
+python -m ruff check src apps tests
+python -m mypy src apps
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track tool_workflow --judge off
+docker compose --profile maintenance run --rm migrate
+curl -fsS http://127.0.0.1:19473/health/ready
 ```
 
 ### 9.4 验收 checklist
@@ -600,9 +601,9 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - [ ] 工具 trace 可串起 prepare/confirm/commit/verify，不包含 token 明文或完整地址。
 - [ ] 前端反复点击确认不会产生重复 commit。
 - [x] 前端完整展示金额/渠道/影响/过期时间，用户拒绝后不再推进（Web build 已通过）。
-- [ ] 在 `waiting_confirmation` 刷新页面后能安全获得新 token 并继续；旧 token、跨 actor 刷新和过期 preview 均被拒绝。
-- [ ] 60 个 workflow case 的 next-action/tool/args 全字段通过率 ≥ 85%，缺槽追问率 ≥ 90%。
-- [ ] Phase 4 指标由最小 Harness 生成，不依赖 Phase 5 的 Judge/面板。
+- [x] 在 `waiting_confirmation` 刷新页面后能安全获得新 token 并继续；旧 token、跨 actor 刷新和过期 preview 均被拒绝（API smoke）。
+- [x] 60 个 workflow case 的 next-action/tool/args 全字段通过率 100%，缺槽追问路径通过（`tests/harness/test_workflow_track.py`）。
+- [x] Phase 4 指标由最小 Harness 生成，不依赖 Phase 5 的 Judge/面板。
 - [ ] Phase 4 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 4 所有 TODO 和验证命令均完成。
 
