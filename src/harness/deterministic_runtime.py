@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import deque
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -64,27 +65,37 @@ class RuntimePlanFixture(Contract):
 
 class DeterministicToolFixture(Contract):
     spec: ToolSpec
-    result: ToolResult
+    result: ToolResult | None = None
+    results: tuple[ToolResult, ...] = ()
 
     @model_validator(mode="after")
     def validate_identity(self) -> DeterministicToolFixture:
         if self.spec.version != "1":
             raise ValueError("AgentLoop fixtures currently require tool version 1")
-        if (self.result.tool_name, self.result.tool_version) != (
-            self.spec.name,
-            self.spec.version,
-        ):
-            raise ValueError("fake tool result identity does not match its specification")
+        responses = self.responses
+        if not responses:
+            raise ValueError("fake tool fixture requires at least one result")
+        for response in responses:
+            if (response.tool_name, response.tool_version) != (
+                self.spec.name,
+                self.spec.version,
+            ):
+                raise ValueError("fake tool result identity does not match its specification")
         return self
+
+    @property
+    def responses(self) -> tuple[ToolResult, ...]:
+        return self.results or ((self.result,) if self.result is not None else ())
 
 
 class DeterministicCaseFixture(Contract):
-    """One fake-model step and its trusted execution boundary for a case ID."""
+    """One or more fake-model steps and their trusted execution boundary."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     case_id: str = Field(pattern=r"^[a-z][a-z0-9_]{2,127}$")
     plan: RuntimePlanFixture
-    decision: Decision
+    decision: Decision | None = None
+    decisions: tuple[Decision, ...] = ()
     tools: tuple[DeterministicToolFixture, ...] = ()
 
     @model_validator(mode="after")
@@ -92,7 +103,13 @@ class DeterministicCaseFixture(Contract):
         names = tuple(tool.spec.name for tool in self.tools)
         if len(set(names)) != len(names):
             raise ValueError("duplicate fake tool name")
+        if not self.all_decisions:
+            raise ValueError("runtime fixture requires at least one decision")
         return self
+
+    @property
+    def all_decisions(self) -> tuple[Decision, ...]:
+        return self.decisions or ((self.decision,) if self.decision is not None else ())
 
 
 class RuntimeFixtureLoader:
@@ -149,9 +166,9 @@ class DeterministicRuntimeFactory:
             raise RuntimeFixtureError("runtime fixture case is unavailable") from error
 
         specs = tuple(tool.spec for tool in definition.tools)
-        adapters = {tool.spec.name: _constant_adapter(tool.result) for tool in definition.tools}
+        adapters = {tool.spec.name: _sequence_adapter(tool.responses) for tool in definition.tools}
         loop = AgentLoop(
-            model=DeterministicFakeModel((definition.decision,)),
+            model=DeterministicFakeModel(definition.all_decisions),
             validator=DecisionValidator(),
             registry=ToolRegistry(specs),
             executor=ToolExecutor(adapters),
@@ -259,10 +276,14 @@ class _FixturePlanner:
         )
 
 
-def _constant_adapter(
-    result: ToolResult,
+def _sequence_adapter(
+    results: tuple[ToolResult, ...],
 ) -> Callable[[ToolContext, dict[str, object]], ToolResult]:
+    remaining = deque(results)
+
     def adapter(_context: ToolContext, _arguments: dict[str, object]) -> ToolResult:
-        return result.model_copy(deep=True)
+        if not remaining:
+            raise RuntimeFixtureError("fake tool has no remaining result")
+        return remaining.popleft().model_copy(deep=True)
 
     return adapter
