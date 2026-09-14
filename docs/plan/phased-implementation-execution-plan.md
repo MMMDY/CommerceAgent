@@ -326,10 +326,10 @@ ModelGateway：
 - [x] 实现结构化 Decision 解析；不合法输出只修复一次。
 - [x] 实现 `model_invocations` 脱敏记录，不保存隐藏思维链。
 - [x] 提供 deterministic fake model，覆盖所有 Decision 分支。
-- [ ] 在同一 ModelGateway 增加 `purpose=intent_classification` profile，从 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY` 读取显式配置，并校验其值与主 Agent 对应配置相同。
-- [ ] 为分类 profile 固定独立的 `RoutingPromptView`、`IntentClassification` Schema、`temperature=0.1`、输出 token 上限、Prompt/Schema 哈希，并在 `model_invocations` 记录 `purpose` 与脱敏延迟。
-- [ ] 更新 `.env.example` 和配置 Schema，加入四个 `CLASSIFIER_*` 变量；Demo/production 缺失、三项连接配置不相等或温度不是 0.1 时，`/health/ready` 必须失败且错误不得泄露配置值。
-- [ ] 提供 deterministic fake intent classifier，覆盖只读、写、低置信度、未知意图和模型输出不合法路径。
+- [x] 在同一 ModelGateway 增加 `purpose=intent_classification` profile，从 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY` 读取显式配置，并校验其值与主 Agent 对应配置相同。
+- [x] 为分类 profile 固定独立的 `RoutingPromptView`、`IntentClassification` Schema、`temperature=0.1`、输出 token 上限、Prompt/Schema 哈希，并在 `model_invocations` 记录 `purpose` 与脱敏延迟。
+- [x] 更新 `.env.example` 和配置 Schema，加入四个 `CLASSIFIER_*` 变量；Demo/production 缺失、三项连接配置不相等或温度不是 0.1 时，`/health/ready` 必须失败且错误不得泄露配置值。
+- [x] 提供 deterministic fake intent classifier，覆盖只读、写、低置信度、未知意图和模型输出不合法路径。
 
 工具与政策：
 
@@ -351,19 +351,19 @@ Loop 与编排：
 - [x] 实现每 step 原子 checkpoint、崩溃恢复和事件回放。
 - [x] 实现 `TraceStore`，只保留结构化决定和脱敏 observation。
 - [x] Runtime 注册完成后扩展 `/health/ready`：检查 Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不调用模型。
-- [ ] 将现有 `AgentLoop.run_step()` 单轮职责迁移/重命名为 `AgentStepExecutor.execute_step()`，并保持兼容入口只作为过渡，不允许出现两套单步实现。
-- [ ] 实现 `AgentLoop.run()` 有界 `while` 主循环；循环必须使用每轮 checkpoint 返回的新 `RunContext`，不得反复使用旧 context。
-- [ ] 每轮只调用一次 `StepPipeline.advance()`；只有八阶段全部完成且 checkpoint 已提交、状态仍为 `running_readonly` 时才能进入下一轮。
-- [ ] 每轮重新构建 PromptView，使第 N 轮脱敏 observation 成为第 N+1 轮的可信输入；禁止把 adapter 原始结果直接拼入 prompt。
-- [ ] 在每轮开始、模型返回后、工具调用前和进入下一轮前检查 cancellation、绝对 deadline、`max_steps` 与 token budget；usage 缺失时按保守上界扣减。
-- [ ] 实现循环无进展检测：连续等价 Decision/工具参数或重复只读错误达到上限后安全退出，禁止空转到 deadline。
-- [ ] 定义强类型 `RouteDecision(outcome=execute | handoff)`：execute 必须选择并持久化 `execution_mode=readonly_loop | workflow`；handoff 直接进入 `waiting_human` 且不能作为 execution_mode 持久化。
-- [ ] 实现 `IntentClassification → RouteDecision` 代码复核：模型只给候选意图/风险/route，最终 execution_mode 由固定 intent 映射、置信度阈值和 ToolSpec.risk 决定。
-- [ ] 新增双执行器协议、数据库 migration 和 repository 约束：created/routing/直接 handoff 允许 execution_mode/workflow 为空；选定后不可修改；run 状态与 execution_mode 必须满足设计文档第 6.4 节 CHECK。
-- [ ] 实现执行器选择与模式防火墙：AgentLoop 只接受 `read_only` 工具，任何 `prepare/low_write/commit` Decision 在副作用前拒绝并进入 `waiting_human`；同一 run 禁止原地切换 execution_mode，真正的写请求由可信 Router 创建/选择 workflow run。
-- [ ] 实现 Readonly loop 的暂停/恢复：`waiting_user/waiting_human` 立即退出；恢复时从最新 checkpoint 和创建时锁定的 model/prompt/workflow/policy/tool 版本重新进入。
-- [ ] 重构依赖方向为 `OrchestrationEngine → AgentLoop → StepPipeline → AgentStepExecutor`；禁止 StepPipeline/AgentStepExecutor 反向调度 OrchestrationEngine，避免递归和双重 checkpoint。
-- [ ] 实现 WorkflowExecutor 入口合同；写流程只按版本化转移表推进，不复用 AgentLoop 的自由 `while` 控制流。
+- [x] 将现有 `AgentLoop.run_step()` 单轮职责迁移/重命名为 `AgentStepExecutor.execute_step()`，并保持兼容入口只作为过渡，不允许出现两套单步实现。
+- [x] 实现 `AgentLoop.run()` 有界 `while` 主循环；循环必须使用每轮 checkpoint 返回的新 `RunContext`，不得反复使用旧 context。
+- [x] 每轮只调用一次 `StepPipeline.advance()`；只有八阶段全部完成且 checkpoint 已提交、状态仍为 `running_readonly` 时才能进入下一轮。
+- [x] 每轮重新构建 PromptView，使第 N 轮脱敏 observation 成为第 N+1 轮的可信输入；禁止把 adapter 原始结果直接拼入 prompt。
+- [x] 在每轮开始、模型返回后、工具调用前和进入下一轮前检查 cancellation、绝对 deadline、`max_steps` 与 token budget；usage 缺失时按保守上界扣减。
+- [x] 实现循环无进展检测：连续等价 Decision/工具参数或重复只读错误达到上限后安全退出，禁止空转到 deadline。
+- [x] 定义强类型 `RouteDecision(outcome=execute | handoff)`：execute 必须选择并持久化 `execution_mode=readonly_loop | workflow`；handoff 直接进入 `waiting_human` 且不能作为 execution_mode 持久化。
+- [x] 实现 `IntentClassification → RouteDecision` 代码复核：模型只给候选意图/风险/route，最终 execution_mode 由固定 intent 映射、置信度阈值和 ToolSpec.risk 决定。
+- [x] 新增双执行器协议、数据库 migration 和 repository 约束：created/routing/直接 handoff 允许 execution_mode/workflow 为空；选定后不可修改；run 状态与 execution_mode 必须满足设计文档第 6.4 节 CHECK。
+- [x] 实现执行器选择与模式防火墙：AgentLoop 只接受 `read_only` 工具，任何 `prepare/low_write/commit` Decision 在副作用前拒绝并进入 `waiting_human`；同一 run 禁止原地切换 execution_mode，真正的写请求由可信 Router 创建/选择 workflow run。
+- [x] 实现 Readonly loop 的暂停/恢复：`waiting_user/waiting_human` 立即退出；恢复时从最新 checkpoint 和创建时锁定的 model/prompt/workflow/policy/tool 版本重新进入。
+- [x] 重构依赖方向为 `OrchestrationEngine → AgentLoop → StepPipeline → AgentStepExecutor`；禁止 StepPipeline/AgentStepExecutor 反向调度 OrchestrationEngine，避免递归和双重 checkpoint。
+- [x] 实现 WorkflowExecutor 入口合同；写流程只按版本化转移表推进，不复用 AgentLoop 的自由 `while` 控制流。
 
 最小 Harness：
 
@@ -371,8 +371,8 @@ Loop 与编排：
 - [x] 实现 `src.harness.runner` 的 `--track/--case-id/--judge off/--timeout` 参数、失败隔离、取消和确定性 JSON 报告。
 - [x] 最小 Harness 只执行 hard eval，不包含 Judge、批次持久化或 Web 面板；这些能力在 Phase 5 完成。
 - [x] 添加 opt-in live ModelGateway smoke：仅检查真实端点认证、结构化 Decision、错误归一化和延迟，不输出 request header、密钥或完整 payload。
-- [ ] 将 `RunDriver` 从“只驱动一个 `run_step()`”升级为驱动 `AgentLoop.run()` 到暂停/终态；fixture 支持多轮 Decision 和多次只读工具 observation。
-- [ ] 增加至少一条 `tool A → observation A → tool B → observation B → finish` 的 deterministic case，并证明 Runtime 仍看不到 expected/source/forbidden/track。
+- [x] 将 `RunDriver` 从“只驱动一个 `run_step()`”升级为驱动 `AgentLoop.run()` 到暂停/终态；fixture 支持多轮 Decision 和多次只读工具 observation。
+- [x] 增加至少一条 `tool A → observation A → tool B → observation B → finish` 的 deterministic case，并证明 Runtime 仍看不到 expected/source/forbidden/track。
 
 ### 7.3 验证命令
 
@@ -1010,6 +1010,15 @@ format/lint
   - `python -m mypy src apps` → pass；`python -m ruff check src apps tests` → pass。
   - migration 单元检查 → `2 passed`；PostgreSQL contract tests 因未设置 `DATABASE_TEST_URL` 跳过。
 - 剩余 TODO：完成真实 PostgreSQL dual-executor contract、跨轮 cancellation/token/no-progress 恢复、执行器选择接入 OrchestrationEngine/API、fixture 的通用多轮 schema，以及 Phase 2 全部验证/验收项。
+- BLOCKED：无。
+
+### 2026-09-14 — Phase 2 — 执行器闭环与持久化验证
+
+- 状态：partial（尚未达到 Phase 2 整体验收）。
+- 已完成：单向 `OrchestrationEngine → AgentLoop → StepPipeline → AgentStepExecutor` 调用链；Model usage 缺失时保守 token 扣减；模型返回后的取消门禁；跨 checkpoint 恢复不重复工具/事件；Router 裁决的数据库持久化；多轮 deterministic fixture；意图分类 live smoke 的 opt-in 测试入口。
+- 新增关键提交：`3cdc670`、`27e29b2`、`efe52f5`、`6afd325`、`42a5792`、`5d24022`。
+- 验证证据：`98` unit、`9` workflow、`1` readonly recovery、`20` Harness 测试均通过；隔离 PostgreSQL 的 dual-executor/recovery/event/mutation 合同 `14 passed`；150 条 `intent_route` static hard-eval 为 `150/150 passed`。真实模型测试仍严格由 `RUN_LIVE_MODEL_TEST=1` 显式开启，本次未调用外部模型。
+- 剩余 TODO：将 Route selection 接入后续 Phase 3 message API；补齐 Phase 2 checklist 的最终全量质量门禁、清理工作区并执行阶段完成审计。
 - BLOCKED：无。
 
 ## 15. 停止或请求用户输入的条件
