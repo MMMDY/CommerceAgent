@@ -11,7 +11,17 @@ from sqlalchemy import Engine, create_engine, text
 
 from src.models.gateway import ModelDecision
 from src.orchestration.run_creation import ExecutionMode, RunCreationSpec
-from src.protocols import Decision, DecisionType, PromptView, RunContext, RunStatus
+from src.protocols import (
+    Decision,
+    DecisionType,
+    IntentClassification,
+    Message,
+    PromptView,
+    RiskHint,
+    RoutingPromptView,
+    RunContext,
+    RunStatus,
+)
 from src.repositories.model_invocations import ModelInvocationRepository
 from src.repositories.run_lifecycle import RunLifecycleRepository
 
@@ -247,3 +257,33 @@ def test_model_invocation_records_actual_gateway_and_prompt_fingerprints(
         "prompt-view-v7",
     )
     assert "conversation" not in row.input_redacted_json
+
+    ModelInvocationRepository(engine).record_classification_success(
+        context=context,
+        prompt=RoutingPromptView(
+            conversation=(Message(role="user", content="查询订单"),),
+            allowed_intents=("order_status",),
+        ),
+        result=IntentClassification(
+            intent="order_status",
+            risk_hint=RiskHint.READ_ONLY,
+            route_hint="order_query",
+            confidence=1,
+        ),
+        provider="fake-provider",
+        model="fake-model",
+        config_hash="sha256:classifier-config",
+        latency_ms=4,
+    )
+    with engine.connect() as connection:
+        classification = connection.execute(
+            text(
+                "SELECT purpose, model_config_hash, latency_ms, input_redacted_json, "
+                "output_redacted_json FROM runtime.model_invocations "
+                "WHERE run_id = :run_id AND purpose = 'intent_classification'"
+            ),
+            {"run_id": context.run_id},
+        ).one()
+    assert tuple(classification[:3]) == ("intent_classification", "sha256:classifier-config", 4)
+    assert "conversation" not in classification.input_redacted_json
+    assert classification.output_redacted_json["intent"] == "order_status"
