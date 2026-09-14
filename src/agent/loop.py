@@ -26,6 +26,17 @@ class ModelInvocationRecorder(Protocol):
         config_hash: str,
     ) -> None: ...
 
+    def record_failure(
+        self,
+        *,
+        context: RunContext,
+        prompt: PromptView,
+        provider: str,
+        model: str,
+        config_hash: str,
+        error_code: str,
+    ) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class LoopResult:
@@ -94,6 +105,23 @@ class AgentLoop:
         try:
             model_result = self._model.decide(prompt)
         except ModelGatewayError:
+            if self._model_invocations is not None:
+                try:
+                    self._model_invocations.record_failure(
+                        context=context,
+                        prompt=prompt,
+                        provider=getattr(self._model, "provider", "unknown"),
+                        model=getattr(self._model, "model_name", "unknown"),
+                        config_hash=getattr(self._model, "config_hash", "unknown"),
+                        error_code="MODEL_GATEWAY_ERROR",
+                    )
+                except Exception:
+                    return LoopResult(
+                        status=StepStatus.FAIL,
+                        response=None,
+                        decision_type=None,
+                        reason="model_audit_failed",
+                    )
             return LoopResult(
                 status=StepStatus.FAIL,
                 response=None,

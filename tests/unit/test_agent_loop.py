@@ -358,3 +358,38 @@ def test_loop_trace_contains_only_structured_decision_metadata() -> None:
     record = traces.records()[0]
     assert record.kind == "decision"
     assert "private response" not in str(record.payload)
+
+
+def test_loop_records_a_safe_model_failure() -> None:
+    failures: list[dict[str, object]] = []
+
+    class Recorder:
+        def record_success(self, **_: object) -> None:
+            raise AssertionError("success must not be recorded")
+
+        def record_failure(self, **kwargs: object) -> None:
+            failures.append(kwargs)
+
+    context = _context()
+    result = AgentLoop(
+        model=DeterministicFakeModel(()),
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
+        model_invocations=Recorder(),
+    ).run_step(
+        context=context,
+        prompt=_prompt(),
+        boundary=DecisionBoundary("r", frozenset({DecisionType.RESPOND}), frozenset(), frozenset()),
+        tool_context=ToolContext(
+            request_id=uuid4(),
+            run_id=context.run_id,
+            conversation_id=context.conversation_id,
+            tenant_id="t",
+            actor_id="a",
+            scopes=(),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+    )
+    assert result.reason == "model_unavailable"
+    assert failures[0]["error_code"] == "MODEL_GATEWAY_ERROR"
