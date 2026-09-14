@@ -133,3 +133,24 @@ class RunRepository:
         if snapshot is None:
             raise VersionConflictError("run disappeared after commit")
         return snapshot
+
+    def load_latest_checkpoint(self, *, run_id: UUID, tenant_id: str) -> dict[str, Any] | None:
+        """Load only the latest tenant-owned checkpoint for crash recovery."""
+
+        statement = text(
+            "SELECT checkpoint.state_json FROM runtime.run_checkpoints AS checkpoint "
+            "JOIN runtime.agent_runs AS run ON run.run_id = checkpoint.run_id "
+            "WHERE checkpoint.run_id = :run_id AND run.tenant_id = :tenant_id "
+            "ORDER BY checkpoint.checkpoint_seq DESC LIMIT 1"
+        )
+        with self._engine.connect() as connection:
+            state = connection.execute(
+                statement, {"run_id": run_id, "tenant_id": tenant_id}
+            ).scalar_one_or_none()
+        if state is None:
+            return None
+        if isinstance(state, str):
+            state = json.loads(state)
+        if not isinstance(state, dict):
+            raise ValueError("persisted checkpoint is not an object")
+        return state
