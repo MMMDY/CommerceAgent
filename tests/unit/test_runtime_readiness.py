@@ -7,6 +7,20 @@ from src.protocols import RetryPolicy, ToolRisk, ToolSpec
 from src.tools.registry import ToolRegistry
 
 
+def _settings(**overrides: object) -> Settings:
+    values: dict[str, object] = {
+        "model": "m",
+        "api_base": "https://provider.test",
+        "api_key": "key",
+        "classifier_model": "m",
+        "classifier_api_base": "https://provider.test",
+        "classifier_api_key": "key",
+        "classifier_temperature": 0.1,
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
 def _policy() -> PolicyEngine:
     return PolicyEngine(
         version="v1",
@@ -43,17 +57,17 @@ def test_runtime_readiness_requires_local_configuration_and_every_registry() -> 
         "workflows": WorkflowRegistry((WorkflowDefinition("w", "1", ("s",)),)),
         "policy": _policy(),
     }
-    missing_model = Settings(model=None, api_base=None, api_key=None)
+    missing_model = _settings(model=None, api_base=None, api_key=None)
     assert check_runtime_ready(settings=missing_model, **kwargs) == (
         False,
         "model_configuration_unavailable",
     )
-    settings = Settings(model="m", api_base="https://provider.test", api_key="key")
+    settings = _settings()
     assert check_runtime_ready(settings=settings, **kwargs) == (True, "ready")
 
 
 def test_runtime_readiness_rejects_each_incomplete_registration() -> None:
-    settings = Settings(model="m", api_base="https://provider.test", api_key="key")
+    settings = _settings()
     tools = _tools()
     workflows = WorkflowRegistry((WorkflowDefinition("w", "1", ("s",)),))
     policy = _policy()
@@ -80,7 +94,7 @@ def test_runtime_readiness_rejects_each_incomplete_registration() -> None:
 
 def test_unconfigured_runtime_container_fails_closed() -> None:
     container = RuntimeRegistrationContainer.unconfigured(
-        settings=Settings(model="m", api_base="https://provider.test", api_key="key")
+        settings=_settings()
     )
 
     assert container.check() == (False, "tool_registry_incomplete")
@@ -88,7 +102,7 @@ def test_unconfigured_runtime_container_fails_closed() -> None:
 
 def test_phase2_bootstrap_registers_a_complete_local_runtime_catalog() -> None:
     container = build_runtime_registrations(
-        settings=Settings(model="m", api_base="https://provider.test", api_key="key")
+        settings=_settings()
     )
 
     assert container.check() == (True, "ready")

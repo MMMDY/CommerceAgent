@@ -12,9 +12,21 @@ from src.protocols import RetryPolicy, ToolRisk, ToolSpec
 from src.tools.registry import ToolRegistry
 
 
+def _settings() -> Settings:
+    return Settings(
+        model="model",
+        api_base="https://provider.test",
+        api_key="secret",
+        classifier_model="model",
+        classifier_api_base="https://provider.test",
+        classifier_api_key="secret",
+        classifier_temperature=0.1,
+    )
+
+
 def _complete_runtime() -> RuntimeRegistrationContainer:
     return RuntimeRegistrationContainer(
-        settings=Settings(model="model", api_base="https://provider.test", api_key="secret"),
+        settings=_settings(),
         tools=ToolRegistry(
             (
                 ToolSpec(
@@ -81,7 +93,7 @@ def test_ready_endpoint_requires_database_and_complete_runtime_registrations() -
 
 def test_ready_endpoint_checks_runtime_even_when_database_is_unavailable() -> None:
     runtime = RuntimeRegistrationContainer.unconfigured(
-        settings=Settings(model="model", api_base="https://provider.test", api_key="secret")
+        settings=_settings()
     )
     dependencies = ReadinessDependencies(
         database=lambda: (False, "database_or_migration_unavailable"),
@@ -99,7 +111,7 @@ def test_ready_endpoint_checks_runtime_even_when_database_is_unavailable() -> No
 
 def test_ready_endpoint_reports_runtime_failure_after_database_passes() -> None:
     runtime = RuntimeRegistrationContainer.unconfigured(
-        settings=Settings(model="model", api_base="https://provider.test", api_key="secret")
+        settings=_settings()
     )
     dependencies = ReadinessDependencies(database=lambda: (True, "ready"), runtime=runtime)
 

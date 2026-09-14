@@ -59,6 +59,8 @@ def check_runtime_ready(
         return False, "model_configuration_unavailable"
     if not _secret_configured(settings.api_key):
         return False, "model_configuration_unavailable"
+    if not settings.classifier_configuration_is_valid():
+        return False, "classifier_configuration_unavailable"
     if len(tools) == 0 or not tools.model_visible_names():
         return False, "tool_registry_incomplete"
     if len(workflows) == 0:
