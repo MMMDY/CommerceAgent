@@ -1039,7 +1039,7 @@ format/lint
 
 - 状态：`completed`。
 - 部署：发现既有 Phase 0 验收容器占用 `127.0.0.1:18437`；检查后切换到空闲的 `127.0.0.1:19473`，并同步 Compose、运行手册、设计方案和部署冒烟脚本。PostgreSQL 不暴露宿主端口。
-- 数据库：保留既有 Docker volume；将历史 volume 中的 migration/runtime 角色口令同步至当前部署配置后，仅执行前向 Alembic migration 至 `20260914_0006`。`/health/live` 与 `/health/ready` 均返回 200。
+- 数据库：保留既有 Docker volume；将历史 volume 中的 migration/runtime 角色口令同步至当前部署配置后，仅执行前向 Alembic migration 至 `20260914_0008`。`/health/live` 与 `/health/ready` 均返回 200。
 - 部署冒烟：`scripts/deployment_smoke.sh` 通过；已验证创建会话、重启 app/DB、ready 恢复，以及会话仍可查询。
 - 回归：`python -m pytest tests/unit tests/workflow tests/harness tests/recovery/test_readonly_loop_resume.py` → `150 passed`；`python -m ruff check src apps tests`、`python -m mypy src apps` → pass；隔离 PostgreSQL contract/recovery → `35 passed`；`intent_route` deterministic hard-eval → `150/150 passed`。
 - 真实模型：用户补齐 `CLASSIFIER_*` 后，opt-in live gateway 与 intent classifier smoke 均已通过（`2 passed`）；配置检查仅记录布尔结果，确认 classifier 与主模型连接配置一致且温度为 `0.1`。

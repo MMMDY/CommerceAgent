@@ -1,5 +1,7 @@
 """Tenant-scoped runtime persistence with optimistic checkpoint commits."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import json
@@ -64,6 +66,9 @@ class RunSnapshot:
     current_step: str
     row_version: int
     last_checkpoint_seq: int
+    conversation_id: UUID | None = None
+    step_count: int = 0
+    terminal_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,7 +144,8 @@ class RunRepository:
 
     def load_run(self, *, run_id: UUID, tenant_id: str) -> RunSnapshot | None:
         statement = text(
-            "SELECT run_id, tenant_id, status, current_step, row_version, last_checkpoint_seq "
+            "SELECT run_id, tenant_id, status, current_step, row_version, last_checkpoint_seq, "
+            "conversation_id, step_count, terminal_reason "
             "FROM runtime.agent_runs WHERE run_id = :run_id AND tenant_id = :tenant_id"
         )
         with self._engine.connect() as connection:
