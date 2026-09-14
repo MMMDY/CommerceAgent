@@ -8,6 +8,18 @@ from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
 from src.protocols import PromptView
 
 
+def _settings(*, api_key: str = "secret") -> Settings:
+    return Settings(
+        model="m",
+        api_base="https://example.test/v1",
+        api_key=api_key,
+        classifier_model="m",
+        classifier_api_base="https://example.test/v1",
+        classifier_api_key=api_key,
+        classifier_temperature=0.1,
+    )
+
+
 def _prompt() -> PromptView:
     return PromptView(
         system_policy_version="p",
@@ -51,7 +63,7 @@ def test_gateway_parses_decision_without_exposing_authorization() -> None:
         )
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    settings = Settings(model="m", api_base="https://example.test/v1", api_key="secret")
+    settings = _settings()
     result = OpenAICompatibleGateway(settings, client).decide(_prompt())
     assert result.decision.response == "ok"
     assert seen["path"] == "/v1/chat/completions"
@@ -59,11 +71,11 @@ def test_gateway_parses_decision_without_exposing_authorization() -> None:
 
 def test_gateway_config_hash_does_not_depend_on_api_key() -> None:
     first = OpenAICompatibleGateway(
-        Settings(model="m", api_base="https://example.test/v1", api_key="first"),
+        _settings(api_key="first"),
         httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(500))),
     )
     second = OpenAICompatibleGateway(
-        Settings(model="m", api_base="https://example.test/v1", api_key="second"),
+        _settings(api_key="second"),
         httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(500))),
     )
     assert first.config_hash == second.config_hash
@@ -73,7 +85,7 @@ def test_gateway_config_hash_does_not_depend_on_api_key() -> None:
 def test_gateway_normalizes_http_errors_without_provider_payload() -> None:
     client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(503)))
     gateway = OpenAICompatibleGateway(
-        Settings(model="m", api_base="https://example.test/v1", api_key="secret"), client
+        _settings(), client
     )
     with pytest.raises(ModelGatewayError, match="model provider request failed"):
         gateway.decide(_prompt())
@@ -104,7 +116,7 @@ def test_gateway_retries_a_recoverable_5xx_once() -> None:
         )
 
     gateway = OpenAICompatibleGateway(
-        Settings(model="m", api_base="https://example.test/v1", api_key="secret"),
+        _settings(),
         httpx.Client(transport=httpx.MockTransport(handler)),
     )
     assert gateway.decide(_prompt()).decision.response == "ok"
@@ -122,7 +134,7 @@ def test_gateway_constrains_legacy_envelope_to_trusted_prompt_route() -> None:
             )
         )
     )
-    settings = Settings(model="m", api_base="https://example.test/v1", api_key="secret")
+    settings = _settings()
     result = OpenAICompatibleGateway(settings, client).decide(_prompt())
     assert result.decision.route == "w"
     assert result.decision.response == "ok"
@@ -148,7 +160,7 @@ def test_gateway_rejects_invalid_or_multi_tool_output_after_one_repair(content: 
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
     gateway = OpenAICompatibleGateway(
-        Settings(model="m", api_base="https://example.test/v1", api_key="secret"),
+        _settings(),
         httpx.Client(transport=httpx.MockTransport(handler)),
     )
     with pytest.raises(ModelGatewayError, match="invalid after one repair"):

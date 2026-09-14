@@ -51,6 +51,30 @@ class PromptView(Contract):
     remaining_steps: int = Field(ge=0, le=6)
 
 
+class RoutingPromptView(Contract):
+    """Minimal untrusted conversation view allowed in intent classification."""
+
+    conversation: tuple[Message, ...]
+    allowed_intents: tuple[str, ...] = Field(min_length=1)
+    known_slots: tuple[str, ...] = ()
+
+
+class RiskHint(StrEnum):
+    READ_ONLY = "read_only"
+    WRITE = "write"
+    UNKNOWN = "unknown"
+
+
+class IntentClassification(Contract):
+    """Model-produced candidate; it never carries an execution mode."""
+
+    intent: str = Field(min_length=1, max_length=128)
+    risk_hint: RiskHint
+    route_hint: str = Field(min_length=1, max_length=128)
+    confidence: float = Field(ge=0, le=1)
+    required_slots: tuple[str, ...] = ()
+
+
 class StatePatch(Contract):
     set_values: dict[str, Any] = Field(default_factory=dict)
     remove_keys: tuple[str, ...] = ()

@@ -12,7 +12,7 @@ from time import perf_counter
 import httpx
 
 from src.config import Settings
-from src.protocols import Decision, PromptView
+from src.protocols import Decision, IntentClassification, PromptView, RoutingPromptView
 
 
 class ModelGatewayError(RuntimeError):
@@ -28,6 +28,9 @@ class ModelDecision:
 
 class ModelGateway:
     def decide(self, prompt: PromptView) -> ModelDecision:
+        raise NotImplementedError
+
+    def classify(self, prompt: RoutingPromptView) -> IntentClassification:
         raise NotImplementedError
 
 
@@ -64,6 +67,13 @@ class OpenAICompatibleGateway(ModelGateway):
         self._timeout = settings.model_timeout_seconds
         self._max_tokens = settings.model_max_tokens
         self._retry_attempts = settings.model_retry_attempts
+        if not settings.classifier_configuration_is_valid():
+            raise ModelGatewayError("classifier configuration is unavailable")
+        self._classifier_model = settings.classifier_model or ""
+        self._classifier_base_url = (settings.classifier_api_base or "").rstrip("/")
+        self._classifier_api_key = settings.classifier_api_key.get_secret_value() if settings.classifier_api_key else ""
+        self._classifier_temperature = settings.classifier_temperature
+        self._classifier_max_tokens = settings.classifier_max_tokens
         self._client = client or httpx.Client(timeout=self._timeout)
         self.provider = "openai_compatible"
         self.model_name = self._model
@@ -80,6 +90,20 @@ class OpenAICompatibleGateway(ModelGateway):
             separators=(",", ":"),
         )
         self.config_hash = f"sha256:{sha256(fingerprint.encode()).hexdigest()}"
+        classifier_fingerprint = json.dumps(
+            {
+                "api_base": self._classifier_base_url,
+                "model": self._classifier_model,
+                "max_tokens": self._classifier_max_tokens,
+                "timeout_seconds": self._timeout,
+                "retry_attempts": self._retry_attempts,
+                "temperature": self._classifier_temperature,
+                "purpose": "intent_classification",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        self.classifier_config_hash = f"sha256:{sha256(classifier_fingerprint.encode()).hexdigest()}"
 
     def decide(self, prompt: PromptView) -> ModelDecision:
         try:
@@ -93,6 +117,34 @@ class OpenAICompatibleGateway(ModelGateway):
                 raise ModelGatewayError("model provider request failed") from error
         except httpx.HTTPError as error:
             raise ModelGatewayError("model provider request failed") from error
+
+    def classify(self, prompt: RoutingPromptView) -> IntentClassification:
+        instruction = (
+            "Return exactly one JSON object and no prose or markdown. "
+            "Required fields: intent, risk_hint, route_hint, confidence, required_slots. "
+            "risk_hint must be read_only, write, or unknown; confidence must be 0 through 1. "
+            "Never return execution_mode, workflow_id, tool calls, identities, scopes, tokens, or policy values."
+        )
+        payload = {
+            "model": self._classifier_model,
+            "temperature": self._classifier_temperature,
+            "max_tokens": self._classifier_max_tokens,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": instruction},
+                {"role": "user", "content": prompt.model_dump_json()},
+            ],
+        }
+        try:
+            response = self._post_to(
+                base_url=self._classifier_base_url,
+                api_key=self._classifier_api_key,
+                payload=payload,
+            )
+            content = response.json()["choices"][0]["message"]["content"]
+            return IntentClassification.model_validate_json(content.strip())
+        except (KeyError, TypeError, ValueError, httpx.HTTPError) as error:
+            raise ModelGatewayError("intent classification is invalid or unavailable") from error
 
     def _request(self, prompt: PromptView, *, repair: bool) -> ModelDecision:
         started = perf_counter()
@@ -128,11 +180,16 @@ class OpenAICompatibleGateway(ModelGateway):
         )
 
     def _post(self, payload: dict[str, object]) -> httpx.Response:
+        return self._post_to(base_url=self._base_url, api_key=self._api_key, payload=payload)
+
+    def _post_to(
+        self, *, base_url: str, api_key: str, payload: dict[str, object]
+    ) -> httpx.Response:
         for attempt in range(self._retry_attempts):
             try:
                 response = self._client.post(
-                    f"{self._base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    f"{base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
                     json=payload,
                 )
                 response.raise_for_status()
