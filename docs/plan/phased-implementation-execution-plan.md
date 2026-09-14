@@ -4,7 +4,7 @@
 > 日期：2026-09-13  
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0 已验收，Phase 1 实施中）
+> 当前整体状态：`in_progress`（Phase 0～2 已验收，Phase 3 尚未开始）
 
 ## 1. Codex 使用规则
 
@@ -105,7 +105,7 @@ Codex 执行每个阶段时必须：
 |---|---|---|---|
 | Phase 0：可运行工程骨架 | `completed` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
 | Phase 1：协议、持久化与 Eval Core | `completed` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
-| Phase 2：自研 Runtime 与最小 Harness | `not_started` | ModelGateway、AgentLoop、编排、工具/政策、hard runner | 循环可终止/恢复，分 track hard eval 可执行 |
+| Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、AgentLoop、编排、工具/政策、hard runner | 循环可终止/恢复，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
 | Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
@@ -319,7 +319,7 @@ ModelGateway：
 
 - [x] 实现 `.env` 配置读取，不记录 `API_KEY`。
 - [x] 实现 OpenAI-compatible HTTP 请求、timeout、限次重试和错误归一化。
-- [ ] 固定 Agent model、temperature、token limit、timeout、retry 和 prompt hash，并把配置指纹写入 run/model invocation。
+- [x] 固定 Agent model、temperature、token limit、timeout、retry 和 prompt hash，并把配置指纹写入 run/model invocation。
 - [x] 实现结构化 Decision 解析；不合法输出只修复一次。
 - [x] 实现 `model_invocations` 脱敏记录，不保存隐藏思维链。
 - [x] 提供 deterministic fake model，覆盖所有 Decision 分支。
@@ -328,22 +328,22 @@ ModelGateway：
 
 - [x] 实现不可变 `ToolRegistry`，按 `name + version` 注册。
 - [x] 实现 `DecisionValidator`：schema、route、step、allowlist、risk、system-field 检查。
-- [ ] 实现 `ToolExecutor`：owner/scope/policy/deadline、adapter 调用、结果 schema、脱敏、trace。
+- [x] 实现 `ToolExecutor`：owner/scope/policy/deadline、adapter 调用、结果 schema、脱敏、trace。
 - [x] 实现版本化 `PolicyEngine`，只允许白名单事实/操作符。
 - [x] 实现错误分类：只读可重试一次，commit 状态未知不重试。
-- [ ] 提供 fake tool adapter，覆盖成功、拒绝、超时、冲突和 unknown。
+- [x] 提供 fake tool adapter，覆盖成功、拒绝、超时、冲突和 unknown。
 
 Loop 与编排：
 
 - [x] 实现 `AgentLoop.run_step()`，一步最多一个动作。
-- [ ] 固化 `build_prompt → request_decision → validate → execute → observe → reduce → checkpoint → terminate` 顺序。
+- [x] 固化 `build_prompt → request_decision → validate → execute → observe → reduce → checkpoint → terminate` 顺序。
 - [x] 实现 `max_steps=6`、deadline、token budget 和 cancellation checks。
 - [x] 实现 `OrchestrationEngine.create/advance/resume/cancel`。
 - [x] 实现 `WorkflowRegistry` 和版本锁定，已发布版本不可原地修改。
 - [x] 实现设计文档第 5.1 节全部 run 状态和非法跳转拒绝。
-- [ ] 实现每 step 原子 checkpoint、崩溃恢复和事件回放。
+- [x] 实现每 step 原子 checkpoint、崩溃恢复和事件回放。
 - [x] 实现 `TraceStore`，只保留结构化决定和脱敏 observation。
-- [ ] Runtime 注册完成后扩展 `/health/ready`：检查 Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不调用模型。
+- [x] Runtime 注册完成后扩展 `/health/ready`：检查 Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不调用模型。
 
 最小 Harness：
 
@@ -358,29 +358,28 @@ Loop 与编排：
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
-python -m pytest tests/unit/agent tests/unit/orchestration tests/unit/tools tests/unit/policies
+python -m pytest tests/unit
 python -m pytest tests/workflow/test_readonly_loop.py
-python -m pytest tests/recovery/test_run_resume.py tests/recovery/test_run_concurrency.py
-python -m pytest tests/security/test_decision_validation.py tests/security/test_tool_scope.py
-python -m pytest tests/harness/test_fixtures.py tests/harness/test_run_driver.py tests/harness/test_trace_adapter.py
+scripts/run_phase1_contract_tests.sh tests/recovery/test_postgres_checkpoint_recovery.py tests/recovery/test_postgres_event_replay.py tests/recovery/test_postgres_mutation_recovery.py
+python -m pytest tests/harness/test_deterministic_runtime.py tests/harness/test_run_driver.py tests/harness/test_runtime_adapter.py tests/harness/test_runner.py
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track intent_route --judge off
 RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gateway_live.py
 ```
 
 ### 7.4 验收 checklist
 
-- [ ] 非 JSON、未知 type、未知 tool、多工具和系统字段入参均在副作用前被拒绝。
-- [ ] 一个 step 最多执行一个工具，达到步数/deadline 后必定终止。
-- [ ] 只读超时最多重试一次，写操作 unknown 绝不盲目重试。
-- [ ] 同一 run 并发 advance 只有一个成功。
-- [ ] 在 checkpoint 前/后注入崩溃，恢复后事件和工具副作用不重复。
-- [ ] 旧 run 在 workflow v2 发布后仍使用创建时锁定的 v1。
-- [ ] Trace 不含密钥、确认 token 明文、完整 PII 或隐藏思维链。
-- [ ] fake model/fake tools 可跑通 complete、wait_user、wait_human、fail 和 cancel 路径。
-- [ ] 最小 Harness 能筛选 case/track、隔离 fixture、驱动 Runtime 并生成 hard-eval JSON。
-- [ ] 真实模型 smoke 返回合法 Decision 并记录脱敏的模型版本与延迟；未执行时 Phase 2 不标记完成。
-- [ ] Phase 2 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [ ] Phase 2 所有 TODO 和验证命令均完成。
+- [x] 非 JSON、未知 type、未知 tool、多工具和系统字段入参均在副作用前被拒绝。
+- [x] 一个 step 最多执行一个工具，达到步数/deadline 后必定终止。
+- [x] 只读超时最多重试一次，写操作 unknown 绝不盲目重试。
+- [x] 同一 run 并发 advance 只有一个成功。
+- [x] 在 checkpoint 前/后注入崩溃，恢复后事件和工具副作用不重复。
+- [x] 旧 run 在 workflow v2 发布后仍使用创建时锁定的 v1。
+- [x] Trace 不含密钥、确认 token 明文、完整 PII 或隐藏思维链。
+- [x] fake model/fake tools 可跑通 complete、wait_user、wait_human、fail 和 cancel 路径。
+- [x] 最小 Harness 能筛选 case/track、隔离 fixture、驱动 Runtime 并生成 hard-eval JSON。
+- [x] 真实模型 smoke 返回合法 Decision 并记录脱敏的模型版本与延迟。
+- [x] Phase 2 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
+- [x] Phase 2 所有 TODO 和验证命令均完成。
 
 ### 7.5 阶段产物
 
@@ -388,7 +387,7 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gate
 - `src/tools/registry.py`、`executor.py`
 - `src/policies/engine.py`
 - `src/telemetry/trace.py`
-- `src/harness/fixtures.py`、`run_driver.py`、`trace_adapter.py`、`runner.py`
+- `src/harness/runtime.py`、`deterministic_runtime.py`、`run_driver.py`、`runner.py`
 - Runtime 单元、workflow、recovery 和 security 测试
 - 最小 hard-eval Harness 报告与脱敏 live ModelGateway smoke 证据
 
@@ -914,6 +913,31 @@ format/lint
 - 关键保证：空库前向迁移至 `20260913_0005`；run checkpoint 原子性/并发/租户隔离、confirmation/idempotency、outbox lease、版本不可变 trigger 均有 PostgreSQL 合同覆盖。
 - 阶段提交：`d3b3b13`。
 - 工作区：阶段提交后仅保留用户预存的 `AGENTS.md` 未提交修改；本阶段文件均已提交。
+
+### 2026-09-14 — Phase 2 — 自研 Runtime 与最小 Harness 阶段验收
+
+- 状态：completed
+- 变更文件：
+  - `src/models/gateway.py`、`src/agent/loop.py`、`src/orchestration/`
+  - `src/tools/registry.py`、`src/tools/executor.py`、`src/policies/engine.py`
+  - `src/harness/runtime.py`、`src/harness/deterministic_runtime.py`、`src/harness/run_driver.py`、`src/harness/runner.py`
+  - `src/repositories/model_invocations.py`、`evals/commerce_bench_zh/cases.runtime.jsonl`
+  - 对应 unit、workflow、harness、PostgreSQL contract/recovery 与 live smoke 测试。
+- 执行验证：
+  - `python -m ruff check src apps tests`、`python -m mypy src apps` → pass。
+  - `python -m pytest -q tests` → `110 passed, 29 skipped`；跳过项仅为未注入隔离 PostgreSQL URL 或未显式启用 live 的 opt-in 测试。
+  - `scripts/run_phase1_contract_tests.sh tests/recovery/test_postgres_checkpoint_recovery.py tests/recovery/test_postgres_event_replay.py tests/recovery/test_postgres_mutation_recovery.py` → 隔离 PostgreSQL `28 passed`。
+  - `python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track intent_route --judge off` → `150/150` hard-pass；五个 track 均有独立 case-id Runtime 驱动与 hard-eval 测试。
+  - `RUN_LIVE_MODEL_TEST=1 python -m pytest -q -m live tests/integration/test_model_gateway_live.py` → `1 passed in 3.45s`；只记录脱敏的模型标识、配置指纹与延迟字段。
+  - `python scripts/check_secrets.py --repository . --tracked-only --env-policy .env --frontend apps/web --git-history` → pass。
+- 关键证据：
+  - 固定八阶段 pipeline、运行创建版本锁定、事件回放与 mutation 崩溃恢复：`6e829fc`、`f9c72d3`、`2b93e4f`、`3ded8ae`。
+  - 150 条 intent_route Runtime fixture、完整 CLI hard-eval：`303ea9b`。
+  - owner/resource binding、workflow/step/scope 解析、同步 adapter deadline、模型与 prompt 指纹审计：`795e5c4`。
+  - API readiness 的无网络 registry 检查：`8035717`。
+  - 五轨代表性 Runtime 执行：`f1b1813`。
+- 剩余 TODO：无。Phase 3 才接入真实业务 adapter、只读 API/SSE 与页面，不将其前移到本阶段。
+- BLOCKED：无。
 
 ## 15. 停止或请求用户输入的条件
 
