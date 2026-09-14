@@ -167,3 +167,134 @@ def test_bounded_loop_commits_each_round_and_exposes_observation_to_next_prompt(
     assert builder.contexts[1].state["last_observation"]["tool_name"] == "tool_a"
     assert builder.contexts[2].state["last_observation"]["tool_name"] == "tool_b"
     assert model.prompts[1].known_slots["last_tool"].value == "tool_a"
+
+
+def test_loop_uses_conservative_charge_when_provider_omits_token_usage() -> None:
+    context = _context()
+    model = DeterministicFakeModel(
+        (
+            Decision(
+                type=DecisionType.CALL_TOOL,
+                intent="lookup",
+                route="readonly",
+                confidence=1,
+                tool="tool_a",
+                args={},
+            ),
+            Decision(
+                type=DecisionType.RESPOND,
+                intent="lookup",
+                route="readonly",
+                confidence=1,
+                response="must not be requested",
+            ),
+        ),
+        usage_tokens=(None,),
+    )
+    adapter = DeterministicFakeToolAdapter(
+        (ToolResult(tool_name="tool_a", tool_version="1", data={}),)
+    )
+    loop = AgentLoop(
+        model=model,
+        validator=DecisionValidator(),
+        registry=ToolRegistry((_spec("tool_a"),)),
+        executor=ToolExecutor({"tool_a": adapter}),
+    )
+    checkpoints = _Checkpoints()
+    pipeline = StepPipeline(
+        step_executor=loop.step_executor,
+        checkpoints=checkpoints,
+        prompt_builder=_PromptBuilder(),
+    )
+    boundary = DecisionBoundary(
+        route="readonly",
+        allowed_types=frozenset({DecisionType.CALL_TOOL, DecisionType.RESPOND}),
+        allowed_tools=frozenset({"tool_a", "tool_b"}),
+        trusted_evidence_ids=frozenset(),
+    )
+
+    result = loop.run(
+        context=context,
+        pipeline=pipeline,
+        boundary=boundary,
+        tool_context=lambda current: ToolContext(
+            request_id=uuid4(),
+            run_id=current.run_id,
+            conversation_id=current.conversation_id,
+            tenant_id=current.tenant_id,
+            actor_id=current.actor_id,
+            scopes=("read",),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=2),
+        token_budget_remaining=1,
+    )
+
+    assert result.context.status is RunStatus.WAITING_HUMAN
+    assert result.context.state["last_step_reason"] == "token_budget_exhausted"
+    assert len(model.prompts) == 1
+    assert len(adapter.calls) == 1
+    assert len(checkpoints.calls) == 2
+
+
+def test_cancellation_after_model_response_prevents_tool_side_effect() -> None:
+    cancelled = False
+
+    class CancellingModel(DeterministicFakeModel):
+        def decide(self, prompt: PromptView):  # type: ignore[no-untyped-def]
+            nonlocal cancelled
+            result = super().decide(prompt)
+            cancelled = True
+            return result
+
+    context = _context()
+    model = CancellingModel(
+        (
+            Decision(
+                type=DecisionType.CALL_TOOL,
+                intent="lookup",
+                route="readonly",
+                confidence=1,
+                tool="tool_a",
+                args={},
+            ),
+        )
+    )
+    adapter = DeterministicFakeToolAdapter(
+        (ToolResult(tool_name="tool_a", tool_version="1", data={}),)
+    )
+    loop = AgentLoop(
+        model=model,
+        validator=DecisionValidator(),
+        registry=ToolRegistry((_spec("tool_a"),)),
+        executor=ToolExecutor({"tool_a": adapter}),
+    )
+    pipeline = StepPipeline(
+        step_executor=loop.step_executor,
+        checkpoints=_Checkpoints(),
+        prompt_builder=_PromptBuilder(),
+    )
+
+    result = loop.run(
+        context=context,
+        pipeline=pipeline,
+        boundary=DecisionBoundary(
+            route="readonly",
+            allowed_types=frozenset({DecisionType.CALL_TOOL, DecisionType.RESPOND}),
+            allowed_tools=frozenset({"tool_a", "tool_b"}),
+            trusted_evidence_ids=frozenset(),
+        ),
+        tool_context=lambda current: ToolContext(
+            request_id=uuid4(),
+            run_id=current.run_id,
+            conversation_id=current.conversation_id,
+            tenant_id=current.tenant_id,
+            actor_id=current.actor_id,
+            scopes=("read",),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=2),
+        cancelled=lambda: cancelled,
+    )
+
+    assert result.context.status is RunStatus.CANCELLED
+    assert len(model.prompts) == 1
+    assert adapter.calls == []
