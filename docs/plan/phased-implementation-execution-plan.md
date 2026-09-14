@@ -317,40 +317,40 @@ python -m pytest tests/harness/test_loader.py tests/harness/test_hard_eval.py te
 
 ModelGateway：
 
-- [ ] 实现 `.env` 配置读取，不记录 `API_KEY`。
-- [ ] 实现 OpenAI-compatible HTTP 请求、timeout、限次重试和错误归一化。
+- [x] 实现 `.env` 配置读取，不记录 `API_KEY`。
+- [x] 实现 OpenAI-compatible HTTP 请求、timeout、限次重试和错误归一化。
 - [ ] 固定 Agent model、temperature、token limit、timeout、retry 和 prompt hash，并把配置指纹写入 run/model invocation。
-- [ ] 实现结构化 Decision 解析；不合法输出只修复一次。
-- [ ] 实现 `model_invocations` 脱敏记录，不保存隐藏思维链。
-- [ ] 提供 deterministic fake model，覆盖所有 Decision 分支。
+- [x] 实现结构化 Decision 解析；不合法输出只修复一次。
+- [x] 实现 `model_invocations` 脱敏记录，不保存隐藏思维链。
+- [x] 提供 deterministic fake model，覆盖所有 Decision 分支。
 
 工具与政策：
 
-- [ ] 实现不可变 `ToolRegistry`，按 `name + version` 注册。
-- [ ] 实现 `DecisionValidator`：schema、route、step、allowlist、risk、system-field 检查。
+- [x] 实现不可变 `ToolRegistry`，按 `name + version` 注册。
+- [x] 实现 `DecisionValidator`：schema、route、step、allowlist、risk、system-field 检查。
 - [ ] 实现 `ToolExecutor`：owner/scope/policy/deadline、adapter 调用、结果 schema、脱敏、trace。
-- [ ] 实现版本化 `PolicyEngine`，只允许白名单事实/操作符。
-- [ ] 实现错误分类：只读可重试一次，commit 状态未知不重试。
+- [x] 实现版本化 `PolicyEngine`，只允许白名单事实/操作符。
+- [x] 实现错误分类：只读可重试一次，commit 状态未知不重试。
 - [ ] 提供 fake tool adapter，覆盖成功、拒绝、超时、冲突和 unknown。
 
 Loop 与编排：
 
-- [ ] 实现 `AgentLoop.run_step()`，一步最多一个动作。
+- [x] 实现 `AgentLoop.run_step()`，一步最多一个动作。
 - [ ] 固化 `build_prompt → request_decision → validate → execute → observe → reduce → checkpoint → terminate` 顺序。
-- [ ] 实现 `max_steps=6`、deadline、token budget 和 cancellation checks。
-- [ ] 实现 `OrchestrationEngine.create/advance/resume/cancel`。
-- [ ] 实现 `WorkflowRegistry` 和版本锁定，已发布版本不可原地修改。
-- [ ] 实现设计文档第 5.1 节全部 run 状态和非法跳转拒绝。
+- [x] 实现 `max_steps=6`、deadline、token budget 和 cancellation checks。
+- [x] 实现 `OrchestrationEngine.create/advance/resume/cancel`。
+- [x] 实现 `WorkflowRegistry` 和版本锁定，已发布版本不可原地修改。
+- [x] 实现设计文档第 5.1 节全部 run 状态和非法跳转拒绝。
 - [ ] 实现每 step 原子 checkpoint、崩溃恢复和事件回放。
-- [ ] 实现 `TraceStore`，只保留结构化决定和脱敏 observation。
+- [x] 实现 `TraceStore`，只保留结构化决定和脱敏 observation。
 - [ ] Runtime 注册完成后扩展 `/health/ready`：检查 Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不调用模型。
 
 最小 Harness：
 
-- [ ] 实现 `FixtureManager`、`RunDriver` 和 `TraceAdapter`，每个 case 使用隔离 mock 状态并输出 Phase 1 定义的 `NormalizedTrace`。
-- [ ] 实现 `src.harness.runner` 的 `--track/--case-id/--judge off/--timeout` 参数、失败隔离、取消和确定性 JSON 报告。
-- [ ] 最小 Harness 只执行 hard eval，不包含 Judge、批次持久化或 Web 面板；这些能力在 Phase 5 完成。
-- [ ] 添加 opt-in live ModelGateway smoke：仅检查真实端点认证、结构化 Decision、错误归一化和延迟，不输出 request header、密钥或完整 payload。
+- [x] 实现 `FixtureManager`、`RunDriver` 和 `TraceAdapter`，每个 case 使用隔离 mock 状态并输出 Phase 1 定义的 `NormalizedTrace`。
+- [x] 实现 `src.harness.runner` 的 `--track/--case-id/--judge off/--timeout` 参数、失败隔离、取消和确定性 JSON 报告。
+- [x] 最小 Harness 只执行 hard eval，不包含 Judge、批次持久化或 Web 面板；这些能力在 Phase 5 完成。
+- [x] 添加 opt-in live ModelGateway smoke：仅检查真实端点认证、结构化 Decision、错误归一化和延迟，不输出 request header、密钥或完整 payload。
 
 ### 7.3 验证命令
 
