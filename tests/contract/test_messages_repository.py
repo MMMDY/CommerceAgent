@@ -75,3 +75,32 @@ def test_messages_are_not_visible_to_another_actor_or_tenant(engine: Engine) -> 
     assert repository.list_for_actor(
         conversation_id=conversation_id, tenant_id="other-tenant", actor_id="actor-a"
     ) == ()
+
+
+def test_message_idempotency_is_checked_before_run_creation(engine: Engine) -> None:
+    tenant, conversation_id = conversation(engine, "actor-a")
+    repository = MessageRepository(engine)
+    run_id = uuid4()
+    message = repository.append_user(
+        conversation_id=conversation_id,
+        tenant_id=tenant,
+        actor_id="actor-a",
+        content="临时请求",
+        client_message_id="client-provisional",
+        run_id=run_id,
+    )
+    existing = repository.find_user_by_client_message_id(
+        conversation_id=conversation_id,
+        tenant_id=tenant,
+        actor_id="actor-a",
+        client_message_id="client-provisional",
+    )
+    assert existing is not None
+    assert existing.message_id == message.message_id
+    assert existing.run_id == run_id
+    assert existing.created is False
+    assert repository.conversation_exists(
+        conversation_id=conversation_id,
+        tenant_id=tenant,
+        actor_id="actor-a",
+    ) is True

@@ -91,6 +91,25 @@ class RunLifecycleRepository:
             if created.rowcount != 1:
                 raise ValueError("conversation is unavailable for this tenant and actor")
 
+    def cancel_unstarted_run(self, *, run_id: UUID, tenant_id: str, reason: str) -> None:
+        """Release a run reservation that could not be attached to a message.
+
+        This is used only for the narrow idempotency race where another request
+        inserted the same client message between reservation and projection.
+        Keeping the reservation terminal prevents it from blocking subsequent
+        requests through the one-active-run conversation constraint.
+        """
+
+        with self._engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE runtime.agent_runs SET status = 'cancelled', "
+                    "current_step = 'terminal', terminal_reason = :reason, updated_at = now() "
+                    "WHERE run_id = :run_id AND tenant_id = :tenant_id AND status = 'created'"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id, "reason": reason},
+            )
+
     def load_definition(self, *, run_id: UUID, tenant_id: str) -> RunDefinitionSnapshot | None:
         """Read the creation-time version pins through the tenant boundary."""
 

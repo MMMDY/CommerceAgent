@@ -438,35 +438,23 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         preview: dict[str, object] | None = None
         confirmation_expires_at: str | None = None
         token_refresh_required = False
-        try:
-            message = messages.append_user(
+        # Resolve client-message idempotency before reserving a new Run.  This
+        # is important because a conversation may still have an unfinished
+        # handoff/confirmation run and the DB intentionally permits only one
+        # active run per conversation.
+        message = messages.find_user_by_client_message_id(
+            conversation_id=conversation_id,
+            tenant_id=DEMO_TENANT_ID,
+            actor_id=actor_id,
+            client_message_id=payload.client_message_id,
+        )
+        if message is None:
+            if not messages.conversation_exists(
                 conversation_id=conversation_id,
                 tenant_id=DEMO_TENANT_ID,
                 actor_id=actor_id,
-                content=payload.content,
-                client_message_id=payload.client_message_id,
-                run_id=run_id,
-            )
-        except MessageConflictError as error:
-            raise HTTPException(status_code=409, detail="client_message_id_conflict") from error
-        except ValueError as error:
-            raise HTTPException(status_code=404, detail="conversation_not_found") from error
-        if not message.created:
-            if message.run_id is None:
-                raise HTTPException(status_code=500, detail="message_run_missing")
-            run_id = message.run_id
-            existing_run = RunRepository(get_engine()).load_run(
-                run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id
-            )
-            run_status = (
-                existing_run.status if existing_run is not None else RunStatus.CREATED.value
-            )
-            waiting_action = (
-                "human_handoff" if run_status == RunStatus.WAITING_HUMAN.value else None
-            )
-            if run_status == RunStatus.WAITING_CONFIRMATION.value:
-                token_refresh_required = True
-        else:
+            ):
+                raise HTTPException(status_code=404, detail="conversation_not_found")
             settings = get_settings()
             fingerprint = "|".join(
                 (settings.model or "unconfigured", settings.api_base or "unconfigured")
@@ -490,6 +478,45 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                 RunLifecycleRepository(get_engine()).create_run(context=context, spec=spec)
             except Exception as error:
                 raise HTTPException(status_code=503, detail="run_creation_unavailable") from error
+            try:
+                message = messages.append_user(
+                    conversation_id=conversation_id,
+                    tenant_id=DEMO_TENANT_ID,
+                    actor_id=actor_id,
+                    content=payload.content,
+                    client_message_id=payload.client_message_id,
+                    run_id=run_id,
+                )
+            except MessageConflictError as error:
+                # A concurrent request won the idempotency race.  The newly
+                # created reservation is cancelled so it cannot block the
+                # conversation's next request.
+                RunLifecycleRepository(get_engine()).cancel_unstarted_run(
+                    run_id=run_id,
+                    tenant_id=DEMO_TENANT_ID,
+                    reason="MESSAGE_IDEMPOTENCY_CONFLICT",
+                )
+                raise HTTPException(status_code=409, detail="client_message_id_conflict") from error
+            except ValueError as error:
+                raise HTTPException(status_code=404, detail="conversation_not_found") from error
+        else:
+            run_id = message.run_id or run_id
+        if not message.created:
+            if message.run_id is None:
+                raise HTTPException(status_code=500, detail="message_run_missing")
+            run_id = message.run_id
+            existing_run = RunRepository(get_engine()).load_run(
+                run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id
+            )
+            run_status = (
+                existing_run.status if existing_run is not None else RunStatus.CREATED.value
+            )
+            waiting_action = (
+                "human_handoff" if run_status == RunStatus.WAITING_HUMAN.value else None
+            )
+            if run_status == RunStatus.WAITING_CONFIRMATION.value:
+                token_refresh_required = True
+        else:
             try:
                 routing_prompt = RoutingPromptView(
                     conversation=(Message(role="user", content=payload.content),),

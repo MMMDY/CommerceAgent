@@ -131,12 +131,33 @@ export function App() {
     if (!conversation || !content.trim() || busy) return;
     setBusy(true); setError(null);
     const clientMessageId = `web-msg-${Date.now()}`;
+    let targetConversation = conversation;
+    let retriedWithFreshConversation = false;
     try {
-      const result = await api<{ message_id: string; run_id: string; run_status: string; confirmation_token?: string | null; preview?: Preview | null; confirmation_expires_at?: string | null; token_refresh_required?: boolean }>(
-        `${conversationPath}/messages`, { method: "POST", body: JSON.stringify({ content, client_message_id: clientMessageId }) },
+      const postMessage = (conversationId: string, messageId: string) => api<{ message_id: string; run_id: string; run_status: string; confirmation_token?: string | null; preview?: Preview | null; confirmation_expires_at?: string | null; token_refresh_required?: boolean }>(
+        `/v1/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ content, client_message_id: messageId }) },
       );
+      let result;
+      try {
+        result = await postMessage(targetConversation.id, clientMessageId);
+      } catch (reason) {
+        // A conversation with an unfinished handoff/confirmation run cannot
+        // accept a second automatic run.  Fork a clean demo conversation and
+        // retry once so the UI remains demonstrable after restoring history.
+        if (!(reason instanceof ApiError) || reason.status !== 503) throw reason;
+        const fresh = await api<Conversation>("/v1/conversations", {
+          method: "POST",
+          body: JSON.stringify({ client_request_id: `web-recovery-${crypto.randomUUID()}` }),
+        });
+        targetConversation = fresh;
+        retriedWithFreshConversation = true;
+        setConversation(fresh);
+        setMessages([]); setEvents([]); setEvidence([]); setRun(null); setConfirmationToken(null);
+        result = await postMessage(fresh.id, `${clientMessageId}-retry`);
+      }
       setInput("");
-      const loaded = await api<Message[]>(`${conversationPath}/messages`);
+      const targetPath = `/v1/conversations/${targetConversation.id}`;
+      const loaded = await api<Message[]>(`${targetPath}/messages`);
       setMessages(loaded);
       setRun({ run_id: result.run_id, status: result.run_status, current_step: "route", step_count: 0, preview: result.preview, confirmation_expires_at: result.confirmation_expires_at, token_refresh_required: result.token_refresh_required });
       setConfirmationToken(result.confirmation_token ?? null);
@@ -145,6 +166,7 @@ export function App() {
         api<Evidence[]>(`/v1/runs/${result.run_id}/evidence`),
       ]);
       setEvents(trace); setEvidence(citedEvidence);
+      if (retriedWithFreshConversation) setError("原会话有未结束任务，已自动切换到新会话。");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "请求失败"); }
     finally { setBusy(false); }
   };

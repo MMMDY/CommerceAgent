@@ -143,26 +143,33 @@ class OpenAICompatibleGateway(ModelGateway):
             "Never return execution_mode, workflow_id, tool calls, identities, scopes, tokens, "
             "or policy values."
         )
-        payload = {
-            "model": self._classifier_model,
-            "temperature": self._classifier_temperature,
-            "max_tokens": self._classifier_max_tokens,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": instruction},
-                {"role": "user", "content": prompt.model_dump_json()},
-            ],
-        }
-        try:
-            response = self._post_to(
-                base_url=self._classifier_base_url,
-                api_key=self._classifier_api_key,
-                payload=payload,
-            )
-            content = response.json()["choices"][0]["message"]["content"]
-            return IntentClassification.model_validate_json(content.strip())
-        except (KeyError, TypeError, ValueError, httpx.HTTPError) as error:
-            raise ModelGatewayError("intent classification is invalid or unavailable") from error
+        last_error: Exception | None = None
+        for repair in (False, True):
+            payload = {
+                "model": self._classifier_model,
+                "temperature": self._classifier_temperature,
+                "max_tokens": self._classifier_max_tokens,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": instruction
+                        + (" Output valid JSON only; do not include reasoning." if repair else ""),
+                    },
+                    {"role": "user", "content": prompt.model_dump_json()},
+                ],
+            }
+            try:
+                response = self._post_to(
+                    base_url=self._classifier_base_url,
+                    api_key=self._classifier_api_key,
+                    payload=payload,
+                )
+                content = response.json()["choices"][0]["message"]["content"]
+                return IntentClassification.model_validate_json(content.strip())
+            except (KeyError, TypeError, ValueError, httpx.HTTPError) as error:
+                last_error = error
+        raise ModelGatewayError("intent classification is invalid or unavailable") from last_error
 
     def conservative_decision_token_charge(self) -> int:
         return self._max_tokens

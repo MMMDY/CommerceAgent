@@ -117,6 +117,54 @@ class MessageRepository:
             return MessageRecord(message_id, conversation_id, run_id, None, "assistant", content,
                                  content_hash, int(sequence), now, True)
 
+    def find_user_by_client_message_id(
+        self,
+        *,
+        conversation_id: UUID,
+        tenant_id: str,
+        actor_id: str,
+        client_message_id: str,
+    ) -> MessageRecord | None:
+        """Read an idempotent user message before creating a new Run."""
+
+        with self._engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT m.message_id, m.conversation_id, m.run_id, m.client_message_id, m.role, "
+                    "m.content_redacted, m.content_hash, m.sequence_no, m.created_at "
+                    "FROM conversation.messages AS m JOIN conversation.conversations AS c "
+                    "ON c.id = m.conversation_id WHERE m.conversation_id = :conversation_id "
+                    "AND c.tenant_id = :tenant_id AND c.actor_id = :actor_id "
+                    "AND m.client_message_id = :client_message_id"
+                ),
+                {
+                    "conversation_id": conversation_id,
+                    "tenant_id": tenant_id,
+                    "actor_id": actor_id,
+                    "client_message_id": client_message_id,
+                },
+            ).first()
+        return MessageRecord(**dict(row._mapping), created=False) if row is not None else None
+
+    def conversation_exists(
+        self, *, conversation_id: UUID, tenant_id: str, actor_id: str
+    ) -> bool:
+        with self._engine.connect() as connection:
+            return (
+                connection.execute(
+                    text(
+                        "SELECT 1 FROM conversation.conversations WHERE id = :conversation_id "
+                        "AND tenant_id = :tenant_id AND actor_id = :actor_id"
+                    ),
+                    {
+                        "conversation_id": conversation_id,
+                        "tenant_id": tenant_id,
+                        "actor_id": actor_id,
+                    },
+                ).first()
+                is not None
+            )
+
     def list_for_actor(
         self, *, conversation_id: UUID, tenant_id: str, actor_id: str, after_sequence: int = 0,
         limit: int = 100,
