@@ -50,3 +50,20 @@ def test_gateway_parses_decision_without_exposing_authorization() -> None:
     result = OpenAICompatibleGateway(settings, client).decide(_prompt())
     assert result.decision.response == "ok"
     assert seen["path"] == "/v1/chat/completions"
+
+
+def test_gateway_constrains_legacy_envelope_to_trusted_prompt_route() -> None:
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": '{"decision":"respond","rationale":"ok"}'}}]
+                },
+            )
+        )
+    )
+    settings = Settings(model="m", api_base="https://example.test/v1", api_key="secret")
+    result = OpenAICompatibleGateway(settings, client).decide(_prompt())
+    assert result.decision.route == "w"
+    assert result.decision.response == "ok"

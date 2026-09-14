@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -91,7 +92,31 @@ class OpenAICompatibleGateway(ModelGateway):
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
         return ModelDecision(
-            decision=Decision.model_validate_json(content),
+            decision=self._parse_decision(content, prompt),
             latency_ms=round((perf_counter() - started) * 1000),
             repaired=repair,
         )
+
+    @staticmethod
+    def _parse_decision(content: str, prompt: PromptView) -> Decision:
+        content = content.strip()
+        if content.startswith("```json") and content.endswith("```"):
+            content = content[7:-3].strip()
+        elif content.startswith("```") and content.endswith("```"):
+            content = content[3:-3].strip()
+        try:
+            return Decision.model_validate_json(content)
+        except ValueError as strict_error:
+            raw = json.loads(content)
+            legacy_type = raw.get("decision") if isinstance(raw, dict) else None
+            rationale = raw.get("rationale") if isinstance(raw, dict) else None
+            supported = {"respond", "ask_user", "handoff", "finish"}
+            if legacy_type not in supported or not isinstance(rationale, str):
+                raise strict_error
+            return Decision(
+                type=legacy_type,
+                intent=prompt.workflow_id,
+                route=prompt.workflow_id,
+                confidence=0,
+                response=rationale,
+            )
