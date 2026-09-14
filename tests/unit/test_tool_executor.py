@@ -103,3 +103,24 @@ def test_executor_requires_an_allowing_policy_before_the_adapter() -> None:
         spec=_spec(), context=_context(), arguments={}, policy_facts={"resource.owner_match": True}
     )
     assert allowed.result.error is None
+
+
+def test_executor_rejects_an_untrusted_adapter_result_before_observation() -> None:
+    spec = _spec()
+    spec = spec.model_copy(
+        update={
+            "output_schema": {
+                "properties": {"count": {"type": "integer"}},
+                "required": ["count"],
+                "additionalProperties": False,
+            }
+        }
+    )
+    wrong_identity = ToolExecutor(
+        {"read": lambda _c, _a: ToolResult(tool_name="other", tool_version="1", data={"count": 1})}
+    ).execute(spec=spec, context=_context(), arguments={})
+    assert wrong_identity.result.error is not None
+    malformed = ToolExecutor(
+        {"read": lambda _c, _a: ToolResult(tool_name="read", tool_version="1", data={"count": "1"})}
+    ).execute(spec=spec, context=_context(), arguments={})
+    assert malformed.result.error is not None

@@ -41,7 +41,10 @@ class ToolExecutor:
         if self._policy is not None:
             if policy_facts is None:
                 return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
-            decision = self._policy.evaluate(action=spec.name, facts=policy_facts)
+            try:
+                decision = self._policy.evaluate(action=spec.name, facts=policy_facts)
+            except ValueError:
+                return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
             if decision.effect is not PolicyEffect.ALLOW:
                 return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
         adapter = self._adapters.get(spec.name)
@@ -54,6 +57,14 @@ class ToolExecutor:
             try:
                 result = adapter(context, arguments)
             except Exception:
+                return ExecutionOutcome(
+                    self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                )
+            if result.tool_name != spec.name or result.tool_version != spec.version:
+                return ExecutionOutcome(
+                    self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                )
+            if result.error is None and not self._valid_output(result.data, spec.output_schema):
                 return ExecutionOutcome(
                     self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
                 )
@@ -72,3 +83,28 @@ class ToolExecutor:
             tool_version=spec.version,
             error=ToolError(code=code, retryable=retryable, message="tool execution denied"),
         )
+
+    @staticmethod
+    def _valid_output(data: dict[str, object] | None, schema: dict[str, object]) -> bool:
+        if data is None:
+            return False
+        required = schema.get("required", [])
+        properties = schema.get("properties", {})
+        if not isinstance(required, list) or not isinstance(properties, dict):
+            return False
+        if any(not isinstance(name, str) or name not in data for name in required):
+            return False
+        if schema.get("additionalProperties") is False and set(data).difference(properties):
+            return False
+        for name, value in data.items():
+            definition = properties.get(name)
+            if not isinstance(definition, dict):
+                continue
+            expected = definition.get("type")
+            if expected == "string" and not isinstance(value, str):
+                return False
+            if expected == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+                return False
+            if expected == "boolean" and not isinstance(value, bool):
+                return False
+        return True
