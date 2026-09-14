@@ -10,10 +10,14 @@ from src.protocols import (
     Decision,
     DecisionType,
     PromptView,
+    RetryPolicy,
     RunContext,
     RunStatus,
     StepStatus,
     ToolContext,
+    ToolResult,
+    ToolRisk,
+    ToolSpec,
 )
 from src.tools.executor import ToolExecutor
 from src.tools.registry import ToolRegistry
@@ -207,4 +211,110 @@ def test_loop_records_only_after_a_model_decision_is_produced() -> None:
     )
     assert result.status is StepStatus.COMPLETE
     assert recorded[0]["context"] == context
-    assert recorded[0]["provider"] == "unknown"
+    assert recorded[0]["provider"] == "deterministic_fake"
+
+
+def test_loop_maps_fake_ask_user_and_handoff_paths() -> None:
+    context = _context()
+    boundary = DecisionBoundary(
+        "r", frozenset({DecisionType.ASK_USER, DecisionType.HANDOFF}), frozenset(), frozenset()
+    )
+    tools = ToolContext(
+        request_id=uuid4(),
+        run_id=context.run_id,
+        conversation_id=context.conversation_id,
+        tenant_id="t",
+        actor_id="a",
+        scopes=(),
+    )
+    loop = AgentLoop(
+        model=DeterministicFakeModel(
+            (
+                Decision(
+                    type=DecisionType.ASK_USER,
+                    intent="x",
+                    route="r",
+                    confidence=1,
+                    response="请补充订单号",
+                ),
+                Decision(
+                    type=DecisionType.HANDOFF,
+                    intent="x",
+                    route="r",
+                    confidence=1,
+                    response="转人工",
+                ),
+            )
+        ),
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
+    )
+    deadline = datetime.now(UTC) + timedelta(seconds=1)
+    assert (
+        loop.run_step(
+            context=context,
+            prompt=_prompt(),
+            boundary=boundary,
+            tool_context=tools,
+            deadline_at=deadline,
+        ).status
+        is StepStatus.WAIT_USER
+    )
+    assert (
+        loop.run_step(
+            context=context,
+            prompt=_prompt(),
+            boundary=boundary,
+            tool_context=tools,
+            deadline_at=deadline,
+        ).status
+        is StepStatus.WAIT_HUMAN
+    )
+
+
+def test_loop_executes_at_most_one_fake_tool_per_step() -> None:
+    context = _context()
+    spec = ToolSpec(
+        name="read",
+        version="1",
+        input_schema={"properties": {}, "required": []},
+        output_schema={"properties": {}, "required": []},
+        risk=ToolRisk.READ_ONLY,
+        required_scopes=("read",),
+        timeout_ms=1,
+        retry_policy=RetryPolicy(max_attempts=1),
+        model_visible=True,
+    )
+    loop = AgentLoop(
+        model=DeterministicFakeModel(
+            (
+                Decision(
+                    type=DecisionType.CALL_TOOL, intent="x", route="r", confidence=1, tool="read"
+                ),
+            )
+        ),
+        validator=DecisionValidator(),
+        registry=ToolRegistry((spec,)),
+        executor=ToolExecutor(
+            {"read": lambda _c, _a: ToolResult(tool_name="read", tool_version="1", data={})}
+        ),
+    )
+    result = loop.run_step(
+        context=context,
+        prompt=_prompt(),
+        boundary=DecisionBoundary(
+            "r", frozenset({DecisionType.CALL_TOOL}), frozenset({"read"}), frozenset()
+        ),
+        tool_context=ToolContext(
+            request_id=uuid4(),
+            run_id=context.run_id,
+            conversation_id=context.conversation_id,
+            tenant_id="t",
+            actor_id="a",
+            scopes=("read",),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+    )
+    assert result.status is StepStatus.CONTINUE
+    assert result.execution is not None and result.execution.attempts == 1
