@@ -147,3 +147,82 @@ def test_driver_can_drive_the_real_agent_loop_through_a_case_planner() -> None:
         planner=Planner(),
     )
     assert RunDriver(runtime=runtime).run_case(case=_case(), timeout_seconds=1).hard_eval.passed
+
+
+def test_agent_loop_runtime_can_publish_a_fixture_defined_semantic_action() -> None:
+    class Planner:
+        def plan(
+            self,
+            *,
+            case: RuntimeCaseInput,
+            fixture: dict[str, object],
+            timeout_seconds: float,
+        ) -> AgentLoopPlan:
+            del case, fixture, timeout_seconds
+            context = RunContext(
+                run_id=uuid4(),
+                conversation_id=uuid4(),
+                tenant_id="t",
+                actor_id="a",
+                workflow_id="route",
+                workflow_version="1",
+                status=RunStatus.RUNNING_READONLY,
+            )
+            return AgentLoopPlan(
+                context=context,
+                prompt=PromptView(
+                    system_policy_version="p",
+                    workflow_id="route",
+                    workflow_version="1",
+                    current_step="ask",
+                    allowed_decisions=("ask_user",),
+                    conversation=(),
+                    known_slots={},
+                    required_slots=(),
+                    allowed_tools=(),
+                    evidence_ids=(),
+                    remaining_steps=6,
+                ),
+                boundary=DecisionBoundary(
+                    "clarify", frozenset({DecisionType.ASK_USER}), frozenset(), frozenset()
+                ),
+                tool_context=ToolContext(
+                    request_id=uuid4(),
+                    run_id=context.run_id,
+                    conversation_id=context.conversation_id,
+                    tenant_id="t",
+                    actor_id="a",
+                    scopes=(),
+                ),
+                deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+                trace_next_action="ask_clarification",
+            )
+
+    runtime = AgentLoopCaseRuntime(
+        loop=AgentLoop(
+            model=DeterministicFakeModel(
+                (
+                    Decision(
+                        type=DecisionType.ASK_USER,
+                        intent="clarify",
+                        route="clarify",
+                        confidence=1,
+                        response="请补充信息",
+                    ),
+                )
+            ),
+            validator=DecisionValidator(),
+            registry=ToolRegistry(()),
+            executor=ToolExecutor({}),
+        ),
+        planner=Planner(),
+    )
+    result = runtime.execute_case(
+        case=RuntimeCaseInput(
+            case_id="case", locale="zh-CN", messages=(),
+        ),
+        fixture={},
+        timeout_seconds=1,
+        cancelled=lambda: False,
+    )
+    assert result.next_action == "ask_clarification"

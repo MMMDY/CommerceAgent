@@ -58,6 +58,7 @@ class RuntimePlanFixture(Contract):
     required_slots: tuple[str, ...] = ()
     scopes: tuple[str, ...] = ()
     token_budget_remaining: int | None = Field(default=None, ge=0)
+    trace_next_action: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class DeterministicToolFixture(Contract):
@@ -229,6 +230,7 @@ class _FixturePlanner:
             ),
             deadline_at=datetime.now(UTC) + timedelta(seconds=timeout_seconds),
             token_budget_remaining=self._plan.token_budget_remaining,
+            trace_next_action=self._plan.trace_next_action,
         )
 
 

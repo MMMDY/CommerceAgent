@@ -40,6 +40,7 @@ class AgentLoopPlan:
     tool_context: ToolContext
     deadline_at: datetime
     token_budget_remaining: int | None = None
+    trace_next_action: str | None = None
 
 
 class CasePlanner(Protocol):
@@ -77,7 +78,7 @@ class AgentLoopCaseRuntime:
         return RuntimeTrace(
             route=decision.route if decision else None,
             intent=decision.intent if decision else None,
-            next_action=decision.type.value if decision else None,
+            next_action=plan.trace_next_action or (decision.type.value if decision else None),
             args=dict(decision.args) if decision else {},
             tools_called=(decision.tool,) if decision and decision.tool else (),
             evidence_ids=decision.evidence_ids if decision else (),

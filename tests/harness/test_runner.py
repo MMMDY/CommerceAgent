@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from src.harness.runner import main
 
 
@@ -106,3 +108,35 @@ def test_runner_accepts_an_explicit_runtime_fixture(capsys: object) -> None:
     assert result == 0
     report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert report["passed_cases"] == 1
+
+
+@pytest.mark.parametrize(
+    ("track", "case_id"),
+    (
+        ("tool_workflow", "workflow_track_order_001"),
+        ("rag_grounding", "rag_fact_001_1"),
+        ("scripted_clarification", "clarify_shopping_001"),
+        ("guardrail_handoff", "guardrail_cross_account_001"),
+    ),
+)
+def test_runner_drives_a_real_agent_loop_fixture_for_each_non_intent_track(
+    capsys: object, track: str, case_id: str
+) -> None:
+    assert main(
+        (
+            "--dataset",
+            "evals/commerce_bench_zh/cases.jsonl",
+            "--track",
+            track,
+            "--case-id",
+            case_id,
+            "--judge",
+            "off",
+            "--timeout",
+            "1",
+        )
+    ) == 0
+    report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert report["selected_cases"] == report["completed_cases"] == report["passed_cases"] == 1
+    assert report["failed_cases"] == 0
+    assert report["results"][0]["runtime_error"] is None
