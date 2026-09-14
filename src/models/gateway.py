@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from time import perf_counter
@@ -183,7 +183,7 @@ class OpenAICompatibleGateway(ModelGateway):
         return self._post_to(base_url=self._base_url, api_key=self._api_key, payload=payload)
 
     def _post_to(
-        self, *, base_url: str, api_key: str, payload: dict[str, object]
+        self, *, base_url: str, api_key: str, payload: Mapping[str, object]
     ) -> httpx.Response:
         for attempt in range(self._retry_attempts):
             try:

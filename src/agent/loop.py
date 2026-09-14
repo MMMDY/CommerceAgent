@@ -2,19 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Protocol
 
 from src.agent.validation import DecisionBoundary, DecisionValidationError, DecisionValidator
 from src.models.gateway import ModelDecision, ModelGateway, ModelGatewayError
-from src.protocols import Decision, DecisionType, PromptView, RunContext, StepStatus, ToolContext
+from src.protocols import (
+    Decision,
+    DecisionType,
+    PromptView,
+    RunContext,
+    RunStatus,
+    StepStatus,
+    ToolContext,
+)
 from src.telemetry.trace import TraceStore
 from src.tools.executor import ExecutionOutcome, ToolExecutor
 from src.tools.registry import ToolRegistry, ToolRegistryError
 
 if TYPE_CHECKING:
-    from src.orchestration.pipeline import StageObserver
+    from src.orchestration.pipeline import StageObserver, StepPipeline, StepPipelineResult
 
 
 class ModelInvocationRecorder(Protocol):
@@ -51,7 +60,8 @@ class LoopResult:
     reason: str | None = None
 
 
-class AgentLoop:
+class AgentStepExecutor:
+    """Single Decision/tool primitive; it never controls a multi-step loop."""
     def __init__(
         self,
         *,
@@ -78,7 +88,7 @@ class AgentLoop:
             raise RuntimeError("model gateway does not expose a configuration fingerprint")
         return value
 
-    def run_step(
+    def execute_step(
         self,
         *,
         context: RunContext,
@@ -266,6 +276,113 @@ class AgentLoop:
         return LoopResult(
             StepStatus.FAIL, None, decision.type, decision=decision, reason="unsupported_decision"
         )
+
+    def run_step(
+        self,
+        **kwargs: object,
+    ) -> LoopResult:
+        """Deprecated compatibility alias; all semantics live in execute_step."""
+
+        return self.execute_step(**kwargs)  # type: ignore[arg-type]
+
+
+@dataclass(frozen=True, slots=True)
+class AgentRunResult:
+    """Result of one bounded outer readonly loop invocation."""
+
+    context: RunContext
+    exit_reason: str
+    steps: tuple[LoopResult, ...]
+
+
+class AgentLoop:
+    """Bounded readonly while loop around one-step pipeline advancement.
+
+    ``run_step`` is retained temporarily for established callers, but delegates
+    to the only single-step implementation, ``AgentStepExecutor``.
+    """
+
+    def __init__(
+        self,
+        *,
+        model: ModelGateway,
+        validator: DecisionValidator,
+        registry: ToolRegistry,
+        executor: ToolExecutor,
+        model_invocations: ModelInvocationRecorder | None = None,
+        traces: TraceStore | None = None,
+    ) -> None:
+        self._step_executor = AgentStepExecutor(
+            model=model,
+            validator=validator,
+            registry=registry,
+            executor=executor,
+            model_invocations=model_invocations,
+            traces=traces,
+        )
+
+    @property
+    def model_config_hash(self) -> str:
+        return self._step_executor.model_config_hash
+
+    def run_step(
+        self,
+        *,
+        context: RunContext,
+        prompt: PromptView,
+        boundary: DecisionBoundary,
+        tool_context: ToolContext,
+        deadline_at: datetime,
+        cancelled: bool = False,
+        token_budget_remaining: int | None = None,
+        stage_observer: StageObserver | None = None,
+    ) -> LoopResult:
+        return self._step_executor.execute_step(
+            context=context,
+            prompt=prompt,
+            boundary=boundary,
+            tool_context=tool_context,
+            deadline_at=deadline_at,
+            cancelled=cancelled,
+            token_budget_remaining=token_budget_remaining,
+            stage_observer=stage_observer,
+        )
+
+    def run(
+        self,
+        *,
+        context: RunContext,
+        pipeline: StepPipeline,
+        boundary: DecisionBoundary,
+        tool_context: ToolContext | Callable[[RunContext], ToolContext],
+        deadline_at: datetime,
+        cancelled: Callable[[], bool] | None = None,
+        token_budget_remaining: int | None = None,
+    ) -> AgentRunResult:
+        """Advance only committed readonly contexts until a pause or terminal state."""
+
+        current = context
+        steps: list[LoopResult] = []
+        is_cancelled = cancelled or (lambda: False)
+        while current.status is RunStatus.RUNNING_READONLY:
+            current_tool_context = (
+                tool_context(current) if callable(tool_context) else tool_context
+            )
+            result: StepPipelineResult = pipeline.advance(
+                context=current,
+                boundary=boundary,
+                tool_context=current_tool_context,
+                deadline_at=deadline_at,
+                cancelled=is_cancelled(),
+                token_budget_remaining=token_budget_remaining,
+            )
+            current = result.advance.context
+            steps.append(result.advance.loop)
+            if current.status is not RunStatus.RUNNING_READONLY:
+                return AgentRunResult(
+                    context=current, exit_reason=current.status.value, steps=tuple(steps)
+                )
+        return AgentRunResult(context=current, exit_reason=current.status.value, steps=tuple(steps))
 
 
 def _record_stage(observer: StageObserver | None, stage: str, outcome: str) -> None:
