@@ -58,9 +58,15 @@ def test_driver_passes_only_isolated_fixture_and_evaluates_after_runtime() -> No
     assert runtime.fixture is not case.context
     assert "mutated" not in case.context
     assert runtime.case is not None
-    assert not hasattr(runtime.case, "expected")
-    assert not hasattr(runtime.case, "forbidden_tools")
-    assert not hasattr(runtime.case, "source")
+    assert set(runtime.case.model_dump()) == {"schema_version", "case_id", "locale", "messages"}
+    for evaluation_only_field in (
+        "expected",
+        "forbidden_tools",
+        "source",
+        "task_type",
+        "tags",
+    ):
+        assert not hasattr(runtime.case, evaluation_only_field)
 
 
 def test_driver_isolates_a_runtime_failure_to_its_case() -> None:

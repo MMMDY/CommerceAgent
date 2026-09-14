@@ -18,6 +18,10 @@ DATASET = Path("evals/commerce_bench_zh/cases.jsonl")
 RUNTIME_FIXTURE = Path("evals/commerce_bench_zh/cases.runtime.jsonl")
 
 
+def _first_runtime_fixture() -> dict[str, object]:
+    return json.loads(RUNTIME_FIXTURE.read_text(encoding="utf-8").splitlines()[0])
+
+
 def test_runtime_fixture_drives_agent_loop_without_observing_gold() -> None:
     case = CaseLoader(DATASET).load(case_id="intent_add_product_001")[0]
     factory = DeterministicRuntimeFactory(RuntimeFixtureLoader(RUNTIME_FIXTURE).load())
@@ -35,8 +39,22 @@ def test_runtime_fixture_drives_agent_loop_without_observing_gold() -> None:
     assert passing.trace.next_action == "respond"
 
 
+def test_runtime_fixture_covers_and_drives_the_complete_intent_route_track() -> None:
+    cases = CaseLoader(DATASET).load(track="intent_route")
+    fixtures = RuntimeFixtureLoader(RUNTIME_FIXTURE).load()
+    factory = DeterministicRuntimeFactory(fixtures)
+
+    assert len(cases) == len(fixtures) == 150
+    assert {case.id for case in cases} == {fixture.case_id for fixture in fixtures}
+
+    results = [RunDriver(runtime=factory).run_case(case=case, timeout_seconds=1) for case in cases]
+    assert all(result.runtime_error is None for result in results)
+    assert all(result.trace.status == "complete" for result in results)
+    assert all(result.hard_eval.passed for result in results)
+
+
 def test_runtime_fixture_schema_rejects_embedded_expected_gold(tmp_path: Path) -> None:
-    raw = json.loads(RUNTIME_FIXTURE.read_text(encoding="utf-8"))
+    raw = _first_runtime_fixture()
     raw["expected"] = {"intent": "add_product"}
     fixture = tmp_path / "runtime.jsonl"
     fixture.write_text(json.dumps(raw, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -46,7 +64,7 @@ def test_runtime_fixture_schema_rejects_embedded_expected_gold(tmp_path: Path) -
 
 
 def test_runtime_fixture_validation_is_enforced_by_real_agent_loop(tmp_path: Path) -> None:
-    raw = json.loads(RUNTIME_FIXTURE.read_text(encoding="utf-8"))
+    raw = _first_runtime_fixture()
     raw["decision"]["route"] = "untrusted_route"
     fixture = tmp_path / "runtime.jsonl"
     fixture.write_text(json.dumps(raw, ensure_ascii=False) + "\n", encoding="utf-8")

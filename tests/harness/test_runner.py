@@ -41,13 +41,20 @@ def test_runner_rejects_a_nonpositive_timeout() -> None:
         raise AssertionError("expected argument rejection")
 
 
-def test_runner_isolates_a_case_missing_from_runtime_fixture(capsys: object) -> None:
+def test_runner_isolates_a_case_missing_from_runtime_fixture(
+    capsys: object, tmp_path: Path
+) -> None:
+    full_fixture = Path("evals/commerce_bench_zh/cases.runtime.jsonl")
+    fixture = tmp_path / "partial.runtime.jsonl"
+    fixture.write_text(full_fixture.read_text(encoding="utf-8").splitlines()[0] + "\n")
     result = main(
         (
             "--dataset",
             "evals/commerce_bench_zh/cases.jsonl",
             "--case-id",
             "intent_add_product_002",
+            "--runtime-fixture",
+            str(fixture),
             "--judge",
             "off",
         )
@@ -58,6 +65,31 @@ def test_runner_isolates_a_case_missing_from_runtime_fixture(capsys: object) -> 
     assert report["completed_cases"] == 1
     assert report["results"][0]["runtime_error"] == "runtime_execution_failed"
     assert report["results"][0]["hard_pass"] is False
+
+
+def test_runner_emits_deterministic_full_intent_track_report(capsys: object) -> None:
+    args = (
+        "--dataset",
+        "evals/commerce_bench_zh/cases.jsonl",
+        "--track",
+        "intent_route",
+        "--judge",
+        "off",
+        "--timeout",
+        "1",
+    )
+
+    assert main(args) == 0
+    first = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert main(args) == 0
+    second = capsys.readouterr().out  # type: ignore[attr-defined]
+
+    assert first == second
+    report = json.loads(first)
+    assert report["selected_cases"] == report["completed_cases"] == 150
+    assert report["passed_cases"] == 150
+    assert report["failed_cases"] == 0
+    assert all(item["runtime_error"] is None for item in report["results"])
 
 
 def test_runner_accepts_an_explicit_runtime_fixture(capsys: object) -> None:
