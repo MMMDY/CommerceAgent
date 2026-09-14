@@ -6,18 +6,21 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Protocol, cast
 from uuid import UUID
 
+from src.agent.intent_classifier import IntentClassifier
 from src.agent.loop import AgentLoop, AgentRunResult
 from src.agent.validation import DecisionBoundary
-from src.orchestration.router import RouteDecision, RouteOutcome
+from src.orchestration.router import IntentRouter, RouteDecision, RouteOutcome
 from src.orchestration.run_creation import RunCreationSpec, RunCreationStore
 from src.orchestration.state_machine import require_transition
 from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     DomainEvent,
     EventType,
+    RoutingPromptView,
     RunContext,
     RunStatus,
     ToolContext,
+    ToolRisk,
 )
 
 if TYPE_CHECKING:
@@ -158,6 +161,22 @@ class OrchestrationEngine:
                 "state": state,
             }
         )
+
+    def classify_and_route(
+        self,
+        *,
+        context: RunContext,
+        prompt: RoutingPromptView,
+        classifier: IntentClassifier,
+        router: IntentRouter,
+        routes: RouteSelectionStore,
+        target_tool_risk: ToolRisk | None = None,
+    ) -> RunContext:
+        """Run the constrained classifier, then persist only code-reviewed routing."""
+
+        candidate = classifier.classify(context=context, prompt=prompt)
+        decision = router.decide(candidate, target_tool_risk=target_tool_risk)
+        return self.select_route(context=context, decision=decision, routes=routes)
 
     def resume(self, *, run_id: UUID, tenant_id: str) -> RunContext:
         """Reload the newest persisted context; never reconstruct it from request input."""

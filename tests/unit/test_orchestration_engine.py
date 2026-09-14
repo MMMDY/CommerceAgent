@@ -3,19 +3,23 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from src.agent.intent_classifier import DeterministicFakeIntentClassifier, IntentClassifier
 from src.agent.loop import AgentLoop
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.models.gateway import DeterministicFakeModel
 from src.orchestration.engine import OrchestrationEngine
 from src.orchestration.pipeline import StepPipeline
-from src.orchestration.router import RouteDecision, RouteOutcome
+from src.orchestration.router import IntentRouter, IntentRouteRule, RouteDecision, RouteOutcome
 from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     Decision,
     DecisionType,
     DomainEvent,
     ExecutionMode,
+    IntentClassification,
     PromptView,
+    RiskHint,
+    RoutingPromptView,
     RunContext,
     RunStatus,
     ToolContext,
@@ -221,3 +225,45 @@ def test_engine_selects_a_code_reviewed_executor_or_direct_handoff() -> None:
     )
     assert handoff.status is RunStatus.WAITING_HUMAN
     assert handoff.execution_mode is None
+
+
+def test_engine_classifies_then_routes_only_through_code_owned_decision() -> None:
+    checkpoints = _Checkpoints()
+    engine = OrchestrationEngine(
+        loop=AgentLoop(
+            model=DeterministicFakeModel(()),
+            validator=DecisionValidator(),
+            registry=ToolRegistry(()),
+            executor=ToolExecutor({}),
+        ),
+        workflows=WorkflowRegistry((WorkflowDefinition("w", "1", ("answer",)),)),
+        checkpoints=checkpoints,
+    )
+    context = _context().model_copy(
+        update={"status": RunStatus.ROUTING, "workflow_id": None, "workflow_version": None}
+    )
+    routes = _Routes()
+    selected = engine.classify_and_route(
+        context=context,
+        prompt=RoutingPromptView(conversation=(), allowed_intents=("faq",)),
+        classifier=IntentClassifier(
+            gateway=DeterministicFakeIntentClassifier(
+                (
+                    IntentClassification(
+                        intent="faq",
+                        risk_hint=RiskHint.READ_ONLY,
+                        route_hint="untrusted",
+                        confidence=1,
+                    ),
+                )
+            )
+        ),
+        router=IntentRouter(
+            (IntentRouteRule("faq", ExecutionMode.READONLY_LOOP, "w", "1"),)
+        ),
+        routes=routes,
+    )
+
+    assert selected.status is RunStatus.RUNNING_READONLY
+    assert selected.workflow_id == "w"
+    assert routes.calls[0][1].reason_code == "ROUTE_RULE_MATCHED"
