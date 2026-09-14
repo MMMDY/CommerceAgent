@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from src.config import Settings
 from src.orchestration.readiness import RuntimeRegistrationContainer
+from src.orchestration.route_catalog import DEFAULT_INTENT_ROUTE_RULES
 from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.policies.engine import FactCondition, PolicyEffect, PolicyEngine, PolicyRule
-from src.protocols import RetryPolicy, ToolRisk, ToolSpec
+from src.tools.readonly_specs import readonly_tool_specs
 from src.tools.registry import ToolRegistry
 
 
@@ -23,44 +24,29 @@ def build_runtime_registrations(*, settings: Settings) -> RuntimeRegistrationCon
     then, any attempt to execute it has no adapter and fails closed.
     """
 
-    tool = ToolSpec(
-        name="retrieve_knowledge",
-        version="1",
-        input_schema={
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-            "additionalProperties": False,
-        },
-        output_schema={
-            "properties": {"evidence_ids": {"type": "array"}},
-            "required": ["evidence_ids"],
-            "additionalProperties": False,
-        },
-        risk=ToolRisk.READ_ONLY,
-        required_scopes=("knowledge:read",),
-        timeout_ms=3_000,
-        retry_policy=RetryPolicy(max_attempts=2, backoff_ms=(100,)),
-        model_visible=True,
-        allowed_workflows=("knowledge_query@1",),
-        allowed_steps=("retrieve",),
-    )
+    tools = readonly_tool_specs()
     policy = PolicyEngine(
         version="phase2-readonly-v1",
         allowed_facts=frozenset({"request.authenticated"}),
-        rules=(
+        rules=tuple(
             PolicyRule(
-                rule_id="allow-authenticated-knowledge-read",
-                applies_to="retrieve_knowledge",
-                priority=100,
+                rule_id=f"allow-authenticated-{tool.name}", applies_to=tool.name, priority=100,
                 conditions=(FactCondition("request.authenticated", "eq", True),),
-                effect=PolicyEffect.ALLOW,
-                reason_code="AUTHENTICATED_READ",
-            ),
+                effect=PolicyEffect.ALLOW, reason_code="AUTHENTICATED_READ",
+            ) for tool in tools
         ),
     )
+    workflows = {
+        (rule.workflow_id, rule.workflow_version)
+        for rule in DEFAULT_INTENT_ROUTE_RULES
+    }
+    workflows.add(("knowledge_query", "1"))
     return RuntimeRegistrationContainer(
         settings=settings,
-        tools=ToolRegistry((tool,)),
-        workflows=WorkflowRegistry((WorkflowDefinition("knowledge_query", "1", ("retrieve",)),)),
+        tools=ToolRegistry(tools),
+        workflows=WorkflowRegistry(tuple(
+            WorkflowDefinition(workflow_id, version, ("retrieve",))
+            for workflow_id, version in sorted(workflows)
+        )),
         policy=policy,
     )
