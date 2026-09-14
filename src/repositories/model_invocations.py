@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from src.models.gateway import ModelDecision
-from src.protocols import PromptView, RunContext
+from src.protocols import IntentClassification, PromptView, RoutingPromptView, RunContext
 
 
 class ModelInvocationRepository:
@@ -85,11 +85,48 @@ class ModelInvocationRepository:
             error_code=error_code,
         )
 
+    def record_classification_success(
+        self,
+        *,
+        context: RunContext,
+        prompt: RoutingPromptView,
+        result: IntentClassification,
+        provider: str,
+        model: str,
+        config_hash: str,
+        latency_ms: int,
+    ) -> None:
+        self._insert(
+            context=context,
+            step="route_intent_risk",
+            purpose="intent_classification",
+            provider=provider,
+            model=model,
+            config_hash=config_hash,
+            prompt_version="intent-classifier-v1",
+            input_metadata={
+                "allowed_intent_count": len(prompt.allowed_intents),
+                "known_slot_count": len(prompt.known_slots),
+            },
+            prompt_hash=_hash(prompt.model_dump_json()),
+            output_metadata={
+                "intent": result.intent,
+                "risk_hint": result.risk_hint.value,
+                "route_hint": result.route_hint,
+                "confidence": result.confidence,
+                "required_slot_count": len(result.required_slots),
+            },
+            latency_ms=latency_ms,
+            status="succeeded",
+            error_code=None,
+        )
+
     def _insert(
         self,
         *,
         context: RunContext,
         step: str,
+        purpose: str = "agent",
         provider: str,
         model: str,
         config_hash: str,
@@ -117,7 +154,7 @@ class ModelInvocationRepository:
                     "model_config_hash, prompt_version, input_redacted_json, input_hash, "
                     "output_redacted_json, output_hash, status, error_code, latency_ms, "
                     "started_at, finished_at) "
-                    "VALUES (:id, :run_id, :step, 'agent', :provider, :model, :config_hash, "
+                    "VALUES (:id, :run_id, :step, :purpose, :provider, :model, :config_hash, "
                     ":prompt_version, CAST(:input AS jsonb), :input_hash, CAST(:output AS jsonb), "
                     ":output_hash, :status, :error_code, :latency, now(), now())"
                 ),
@@ -125,6 +162,7 @@ class ModelInvocationRepository:
                     "id": uuid4(),
                     "run_id": context.run_id,
                     "step": step,
+                    "purpose": purpose,
                     "provider": provider,
                     "model": model,
                     "config_hash": config_hash,

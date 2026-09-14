@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 import httpx
 import pytest
 
-from src.agent.intent_classifier import DeterministicFakeIntentClassifier
+from src.agent.intent_classifier import DeterministicFakeIntentClassifier, IntentClassifier
 from src.config import Settings
 from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
 from src.protocols import (
@@ -15,6 +16,8 @@ from src.protocols import (
     PromptView,
     RiskHint,
     RoutingPromptView,
+    RunContext,
+    RunStatus,
 )
 
 
@@ -153,3 +156,35 @@ def test_fake_classifier_is_fifo() -> None:
 
     assert fake.classify(_prompt()) == expected
     assert fake.prompts == [_prompt()]
+
+
+def test_intent_classifier_records_only_redacted_profile_metadata() -> None:
+    expected = IntentClassification(
+        intent="order_status",
+        risk_hint=RiskHint.READ_ONLY,
+        route_hint="order_query",
+        confidence=1,
+    )
+    records: list[dict[str, object]] = []
+
+    class Recorder:
+        def record_classification_success(self, **kwargs: object) -> None:
+            records.append(kwargs)
+
+    result = IntentClassifier(
+        gateway=DeterministicFakeIntentClassifier((expected,)), invocations=Recorder()
+    ).classify(
+        context=RunContext(
+            run_id=uuid4(),
+            conversation_id=uuid4(),
+            tenant_id="tenant",
+            actor_id="actor",
+            status=RunStatus.ROUTING,
+        ),
+        prompt=_prompt(),
+    )
+
+    assert result == expected
+    assert records[0]["config_hash"] == "sha256:deterministic_fake_classifier"
+    assert isinstance(records[0]["latency_ms"], int)
+    assert "api_key" not in records[0]
