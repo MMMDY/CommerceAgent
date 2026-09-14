@@ -59,10 +59,12 @@ class LoopResult:
     decision: Decision | None = None
     execution: ExecutionOutcome | None = None
     reason: str | None = None
+    usage_tokens: int | None = None
 
 
 class AgentStepExecutor:
     """Single Decision/tool primitive; it never controls a multi-step loop."""
+
     def __init__(
         self,
         *,
@@ -89,6 +91,13 @@ class AgentStepExecutor:
             raise RuntimeError("model gateway does not expose a configuration fingerprint")
         return value
 
+    @property
+    def conservative_token_charge(self) -> int:
+        charge = self._model.conservative_decision_token_charge()
+        if not isinstance(charge, int) or charge <= 0:
+            raise RuntimeError("model gateway has no safe token charge")
+        return charge
+
     def execute_step(
         self,
         *,
@@ -97,11 +106,11 @@ class AgentStepExecutor:
         boundary: DecisionBoundary,
         tool_context: ToolContext,
         deadline_at: datetime,
-        cancelled: bool = False,
+        cancelled: bool | Callable[[], bool] = False,
         token_budget_remaining: int | None = None,
         stage_observer: StageObserver | None = None,
     ) -> LoopResult:
-        if cancelled:
+        if _is_cancelled(cancelled):
             _record_skipped_action(stage_observer)
             return LoopResult(
                 status=StepStatus.FAIL, response=None, decision_type=None, reason="cancelled"
@@ -179,6 +188,11 @@ class AgentStepExecutor:
                     reason="model_audit_failed",
                 )
         decision = model_result.decision
+        if _is_cancelled(cancelled):
+            _record_skipped_action_after_model(stage_observer)
+            return LoopResult(
+                status=StepStatus.FAIL, response=None, decision_type=None, reason="cancelled"
+            )
         if self._traces is not None:
             try:
                 self._traces.append(
@@ -247,6 +261,7 @@ class AgentStepExecutor:
                 decision_type=decision.type,
                 decision=decision,
                 execution=execution,
+                usage_tokens=model_result.usage_tokens,
             )
         try:
             self._validator.validate(decision=decision, boundary=boundary)
@@ -266,18 +281,35 @@ class AgentStepExecutor:
         _record_stage(stage_observer, "observe", "completed")
         if decision.type is DecisionType.ASK_USER:
             return LoopResult(
-                StepStatus.WAIT_USER, decision.response, decision.type, decision=decision
+                StepStatus.WAIT_USER,
+                decision.response,
+                decision.type,
+                decision=decision,
+                usage_tokens=model_result.usage_tokens,
             )
         if decision.type is DecisionType.HANDOFF:
             return LoopResult(
-                StepStatus.WAIT_HUMAN, decision.response, decision.type, decision=decision
+                StepStatus.WAIT_HUMAN,
+                decision.response,
+                decision.type,
+                decision=decision,
+                usage_tokens=model_result.usage_tokens,
             )
         if decision.type in (DecisionType.RESPOND, DecisionType.FINISH):
             return LoopResult(
-                StepStatus.COMPLETE, decision.response, decision.type, decision=decision
+                StepStatus.COMPLETE,
+                decision.response,
+                decision.type,
+                decision=decision,
+                usage_tokens=model_result.usage_tokens,
             )
         return LoopResult(
-            StepStatus.FAIL, None, decision.type, decision=decision, reason="unsupported_decision"
+            StepStatus.FAIL,
+            None,
+            decision.type,
+            decision=decision,
+            reason="unsupported_decision",
+            usage_tokens=model_result.usage_tokens,
         )
 
     def run_step(
@@ -328,6 +360,12 @@ class AgentLoop:
     def model_config_hash(self) -> str:
         return self._step_executor.model_config_hash
 
+    @property
+    def step_executor(self) -> AgentStepExecutor:
+        """The sole single-step primitive for a pipeline composition."""
+
+        return self._step_executor
+
     def run_step(
         self,
         *,
@@ -336,7 +374,7 @@ class AgentLoop:
         boundary: DecisionBoundary,
         tool_context: ToolContext,
         deadline_at: datetime,
-        cancelled: bool = False,
+        cancelled: bool | Callable[[], bool] = False,
         token_budget_remaining: int | None = None,
         stage_observer: StageObserver | None = None,
     ) -> LoopResult:
@@ -366,27 +404,31 @@ class AgentLoop:
 
         current = context
         steps: list[LoopResult] = []
+        remaining_budget = token_budget_remaining
         previous_signature: tuple[object, ...] | None = None
         is_cancelled = cancelled or (lambda: False)
         while current.status is RunStatus.RUNNING_READONLY:
-            current_tool_context = (
-                tool_context(current) if callable(tool_context) else tool_context
-            )
+            current_tool_context = tool_context(current) if callable(tool_context) else tool_context
             result: StepPipelineResult = pipeline.advance(
                 context=current,
                 boundary=boundary,
                 tool_context=current_tool_context,
                 deadline_at=deadline_at,
-                cancelled=is_cancelled(),
-                token_budget_remaining=token_budget_remaining,
+                cancelled=is_cancelled,
+                token_budget_remaining=remaining_budget,
             )
-            current = result.advance.context
-            steps.append(result.advance.loop)
+            current = result.context
+            steps.append(result.loop)
+            if remaining_budget is not None:
+                usage = result.loop.usage_tokens
+                if usage is None:
+                    usage = self._step_executor.conservative_token_charge
+                remaining_budget = max(0, remaining_budget - usage)
             if current.status is not RunStatus.RUNNING_READONLY:
                 return AgentRunResult(
                     context=current, exit_reason=current.status.value, steps=tuple(steps)
                 )
-            signature = _decision_signature(result.advance.loop)
+            signature = _decision_signature(result.loop)
             if signature is not None and signature == previous_signature:
                 handoff = pipeline.handoff(context=current, reason="readonly_loop_no_progress")
                 steps.append(handoff.loop)
@@ -409,6 +451,16 @@ def _record_skipped_action(observer: StageObserver | None) -> None:
     _record_stage(observer, "validate", "skipped")
     _record_stage(observer, "execute", "skipped")
     _record_stage(observer, "observe", "completed")
+
+
+def _record_skipped_action_after_model(observer: StageObserver | None) -> None:
+    _record_stage(observer, "validate", "skipped")
+    _record_stage(observer, "execute", "skipped")
+    _record_stage(observer, "observe", "completed")
+
+
+def _is_cancelled(value: bool | Callable[[], bool]) -> bool:
+    return value() if callable(value) else value
 
 
 def _record_post_request_failure(observer: StageObserver | None) -> None:

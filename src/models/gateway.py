@@ -24,6 +24,7 @@ class ModelDecision:
     decision: Decision
     latency_ms: int
     repaired: bool = False
+    usage_tokens: int | None = None
 
 
 class ModelGateway:
@@ -33,12 +34,20 @@ class ModelGateway:
     def classify(self, prompt: RoutingPromptView) -> IntentClassification:
         raise NotImplementedError
 
+    def conservative_decision_token_charge(self) -> int:
+        """Bound an invocation when a provider omits usage accounting."""
+
+        return 2048
+
 
 class DeterministicFakeModel(ModelGateway):
     """FIFO decision source used to make loop paths fully reproducible."""
 
-    def __init__(self, decisions: Sequence[Decision]) -> None:
+    def __init__(
+        self, decisions: Sequence[Decision], *, usage_tokens: Sequence[int | None] = ()
+    ) -> None:
         self._decisions = deque(decisions)
+        self._usage_tokens = deque(usage_tokens)
         self.prompts: list[PromptView] = []
         self.provider = "deterministic_fake"
         self.model_name = "deterministic_fake"
@@ -52,7 +61,11 @@ class DeterministicFakeModel(ModelGateway):
         return ModelDecision(
             decision=self._decisions.popleft(),
             latency_ms=max(0, round((perf_counter() - started) * 1000)),
+            usage_tokens=self._usage_tokens.popleft() if self._usage_tokens else None,
         )
+
+    def conservative_decision_token_charge(self) -> int:
+        return 1
 
 
 class OpenAICompatibleGateway(ModelGateway):
@@ -151,6 +164,9 @@ class OpenAICompatibleGateway(ModelGateway):
         except (KeyError, TypeError, ValueError, httpx.HTTPError) as error:
             raise ModelGatewayError("intent classification is invalid or unavailable") from error
 
+    def conservative_decision_token_charge(self) -> int:
+        return self._max_tokens
+
     def _request(self, prompt: PromptView, *, repair: bool) -> ModelDecision:
         started = perf_counter()
         allowed_types = json.dumps(prompt.allowed_decisions, ensure_ascii=False)
@@ -178,10 +194,15 @@ class OpenAICompatibleGateway(ModelGateway):
         }
         response = self._post(payload)
         content = response.json()["choices"][0]["message"]["content"]
+        usage = response.json().get("usage")
+        usage_tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
+        if not isinstance(usage_tokens, int) or usage_tokens < 0:
+            usage_tokens = None
         return ModelDecision(
             decision=self._parse_decision(content, prompt),
             latency_ms=round((perf_counter() - started) * 1000),
             repaired=repair,
+            usage_tokens=usage_tokens,
         )
 
     def _post(self, payload: dict[str, object]) -> httpx.Response:

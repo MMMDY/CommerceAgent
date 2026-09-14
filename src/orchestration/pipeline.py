@@ -12,10 +12,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
-from src.agent.loop import LoopResult
+from src.agent.loop import AgentStepExecutor, LoopResult
 from src.agent.validation import DecisionBoundary
+from src.orchestration.state_machine import require_transition
 from src.protocols import (
     DomainEvent,
     EventType,
@@ -25,10 +26,6 @@ from src.protocols import (
     StepStatus,
     ToolContext,
 )
-
-if TYPE_CHECKING:
-    from src.orchestration.engine import AdvanceResult, OrchestrationEngine
-
 
 MAX_STEPS = 6
 
@@ -66,6 +63,20 @@ class PipelineSequenceError(RuntimeError):
 
 class StageObserver(Protocol):
     def record(self, stage: str, *, outcome: str) -> None: ...
+
+
+class CheckpointStore(Protocol):
+    """Atomic durable boundary used by one completed pipeline round."""
+
+    def checkpoint(
+        self,
+        *,
+        context: RunContext,
+        status: RunStatus,
+        next_step: str,
+        state: dict[str, object],
+        events: tuple[DomainEvent, ...],
+    ) -> int: ...
 
 
 class PipelineJournal:
@@ -132,15 +143,29 @@ class ReducedStep:
 
 @dataclass(frozen=True, slots=True)
 class StepPipelineResult:
-    advance: AdvanceResult
+    context: RunContext
+    loop: LoopResult
     stages: tuple[PipelineStageRecord, ...]
 
 
 class StepPipeline:
-    """Build a trusted prompt, then drive exactly one engine step."""
+    """Build, execute and atomically persist exactly one readonly step.
 
-    def __init__(self, *, engine: OrchestrationEngine, prompt_builder: PromptBuilder) -> None:
-        self._engine = engine
+    The pipeline deliberately owns the persistence boundary.  This keeps the
+    dependency direction one-way: Engine -> AgentLoop -> StepPipeline ->
+    AgentStepExecutor.  In particular, an executor cannot recursively call an
+    engine to obtain another step or create a second checkpoint.
+    """
+
+    def __init__(
+        self,
+        *,
+        step_executor: AgentStepExecutor,
+        checkpoints: CheckpointStore,
+        prompt_builder: PromptBuilder,
+    ) -> None:
+        self._step_executor = step_executor
+        self._checkpoints = checkpoints
         self._prompt_builder = prompt_builder
 
     def advance(
@@ -150,7 +175,7 @@ class StepPipeline:
         boundary: DecisionBoundary,
         tool_context: ToolContext,
         deadline_at: datetime,
-        cancelled: bool = False,
+        cancelled: bool | Callable[[], bool] = False,
         token_budget_remaining: int | None = None,
         observer: Callable[[PipelineStageRecord], None] | None = None,
     ) -> StepPipelineResult:
@@ -170,7 +195,7 @@ class StepPipeline:
             raise
         journal.record(PipelineStage.BUILD_PROMPT.value, outcome=StageOutcome.COMPLETED.value)
         try:
-            advance = self._engine.advance(
+            loop = self._step_executor.execute_step(
                 context=context,
                 prompt=prompt,
                 boundary=boundary,
@@ -183,13 +208,78 @@ class StepPipeline:
         except Exception:
             journal.skip_remaining()
             raise
+        try:
+            reduced = reduce_step(context=context, prompt=prompt, result=loop)
+            require_transition(context.status, reduced.status)
+        except Exception:
+            _record_stage(journal, "reduce", "failed")
+            _record_stage(journal, "checkpoint", "skipped")
+            _record_stage(journal, "terminate", "skipped")
+            raise
+        _record_stage(journal, "reduce", "completed")
+        try:
+            version = self._checkpoints.checkpoint(
+                context=context,
+                status=reduced.status,
+                next_step=reduced.next_step,
+                state=reduced.state,
+                events=reduced.events,
+            )
+        except Exception:
+            _record_stage(journal, "checkpoint", "failed")
+            _record_stage(journal, "terminate", "skipped")
+            raise
+        _record_stage(journal, "checkpoint", "completed")
+        _record_stage(journal, "terminate", "completed")
         journal.require_complete()
-        return StepPipelineResult(advance=advance, stages=journal.records())
+        return StepPipelineResult(
+            context=context.model_copy(
+                update={
+                    "status": reduced.status,
+                    "state": reduced.state,
+                    "step_count": context.step_count + 1,
+                    "checkpoint_version": version,
+                }
+            ),
+            loop=loop,
+            stages=journal.records(),
+        )
 
-    def handoff(self, *, context: RunContext, reason: str) -> AdvanceResult:
+    def handoff(self, *, context: RunContext, reason: str) -> StepPipelineResult:
         """Persist a safe readonly-loop stop after a completed checkpoint."""
 
-        return self._engine.handoff(context=context, reason=reason)
+        require_transition(context.status, RunStatus.WAITING_HUMAN)
+        state = dict(context.state)
+        state["last_step_reason"] = reason
+        version = self._checkpoints.checkpoint(
+            context=context,
+            status=RunStatus.WAITING_HUMAN,
+            next_step="terminal",
+            state=state,
+            events=(DomainEvent(event_type=EventType.FAILED, payload={"reason": reason}),),
+        )
+        loop = LoopResult(
+            status=StepStatus.WAIT_HUMAN,
+            response=None,
+            decision_type=None,
+            reason=reason,
+        )
+        return StepPipelineResult(
+            context=context.model_copy(
+                update={
+                    "status": RunStatus.WAITING_HUMAN,
+                    "state": state,
+                    "step_count": context.step_count + 1,
+                    "checkpoint_version": version,
+                }
+            ),
+            loop=loop,
+            stages=(),
+        )
+
+
+def _record_stage(observer: StageObserver, stage: str, outcome: str) -> None:
+    observer.record(stage, outcome=outcome)
 
 
 def validate_step_inputs(

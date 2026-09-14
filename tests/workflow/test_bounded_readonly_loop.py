@@ -6,9 +6,7 @@ from uuid import uuid4
 from src.agent.loop import AgentLoop
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.models.gateway import DeterministicFakeModel
-from src.orchestration.engine import OrchestrationEngine
 from src.orchestration.pipeline import StepPipeline
-from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     Decision,
     DecisionType,
@@ -133,11 +131,8 @@ def test_bounded_loop_commits_each_round_and_exposes_observation_to_next_prompt(
     checkpoints = _Checkpoints()
     builder = _PromptBuilder()
     pipeline = StepPipeline(
-        engine=OrchestrationEngine(
-            loop=loop,
-            workflows=WorkflowRegistry((WorkflowDefinition("readonly", "1", ("lookup",)),)),
-            checkpoints=checkpoints,
-        ),
+        step_executor=loop.step_executor,
+        checkpoints=checkpoints,
         prompt_builder=builder,
     )
     boundary = DecisionBoundary(

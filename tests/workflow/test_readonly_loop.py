@@ -9,7 +9,6 @@ import pytest
 from src.agent.loop import AgentLoop
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.models.gateway import DeterministicFakeModel
-from src.orchestration.engine import OrchestrationEngine
 from src.orchestration.pipeline import (
     PIPELINE_ORDER,
     PipelineInputError,
@@ -19,7 +18,6 @@ from src.orchestration.pipeline import (
     StepPipeline,
     reduce_step,
 )
-from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     Decision,
     DecisionType,
@@ -148,12 +146,15 @@ def _pipeline(
         registry=ToolRegistry((_spec(),)),
         executor=ToolExecutor({"get_order_status": adapter}),
     )
-    engine = OrchestrationEngine(
-        loop=loop,
-        workflows=WorkflowRegistry((WorkflowDefinition("readonly_order", "1", ("lookup",)),)),
-        checkpoints=checkpoints,
+    return (
+        StepPipeline(
+            step_executor=loop.step_executor,
+            checkpoints=checkpoints,
+            prompt_builder=_PromptBuilder(prompt),
+        ),
+        model,
+        prompt,
     )
-    return StepPipeline(engine=engine, prompt_builder=_PromptBuilder(prompt)), model, prompt
 
 
 def test_readonly_step_runs_the_fixed_pipeline_and_reduces_deterministically() -> None:
@@ -193,9 +194,9 @@ def test_readonly_step_runs_the_fixed_pipeline_and_reduces_deterministically() -
     assert all(record.outcome is StageOutcome.COMPLETED for record in result.stages)
     assert [record.sequence for record in result.stages] == list(range(1, 9))
     assert len(adapter.calls) == 1
-    assert result.advance.context.status is RunStatus.RUNNING_READONLY
-    assert result.advance.context.step_count == 1
-    assert result.advance.context.state["last_observation"] == {
+    assert result.context.status is RunStatus.RUNNING_READONLY
+    assert result.context.step_count == 1
+    assert result.context.state["last_observation"] == {
         "tool_name": "get_order_status",
         "tool_version": "1",
         "attempts": 1,
@@ -208,8 +209,8 @@ def test_readonly_step_runs_the_fixed_pipeline_and_reduces_deterministically() -
         EventType.STEP_COMPLETED,
     ]
 
-    first = reduce_step(context=context, prompt=prompt, result=result.advance.loop)
-    second = reduce_step(context=context, prompt=prompt, result=result.advance.loop)
+    first = reduce_step(context=context, prompt=prompt, result=result.loop)
+    second = reduce_step(context=context, prompt=prompt, result=result.loop)
     assert first == second
 
 
@@ -247,8 +248,8 @@ def test_rejected_decision_never_reaches_the_tool_side_effect_boundary() -> None
     )
 
     assert adapter.calls == []
-    assert result.advance.context.status is RunStatus.FAILED
-    assert result.advance.loop.reason == "decision_rejected"
+    assert result.context.status is RunStatus.FAILED
+    assert result.loop.reason == "decision_rejected"
     outcomes = {record.stage: record.outcome for record in result.stages}
     assert outcomes[PipelineStage.VALIDATE] is StageOutcome.FAILED
     assert outcomes[PipelineStage.EXECUTE] is StageOutcome.SKIPPED

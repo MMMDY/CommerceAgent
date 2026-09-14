@@ -8,9 +8,7 @@ from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.harness.run_driver import AgentLoopCaseRuntime, AgentLoopPlan
 from src.harness.schema import RuntimeCaseInput
 from src.models.gateway import DeterministicFakeModel
-from src.orchestration.engine import OrchestrationEngine
 from src.orchestration.pipeline import StepPipeline
-from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     Decision,
     DecisionType,
@@ -121,11 +119,8 @@ def test_harness_runtime_drives_real_multistep_agent_loop() -> None:
     )
     checkpoints = _Checkpoints()
     pipeline = StepPipeline(
-        engine=OrchestrationEngine(
-            loop=loop,
-            workflows=WorkflowRegistry((WorkflowDefinition("readonly", "1", ("lookup",)),)),
-            checkpoints=checkpoints,
-        ),
+        step_executor=loop.step_executor,
+        checkpoints=checkpoints,
         prompt_builder=_Builder(),
     )
 

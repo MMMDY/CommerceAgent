@@ -7,6 +7,7 @@ from src.agent.loop import AgentLoop
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.models.gateway import DeterministicFakeModel
 from src.orchestration.engine import OrchestrationEngine
+from src.orchestration.pipeline import StepPipeline
 from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     Decision,
@@ -62,32 +63,43 @@ def _prompt() -> PromptView:
     )
 
 
+class _PromptBuilder:
+    def build(self, *, context: RunContext) -> PromptView:
+        del context
+        return _prompt()
+
+
 def test_engine_checkpoints_each_completed_step_and_locks_workflow_version() -> None:
     checkpoints = _Checkpoints()
-    engine = OrchestrationEngine(
-        loop=AgentLoop(
-            model=DeterministicFakeModel(
-                (
-                    Decision(
-                        type=DecisionType.RESPOND,
-                        intent="i",
-                        route="r",
-                        confidence=1,
-                        response="ok",
-                    ),
-                )
-            ),
-            validator=DecisionValidator(),
-            registry=ToolRegistry(()),
-            executor=ToolExecutor({}),
+    loop = AgentLoop(
+        model=DeterministicFakeModel(
+            (
+                Decision(
+                    type=DecisionType.RESPOND,
+                    intent="i",
+                    route="r",
+                    confidence=1,
+                    response="ok",
+                ),
+            )
         ),
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
+    )
+    engine = OrchestrationEngine(
+        loop=loop,
         workflows=WorkflowRegistry((WorkflowDefinition("w", "1", ("answer",)),)),
         checkpoints=checkpoints,
     )
     context = _context()
-    result = engine.advance(
+    result = engine.execute_readonly(
         context=context,
-        prompt=_prompt(),
+        pipeline=StepPipeline(
+            step_executor=loop.step_executor,
+            checkpoints=checkpoints,
+            prompt_builder=_PromptBuilder(),
+        ),
         boundary=DecisionBoundary("r", frozenset({DecisionType.RESPOND}), frozenset(), frozenset()),
         tool_context=ToolContext(
             request_id=uuid4(),
@@ -121,20 +133,19 @@ def test_engine_cancel_persists_terminal_checkpoint() -> None:
     assert checkpoints.calls[0][0] is RunStatus.CANCELLED
 
 
-def test_engine_handoff_persists_a_safe_loop_guard_exit() -> None:
+def test_pipeline_handoff_persists_a_safe_loop_guard_exit() -> None:
     checkpoints = _Checkpoints()
-    engine = OrchestrationEngine(
-        loop=AgentLoop(
-            model=DeterministicFakeModel(()),
-            validator=DecisionValidator(),
-            registry=ToolRegistry(()),
-            executor=ToolExecutor({}),
-        ),
-        workflows=WorkflowRegistry((WorkflowDefinition("w", "1", ("answer",)),)),
-        checkpoints=checkpoints,
+    loop = AgentLoop(
+        model=DeterministicFakeModel(()),
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
     )
-
-    result = engine.handoff(context=_context(), reason="readonly_loop_no_progress")
+    result = StepPipeline(
+        step_executor=loop.step_executor,
+        checkpoints=checkpoints,
+        prompt_builder=_PromptBuilder(),
+    ).handoff(context=_context(), reason="readonly_loop_no_progress")
 
     assert result.context.status is RunStatus.WAITING_HUMAN
     assert result.context.state["last_step_reason"] == "readonly_loop_no_progress"

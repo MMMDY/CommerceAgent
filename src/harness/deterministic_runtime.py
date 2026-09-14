@@ -22,9 +22,7 @@ from src.harness.run_driver import AgentLoopCaseRuntime, AgentLoopPlan
 from src.harness.runtime import RuntimeTrace
 from src.harness.schema import RuntimeCaseInput
 from src.models.gateway import DeterministicFakeModel
-from src.orchestration.engine import OrchestrationEngine
 from src.orchestration.pipeline import PromptBuilder, StepPipeline
-from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     Contract,
     Decision,
@@ -184,9 +182,7 @@ class _FixturePromptBuilder(PromptBuilder):
         self._prompt = prompt
 
     def build(self, *, context: RunContext) -> PromptView:
-        return self._prompt.model_copy(
-            update={"remaining_steps": max(0, 6 - context.step_count)}
-        )
+        return self._prompt.model_copy(update={"remaining_steps": max(0, 6 - context.step_count)})
 
 
 class _FixturePlanner:
@@ -235,19 +231,8 @@ class _FixturePlanner:
             remaining_steps=6,
         )
         pipeline = StepPipeline(
-            engine=OrchestrationEngine(
-                loop=self._loop,
-                workflows=WorkflowRegistry(
-                    (
-                        WorkflowDefinition(
-                            self._plan.workflow_id,
-                            self._plan.workflow_version,
-                            (self._plan.current_step,),
-                        ),
-                    )
-                ),
-                checkpoints=_FixtureCheckpoints(),
-            ),
+            step_executor=self._loop.step_executor,
+            checkpoints=_FixtureCheckpoints(),
             prompt_builder=_FixturePromptBuilder(prompt),
         )
         return AgentLoopPlan(

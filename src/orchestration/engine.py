@@ -2,26 +2,27 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 from uuid import UUID
 
-from src.agent.loop import AgentLoop, LoopResult
+from src.agent.loop import AgentLoop, AgentRunResult
 from src.agent.validation import DecisionBoundary
-from src.orchestration.pipeline import StageObserver, reduce_step, validate_step_inputs
 from src.orchestration.run_creation import RunCreationSpec, RunCreationStore
 from src.orchestration.state_machine import require_transition
 from src.orchestration.workflows import WorkflowRegistry
 from src.protocols import (
     DomainEvent,
     EventType,
-    PromptView,
     RunContext,
     RunStatus,
-    StepStatus,
     ToolContext,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.orchestration.pipeline import StepPipeline
 
 
 class CheckpointStore(Protocol):
@@ -40,12 +41,6 @@ class CheckpointStore(Protocol):
 
 class RecoveryCheckpointStore(CheckpointStore, Protocol):
     def resume(self, *, run_id: UUID, tenant_id: str) -> RunContext | None: ...
-
-
-@dataclass(frozen=True, slots=True)
-class AdvanceResult:
-    context: RunContext
-    loop: LoopResult
 
 
 class OrchestrationEngine:
@@ -92,73 +87,30 @@ class OrchestrationEngine:
         self._run_creation_store.create_run(context=context, spec=spec)
         return context
 
-    def advance(
+    def execute_readonly(
         self,
         *,
         context: RunContext,
-        prompt: PromptView,
+        pipeline: StepPipeline,
         boundary: DecisionBoundary,
-        tool_context: ToolContext,
+        tool_context: ToolContext | Callable[[RunContext], ToolContext],
         deadline_at: datetime,
-        cancelled: bool = False,
+        cancelled: Callable[[], bool] | None = None,
         token_budget_remaining: int | None = None,
-        stage_observer: StageObserver | None = None,
-    ) -> AdvanceResult:
-        workflow = self._workflows.get(
-            workflow_id=context.workflow_id, version=context.workflow_version
-        )
-        validate_step_inputs(
+    ) -> AgentRunResult:
+        """Start only a readonly executor; the loop owns every step boundary."""
+
+        self._workflows.get(workflow_id=context.workflow_id, version=context.workflow_version)
+        if context.status is not RunStatus.RUNNING_READONLY:
+            raise ValueError("readonly executor requires a readonly running run")
+        return self._loop.run(
             context=context,
-            prompt=prompt,
-            boundary=boundary,
-            tool_context=tool_context,
-            deadline_at=deadline_at,
-        )
-        if prompt.current_step not in workflow.steps:
-            raise ValueError("prompt step is not in the locked workflow")
-        loop = self._loop.run_step(
-            context=context,
-            prompt=prompt,
+            pipeline=pipeline,
             boundary=boundary,
             tool_context=tool_context,
             deadline_at=deadline_at,
             cancelled=cancelled,
             token_budget_remaining=token_budget_remaining,
-            stage_observer=stage_observer,
-        )
-        try:
-            reduced = reduce_step(context=context, prompt=prompt, result=loop)
-            require_transition(context.status, reduced.status)
-        except Exception:
-            _record_stage(stage_observer, "reduce", "failed")
-            _record_stage(stage_observer, "checkpoint", "skipped")
-            _record_stage(stage_observer, "terminate", "skipped")
-            raise
-        _record_stage(stage_observer, "reduce", "completed")
-        try:
-            version = self._checkpoints.checkpoint(
-                context=context,
-                status=reduced.status,
-                next_step=reduced.next_step,
-                state=reduced.state,
-                events=reduced.events,
-            )
-        except Exception:
-            _record_stage(stage_observer, "checkpoint", "failed")
-            _record_stage(stage_observer, "terminate", "skipped")
-            raise
-        _record_stage(stage_observer, "checkpoint", "completed")
-        _record_stage(stage_observer, "terminate", "completed")
-        return AdvanceResult(
-            context=context.model_copy(
-                update={
-                    "status": reduced.status,
-                    "state": reduced.state,
-                    "step_count": context.step_count + 1,
-                    "checkpoint_version": version,
-                }
-            ),
-            loop=loop,
         )
 
     def resume(self, *, run_id: UUID, tenant_id: str) -> RunContext:
@@ -194,39 +146,3 @@ class OrchestrationEngine:
                 "checkpoint_version": version,
             }
         )
-
-    def handoff(self, *, context: RunContext, reason: str) -> AdvanceResult:
-        """Atomically freeze a readonly run when a loop safety guard triggers."""
-
-        require_transition(context.status, RunStatus.WAITING_HUMAN)
-        state = dict(context.state)
-        state["last_step_reason"] = reason
-        version = self._checkpoints.checkpoint(
-            context=context,
-            status=RunStatus.WAITING_HUMAN,
-            next_step="terminal",
-            state=state,
-            events=(DomainEvent(event_type=EventType.FAILED, payload={"reason": reason}),),
-        )
-        next_context = context.model_copy(
-            update={
-                "status": RunStatus.WAITING_HUMAN,
-                "state": state,
-                "step_count": context.step_count + 1,
-                "checkpoint_version": version,
-            }
-        )
-        return AdvanceResult(
-            context=next_context,
-            loop=LoopResult(
-                status=StepStatus.WAIT_HUMAN,
-                response=None,
-                decision_type=None,
-                reason=reason,
-            ),
-        )
-
-
-def _record_stage(observer: StageObserver | None, stage: str, outcome: str) -> None:
-    if observer is not None:
-        observer.record(stage, outcome=outcome)
