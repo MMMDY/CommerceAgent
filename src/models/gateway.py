@@ -71,7 +71,9 @@ class OpenAICompatibleGateway(ModelGateway):
             raise ModelGatewayError("classifier configuration is unavailable")
         self._classifier_model = settings.classifier_model or ""
         self._classifier_base_url = (settings.classifier_api_base or "").rstrip("/")
-        self._classifier_api_key = settings.classifier_api_key.get_secret_value() if settings.classifier_api_key else ""
+        self._classifier_api_key = (
+            settings.classifier_api_key.get_secret_value() if settings.classifier_api_key else ""
+        )
         self._classifier_temperature = settings.classifier_temperature
         self._classifier_max_tokens = settings.classifier_max_tokens
         self._client = client or httpx.Client(timeout=self._timeout)
@@ -103,7 +105,9 @@ class OpenAICompatibleGateway(ModelGateway):
             sort_keys=True,
             separators=(",", ":"),
         )
-        self.classifier_config_hash = f"sha256:{sha256(classifier_fingerprint.encode()).hexdigest()}"
+        self.classifier_config_hash = (
+            f"sha256:{sha256(classifier_fingerprint.encode()).hexdigest()}"
+        )
 
     def decide(self, prompt: PromptView) -> ModelDecision:
         try:
@@ -123,7 +127,8 @@ class OpenAICompatibleGateway(ModelGateway):
             "Return exactly one JSON object and no prose or markdown. "
             "Required fields: intent, risk_hint, route_hint, confidence, required_slots. "
             "risk_hint must be read_only, write, or unknown; confidence must be 0 through 1. "
-            "Never return execution_mode, workflow_id, tool calls, identities, scopes, tokens, or policy values."
+            "Never return execution_mode, workflow_id, tool calls, identities, scopes, tokens, "
+            "or policy values."
         )
         payload = {
             "model": self._classifier_model,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from hmac import compare_digest
 from functools import lru_cache
+from hmac import compare_digest
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
