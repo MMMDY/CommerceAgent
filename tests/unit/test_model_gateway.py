@@ -122,3 +122,31 @@ def test_gateway_constrains_legacy_envelope_to_trusted_prompt_route() -> None:
     result = OpenAICompatibleGateway(settings, client).decide(_prompt())
     assert result.decision.route == "w"
     assert result.decision.response == "ok"
+
+
+@pytest.mark.parametrize(
+    "content",
+    (
+        "not-json",
+        '{"type":"unknown","intent":"x","route":"r","confidence":1}',
+        (
+            '{"type":"call_tool","intent":"x","route":"r","confidence":1,'
+            '"tool_calls":[{"name":"a"},{"name":"b"}]}'
+        ),
+    ),
+)
+def test_gateway_rejects_invalid_or_multi_tool_output_after_one_repair(content: str) -> None:
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    gateway = OpenAICompatibleGateway(
+        Settings(model="m", api_base="https://example.test/v1", api_key="secret"),
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    with pytest.raises(ModelGatewayError, match="invalid after one repair"):
+        gateway.decide(_prompt())
+    assert calls == 2
