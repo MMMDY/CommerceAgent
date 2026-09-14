@@ -62,6 +62,26 @@ ROUTE_TOOLS: dict[str, tuple[str, ...]] = {
 }
 
 
+_TOOL_ARGUMENT_RULES: dict[str, str] = {
+    "search_catalog": 'args must include {"query": "..."}; optional filters and limit only.',
+    "get_product_detail": 'args must include {"product_id": "..."}.',
+    "compare_products": (
+        'args must include {"product_ids": ["SKU-A", "SKU-B"]}; fields is optional.'
+    ),
+    "list_my_orders": "args may be {} or contain only status, time_range, and limit.",
+    "get_order_status": 'args must include {"order_id": "the order ID from the user"}.',
+    "get_delivery_tracking": (
+        'args must include {"order_id": "the original user order ID"}; '
+        "do not replace it with tracking_id."
+    ),
+    "get_payment_status": 'args must include {"order_id": "the order ID from the user"}.',
+    "get_refund_status": "args may contain order_id and/or refund_id.",
+    "retrieve_knowledge": (
+        'args must include {"query": "..."}; metadata_filter and top_k are optional.'
+    ),
+}
+
+
 class ApiPromptBuilder(PromptBuilder):
     def __init__(
         self,
@@ -91,7 +111,24 @@ class ApiPromptBuilder(PromptBuilder):
             actor_id=self._actor_id,
             limit=100,
         )
-        conversation = tuple(
+        tool_rules = " ".join(
+            f"{name}: {_TOOL_ARGUMENT_RULES.get(name, 'use only its declared schema.')}"
+            for name in self._tool_names
+        )
+        runtime_rules = (
+            "[runtime_tool_protocol] The route and allowed tools are locked. "
+            "For call_tool, provide exactly the required arguments for that tool. "
+            "For respond, finish, ask_user, or handoff, set tool to null and args to {}. "
+            "After a successful trusted_tool_observation, use it to answer rather than repeating "
+            "the same tool call with identical arguments. "
+            "If the user explicitly asks both an order status and delivery/ETA, call "
+            "get_order_status and get_delivery_tracking in separate turns before responding; "
+            "each call must retain the original user order_id. "
+            f"Tool argument rules: {tool_rules}"
+        )
+        conversation = (
+            Message(role="system", content=runtime_rules),
+        ) + tuple(
             Message(
                 role=cast(Literal["user", "assistant", "system"], item.role),
                 content=item.content_redacted,
@@ -99,6 +136,9 @@ class ApiPromptBuilder(PromptBuilder):
             for item in records
         )
         observation = context.state.get("last_tool_data")
+        accumulated = context.state.get("tool_data_by_name")
+        if isinstance(accumulated, dict) and accumulated:
+            observation = {"by_tool": accumulated, "last": observation}
         if observation is not None:
             conversation = conversation + (
                 Message(

@@ -369,6 +369,16 @@ def reduce_step(*, context: RunContext, prompt: PromptView, result: LoopResult) 
             # Keep the historical observation contract stable while retaining
             # the redacted payload for the next model turn.
             state["last_tool_data"] = tool_result.data
+            # Keep one redacted observation per tool so a compound readonly
+            # request can be answered after independent facts have been
+            # collected.  The reducer is the only writer, therefore the model
+            # cannot inject or edit this trusted accumulation.
+            by_tool = state.get("tool_data_by_name", {})
+            if not isinstance(by_tool, dict):
+                by_tool = {}
+            by_tool = dict(by_tool)
+            by_tool[tool_result.tool_name] = tool_result.data
+            state["tool_data_by_name"] = by_tool
             if isinstance(tool_result.data, dict):
                 ids = tool_result.data.get("evidence_ids")
                 if isinstance(ids, list) and all(isinstance(item, str) for item in ids):
@@ -421,17 +431,31 @@ def _events_for(result: LoopResult) -> tuple[DomainEvent, ...]:
                 isinstance(item, str) for item in evidence_ids
             ):
                 observed["evidence_ids"] = evidence_ids
-        return (
-            DomainEvent(
-                event_type=EventType.TOOL_CALLED,
-                payload={
-                    "tool_name": tool_result.tool_name,
-                    "tool_version": tool_result.tool_version,
-                },
-            ),
-            DomainEvent(event_type=EventType.TOOL_OBSERVED, payload=observed),
-            DomainEvent(event_type=EventType.STEP_COMPLETED, payload={"tool_called": True}),
+        events: list[DomainEvent] = []
+        # ``attempts == 0`` means validation, policy, or resource-owner
+        # authorization stopped execution before the adapter boundary.  Do
+        # not publish a misleading ``tool_called`` event in that case; the
+        # denied observation remains visible for audit and UI purposes.
+        if result.execution.attempts > 0:
+            events.append(
+                DomainEvent(
+                    event_type=EventType.TOOL_CALLED,
+                    payload={
+                        "tool_name": tool_result.tool_name,
+                        "tool_version": tool_result.tool_version,
+                    },
+                )
+            )
+        events.extend(
+            (
+                DomainEvent(event_type=EventType.TOOL_OBSERVED, payload=observed),
+                DomainEvent(
+                    event_type=EventType.STEP_COMPLETED,
+                    payload={"tool_called": result.execution.attempts > 0},
+                ),
+            )
         )
+        return tuple(events)
     if result.status is StepStatus.WAIT_USER:
         return (DomainEvent(event_type=EventType.WAITING_FOR_USER, payload={}),)
     if result.status is StepStatus.FAIL:

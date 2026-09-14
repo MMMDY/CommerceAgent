@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.agent.loop import AgentLoop
+from src.agent.loop import AgentLoop, LoopResult
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.models.gateway import DeterministicFakeModel
 from src.orchestration.pipeline import (
@@ -16,6 +16,7 @@ from src.orchestration.pipeline import (
     PipelineStageRecord,
     StageOutcome,
     StepPipeline,
+    _events_for,
     reduce_step,
 )
 from src.protocols import (
@@ -26,12 +27,15 @@ from src.protocols import (
     RetryPolicy,
     RunContext,
     RunStatus,
+    StepStatus,
     ToolContext,
+    ToolError,
+    ToolErrorCode,
     ToolResult,
     ToolRisk,
     ToolSpec,
 )
-from src.tools.executor import ToolExecutor
+from src.tools.executor import ExecutionOutcome, ToolExecutor
 from src.tools.fake import DeterministicFakeToolAdapter
 from src.tools.registry import ToolRegistry
 
@@ -212,6 +216,66 @@ def test_readonly_step_runs_the_fixed_pipeline_and_reduces_deterministically() -
     first = reduce_step(context=context, prompt=prompt, result=result.loop)
     second = reduce_step(context=context, prompt=prompt, result=result.loop)
     assert first == second
+
+
+def test_reducer_accumulates_redacted_tool_data_for_compound_readonly_answers() -> None:
+    context = _context()
+    context = context.model_copy(
+        update={"state": {"tool_data_by_name": {"get_order_status": {"status": "shipped"}}}}
+    )
+    prompt = _prompt(context)
+    result = LoopResult(
+        status=StepStatus.CONTINUE,
+        response=None,
+        decision_type=DecisionType.CALL_TOOL,
+        decision=Decision(
+            type=DecisionType.CALL_TOOL,
+            intent="track_delivery",
+            route="readonly_order",
+            confidence=1,
+            tool="get_delivery_tracking",
+            args={"order_id": "ORD-001"},
+        ),
+        execution=ExecutionOutcome(
+            result=ToolResult(
+                tool_name="get_delivery_tracking",
+                tool_version="1",
+                data={"tracking_id": "TRK-001", "eta": "2026-09-16"},
+            ),
+            attempts=1,
+        ),
+    )
+    reduced = reduce_step(context=context, prompt=prompt, result=result)
+    assert reduced.state["tool_data_by_name"] == {
+        "get_order_status": {"status": "shipped"},
+        "get_delivery_tracking": {"tracking_id": "TRK-001", "eta": "2026-09-16"},
+    }
+
+
+def test_denied_resource_does_not_emit_tool_called_event() -> None:
+    result = LoopResult(
+        status=StepStatus.CONTINUE,
+        response=None,
+        decision_type=DecisionType.CALL_TOOL,
+        execution=ExecutionOutcome(
+            result=ToolResult(
+                tool_name="get_order_status",
+                tool_version="1",
+                error=ToolError(
+                    code=ToolErrorCode.RESOURCE_NOT_FOUND,
+                    retryable=False,
+                    message="未找到可访问的资源",
+                ),
+            ),
+            attempts=0,
+        ),
+    )
+    events = _events_for(result)
+    assert [event.event_type for event in events] == [
+        EventType.TOOL_OBSERVED,
+        EventType.STEP_COMPLETED,
+    ]
+    assert events[-1].payload == {"tool_called": False}
 
 
 def test_rejected_decision_never_reaches_the_tool_side_effect_boundary() -> None:

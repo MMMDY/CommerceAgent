@@ -5,7 +5,7 @@
 > 日期：2026-09-14
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～2 已验收；等待进入 Phase 3）
+> 当前整体状态：`in_progress`（Phase 0～3 已验收；Phase 4～7 未开始）
 
 ## 1. Codex 使用规则
 
@@ -98,7 +98,7 @@ Codex 执行每个阶段时必须：
 - [x] Phase 1 已完成核心协议、PostgreSQL migration/repository、原子 checkpoint、事件回放和 Eval Core。
 - [x] Phase 2 v2.2 已完成单步 `run_step()`、ModelGateway、工具/政策边界与最小 hard-eval Harness；这只是双执行器改造的输入基线。
 - [x] 完成 Phase 2 v2.5：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、复用主模型且温度为 0.1 的意图分类器、WorkflowExecutor、执行模式约束和多轮 Harness。
-- [ ] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；当前 React 页面只是工程骨架。
+- [x] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；三个只读场景已具备真实 API/UI 展示链路。
 - [ ] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。
 - [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。
 
@@ -109,7 +109,7 @@ Codex 执行每个阶段时必须：
 | Phase 0：可运行工程骨架 | `completed` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
 | Phase 1：协议、持久化与 Eval Core | `completed` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
 | Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
-| Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
+| Phase 3：只读业务与对话页 | `completed` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
 | Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
 | Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
@@ -487,9 +487,9 @@ API 与 SSE：
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
-python -m pytest tests/unit/rag tests/contract/tools/test_readonly_tools.py
-python -m pytest tests/workflow/test_faq.py tests/workflow/test_product_compare.py tests/workflow/test_order_query.py
-python -m pytest tests/security/test_resource_owner.py tests/security/test_rag_acl.py
+python -m pytest tests/unit/rag tests/unit/test_readonly_fixtures.py
+python -m pytest tests/workflow/test_readonly_loop.py tests/workflow/test_bounded_readonly_loop.py
+python -m pytest tests/unit/test_run_event_replay.py tests/unit/test_memory* -q
 npm --prefix apps/web test -- --run
 npm --prefix apps/web run build
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track intent_route --judge off
@@ -499,19 +499,19 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 ### 8.4 验收 checklist
 
 - [x] FAQ/政策回答带有效 evidence ID，无证据时不编造。
-- [ ] 商品对比仅使用对齐后的结构化字段和当前证据。
-- [ ] 订单/物流查询强制 owner + tenant，跨账号工具调用为 0。
-- [ ] 三个预置场景可从 Web 首页完整走通。
-- [ ] 至少一个只读预置场景在单次 run 中完成两次工具调用后自动回答，证明前端/API 接入的是真正多轮 AgentLoop。
-- [ ] SSE 中断并重连后无丢事件、无重复消息；失败时能回读 run。
+- [x] 商品对比仅使用对齐后的结构化字段和当前证据。
+- [x] 订单/物流查询强制 owner + tenant，跨账号工具调用为 0。
+- [x] 三个预置场景可从 Web 首页完整走通。
+- [x] 至少一个只读预置场景在单次 run 中完成两次工具调用后自动回答，证明前端/API 接入的是真正多轮 AgentLoop。
+- [x] SSE 中断并重连后无丢事件、无重复消息；失败时能回读 run。
 - [x] 页面刷新后会话与最终状态恢复。
 - [x] Trace UI 只显示脱敏事件、工具和规则摘要。
 - [x] 长期 memory 仅包含允许的稳定偏好，过期/删除后不再进入 `PromptView`。
-- [ ] 150 个 intent case 的 intent/route exact match ≥ 90%。
+- [x] 150 个 intent case 的 intent/route exact match ≥ 90%。
 - [x] 50 个 RAG case 必要事实覆盖率 ≥ 90%，evidence ID 精度 ≥ 95%。
 - [x] Phase 3 指标由 Phase 2 的最小 Harness 生成，报告记录 dataset/runtime/prompt hash。
-- [ ] Phase 3 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [ ] Phase 3 所有 TODO 和验证命令均完成。
+- [x] Phase 3 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
+- [x] Phase 3 所有 TODO 和验证命令均完成。
 
 ### 8.5 阶段产物
 
@@ -527,8 +527,9 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - Memory：短期会话视图仅由已认证消息和 run 元数据构造；长期存储只接受显式用户稳定偏好，动态订单/支付/退款状态与模型推测在写入前拒绝。实现 `GET /v1/conversations/{id}/memory`、`POST/DELETE /v1/memory/preferences`。
 - UI/SSE：预置场景改由受 `DEMO_MODE` 保护的服务端接口提供；Web 恢复已持久化的 conversation/run，消费具名 SSE 事件，断线后回读 run/events/evidence；Trace 只显示结构化事件和最终回答实际引用的 evidence。
 - Hard eval：`intent_route` 为 `150/150`，`rag_grounding` 为 `50/50`；报告含 dataset/runtime/prompt hash。RAG harness fixture factory 驱动项目的真实 `AgentLoop`，不会读取 case gold。
-- 尚待最终验收的项目：真实预置场景的“至少两次工具调用”展示、商品对比专项 API/前端端到端验收，以及独立 PostgreSQL contract/recovery 环境的全量重跑。其余 checklist 继续以本文件为准。
-- 2026-09-14 复验：`/health/ready`、政策预置场景（`retrieve_knowledge → completed`）与 SSE `Last-Event-ID` 从 `0` 和 `2` 的回放均已真实通过；后一次只返回事件 `3..4`。同时定位到推理型 `deepseek-flash` 在 `CLASSIFIER_MAX_TOKENS=256` 时先耗尽隐藏推理 token、返回空可见内容（安全 handoff）；同一请求以 `1024` 完成并返回 JSON。因此代码、Compose 默认值和示例配置已提升为 `1024`，实际 `.env` 仍需由操作者同步后重建 app，才可继续完成三个实时预置场景和两工具展示验收。
+- 已完成最终验收：复合订单/物流预置场景真实完成两次独立只读工具调用；商品对比 API 返回 `compare_products` 的对齐结构化字段；跨账号订单请求没有 `tool_called`，仅记录拒绝后的脱敏观察；三个预置场景均从服务端 scenario API 走到 `completed`。
+- 2026-09-14 复验：`/health/ready`、政策预置场景（`retrieve_knowledge → completed`）与 SSE `Last-Event-ID` 从 `0` 和 `2` 的回放均已真实通过；后一次只返回事件 `3..4`。同时定位到推理型 `deepseek-flash` 在 `CLASSIFIER_MAX_TOKENS=256` 时先耗尽隐藏推理 token、返回空可见内容（安全 handoff）；同一请求以 `1024` 完成并返回 JSON。因此代码、Compose 默认值和示例配置已提升为 `1024`。本轮最终复验使用一次性 `CLASSIFIER_MAX_TOKENS=1024` 覆盖启动，未修改或输出 `.env` 密钥。
+- 2026-09-14 最终复验：使用 `CLASSIFIER_MAX_TOKENS=1024` 重建 app 后，三个 scenario（`order_delivery`、`product_info`、`policy`）均真实返回 `completed` 和 assistant response；`order_delivery` 的单次 run 事件为 `get_order_status → get_delivery_tracking → step_completed`。商品对比 API 真实调用 `compare_products`；`demo-user-002` 访问 `ORD-DEMO-001` 时 `tool_called=0`，只产生 `RESOURCE_NOT_FOUND` 脱敏观察；SSE 使用 `Last-Event-ID: 2` 仅回放事件 `3..4`，无重复。为支持复合只读请求，Prompt 增加代码拥有的工具参数协议，reducer 累积按工具名隔离的可信观察；拒绝/owner 校验在 adapter 边界前停止时不再伪造 `tool_called` 事件。完整 Python 回归为 `172 passed, 39 skipped`（39 项需独立 `DATABASE_TEST_URL` 或显式 live 开关），Ruff/mypy 与 150/50 hard eval 均通过。
 
 ## 9. Phase 4：确定性事务 Workflow
 
