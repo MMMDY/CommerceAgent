@@ -7,6 +7,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from time import perf_counter
 
+import httpx
+
+from src.config import Settings
 from src.protocols import Decision, PromptView
 
 
@@ -41,4 +44,54 @@ class DeterministicFakeModel(ModelGateway):
         return ModelDecision(
             decision=self._decisions.popleft(),
             latency_ms=max(0, round((perf_counter() - started) * 1000)),
+        )
+
+
+class OpenAICompatibleGateway(ModelGateway):
+    """Minimal OpenAI-compatible client with one format-repair attempt."""
+
+    def __init__(self, settings: Settings, client: httpx.Client | None = None) -> None:
+        if not settings.model or not settings.api_base or not settings.api_key:
+            raise ModelGatewayError("model configuration is unavailable")
+        self._model = settings.model
+        self._base_url = settings.api_base.rstrip("/")
+        self._api_key = settings.api_key.get_secret_value()
+        self._timeout = settings.model_timeout_seconds
+        self._max_tokens = settings.model_max_tokens
+        self._client = client or httpx.Client(timeout=self._timeout)
+
+    def decide(self, prompt: PromptView) -> ModelDecision:
+        try:
+            return self._request(prompt, repair=False)
+        except (ValueError, KeyError, TypeError):
+            try:
+                return self._request(prompt, repair=True)
+            except (ValueError, KeyError, TypeError) as error:
+                raise ModelGatewayError("model decision is invalid after one repair") from error
+
+    def _request(self, prompt: PromptView, *, repair: bool) -> ModelDecision:
+        started = perf_counter()
+        instruction = "Return only a JSON object matching the Decision schema."
+        if repair:
+            instruction += " Repair the prior format failure; do not add prose."
+        response = self._client.post(
+            f"{self._base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            json={
+                "model": self._model,
+                "temperature": 0,
+                "max_tokens": self._max_tokens,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": instruction},
+                    {"role": "user", "content": prompt.model_dump_json()},
+                ],
+            },
+        )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        return ModelDecision(
+            decision=Decision.model_validate_json(content),
+            latency_ms=round((perf_counter() - started) * 1000),
+            repaired=repair,
         )
