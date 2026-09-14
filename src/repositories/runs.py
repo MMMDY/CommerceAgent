@@ -3,16 +3,30 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from src.mutation_safety import MutationCompletion, MutationExecutionStatus
+
 
 class VersionConflictError(RuntimeError):
     """Raised when another worker advanced the same run first."""
+
+
+class MutationCompletionConflictError(RuntimeError):
+    """The durable mutation intent cannot be completed by this checkpoint."""
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxMessage:
+    event_id: UUID
+    topic: str
+    payload_redacted: dict[str, Any]
+    outbox_id: UUID = field(default_factory=uuid4)
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,11 +66,22 @@ class RunRepository:
         checkpoint: dict[str, Any],
         checkpoint_hash: str,
         events: list[dict[str, Any]],
+        mutation_completion: MutationCompletion | None = None,
+        outbox_messages: tuple[OutboxMessage, ...] = (),
     ) -> RunSnapshot:
-        """Append events/checkpoint and advance one run in one transaction."""
+        """Commit events, mutation outcome, outbox, checkpoint, and run atomically."""
 
         if not events:
             raise ValueError("a checkpoint commit must include at least one domain event")
+        event_ids = {event.get("event_id") for event in events}
+        if any(message.event_id not in event_ids for message in outbox_messages):
+            raise ValueError("an outbox message must reference an event in the same checkpoint")
+        if mutation_completion is not None and mutation_completion.status not in {
+            MutationExecutionStatus.SUCCEEDED,
+            MutationExecutionStatus.FAILED,
+            MutationExecutionStatus.UNKNOWN,
+        }:
+            raise ValueError("mutation completion must be a terminal observation")
 
         with self._engine.begin() as connection:
             current = connection.execute(
@@ -69,6 +94,30 @@ class RunRepository:
             ).one_or_none()
             if current is None:
                 raise VersionConflictError("run is unavailable or stale")
+            if mutation_completion is not None:
+                changed_mutation = connection.execute(
+                    text(
+                        "UPDATE runtime.idempotency_records SET status = :mutation_status, "
+                        "business_reference = :business_reference, "
+                        "response_redacted_json = CAST(:response AS jsonb), updated_at = now(), "
+                        "row_version = row_version + 1 "
+                        "WHERE idempotency_record_id = :record_id AND tenant_id = :tenant_id "
+                        "AND request_fingerprint = :request_fingerprint "
+                        "AND status = 'in_progress'"
+                    ),
+                    {
+                        "mutation_status": mutation_completion.status.value,
+                        "business_reference": mutation_completion.business_reference,
+                        "response": json.dumps(mutation_completion.response_redacted),
+                        "record_id": mutation_completion.record_id,
+                        "tenant_id": tenant_id,
+                        "request_fingerprint": mutation_completion.request_fingerprint,
+                    },
+                )
+                if changed_mutation.rowcount != 1:
+                    raise MutationCompletionConflictError(
+                        "mutation intent is unavailable, stale, or already completed"
+                    )
             checkpoint_sequence = current.last_checkpoint_seq + 1
             last_event_sequence = connection.execute(
                 text(
@@ -91,6 +140,23 @@ class RunRepository:
                         **event,
                         "run_id": run_id,
                         "event_seq": event_from_sequence + offset - 1,
+                    },
+                )
+            for message in outbox_messages:
+                connection.execute(
+                    text(
+                        "INSERT INTO runtime.runtime_outbox "
+                        "(outbox_id, run_id, event_id, topic, payload_redacted_json, "
+                        "available_at, created_at) "
+                        "VALUES (:outbox_id, :run_id, :event_id, :topic, "
+                        "CAST(:payload AS jsonb), now(), now())"
+                    ),
+                    {
+                        "outbox_id": message.outbox_id,
+                        "run_id": run_id,
+                        "event_id": message.event_id,
+                        "topic": message.topic,
+                        "payload": json.dumps(message.payload_redacted),
                     },
                 )
             connection.execute(

@@ -2,9 +2,77 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from enum import StrEnum
 from threading import Lock
+from typing import Any
+from uuid import UUID
+
+
+class MutationExecutionStatus(StrEnum):
+    """Durable states around one externally visible mutation."""
+
+    RESERVED = "reserved"
+    IN_PROGRESS = "in_progress"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
+
+
+class MutationAdapterStatus(StrEnum):
+    """The only outcomes a mutation adapter may report to orchestration."""
+
+    SUCCEEDED = "succeeded"
+    REJECTED = "rejected"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class MutationExecutionIntent:
+    """Identity persisted before a mutation adapter is allowed to run.
+
+    ``record_id`` is also the stable upstream idempotency key.  The request
+    fingerprint binds that key to one canonical operation without persisting
+    the original arguments in this record.
+    """
+
+    record_id: UUID
+    tenant_id: str
+    operation: str
+    request_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class StoredMutationExecution:
+    intent: MutationExecutionIntent
+    status: MutationExecutionStatus
+    business_reference: str | None = None
+    response_redacted: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MutationExecutionClaim:
+    execution: StoredMutationExecution
+    acquired: bool
+
+
+@dataclass(frozen=True, slots=True)
+class MutationAdapterResult:
+    status: MutationAdapterStatus
+    business_reference: str | None = None
+    response_redacted: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class MutationCompletion:
+    """Outcome committed atomically with the post-tool checkpoint and outbox."""
+
+    record_id: UUID
+    request_fingerprint: str
+    status: MutationExecutionStatus
+    business_reference: str | None = None
+    response_redacted: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
