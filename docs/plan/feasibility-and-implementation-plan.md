@@ -1,7 +1,8 @@
 # 电商客服 Agent 技术设计方案
 
-> 设计版本：v1.1  
-> 更新日期：2026-09-13  
+> 设计版本：v1.2
+>
+> 更新日期：2026-09-14
 > 参考目标图：[image.png](./image.png)  
 > 详细执行计划：[phased-implementation-execution-plan.md](./phased-implementation-execution-plan.md)
 
@@ -14,7 +15,7 @@
 1. **不选择任何开源 Agent 底座**；agent loop、编排引擎、运行时协议和评测 harness 全部在本项目中从零实现。
 2. **自研 AgentLoop、OrchestrationEngine、状态机、工具注册、checkpoint、trace、memory 和 EvalHarness**；业务状态、循环终止、执行顺序和恢复语义完全由本项目控制。
 3. **首版评测采用 300 个静态 case**。从许可清晰、可直接下载的公开数据中筛选并中文化，订单状态、工具结果和多轮消息全部固定，不引入模型驱动的 user simulator。
-4. **查询类能力使用自研的受限 agent loop，写操作使用自研确定性状态机。** 商品搜索、FAQ 可以在步数和工具白名单内规划、观察和重试；退款、取消、换货、修改地址不能让模型自由决定执行顺序。
+4. **采用双执行器。** 查询类能力进入自研的有界 `while` AgentLoop，由模型在每轮 checkpoint 后基于最新 observation 继续决策；所有写操作进入自研确定性 WorkflowExecutor，退款、取消、换货、修改地址等流程不能由模型自由决定执行顺序。
 5. **上线指标以最终业务状态和安全为主**。Intent Accuracy、Slot Accuracy 只能作为诊断指标，不能代表 Agent 真正完成了任务。
 6. **首版范围控制在**：商品搜索/详情/对比、订单查询、FAQ/政策问答、退款/退货申请、人工转接。支付、自动审批大额退款、跨账号操作暂不开放。
 7. **首版同步交付可展示 Web 页面**：一个页面完成对话、确认操作、引用展示和 run-level Trace 查看，另提供简化的 300-case 评测面板。
@@ -25,8 +26,8 @@
 |---|---|---|
 | Agent 内核 | 完全自研 | AgentLoop、OrchestrationEngine、状态机和 EvalHarness 均由项目实现 |
 | 模型职责 | 受限决策与表达 | 模型不持久化状态、不直接提交写操作、不决定权限和资格 |
-| 只读执行 | 受限 AgentLoop | 单步单动作、工具白名单、最大步数、deadline 和取消信号 |
-| 写操作 | 确定性状态机 | 固定执行 `authenticate → prepare → confirm → commit → verify` |
+| 只读执行器 | 有界 `while` AgentLoop | 每轮单动作、逐轮 checkpoint、工具白名单、最大步数、deadline、token budget 和取消信号 |
+| 写执行器 | 确定性 WorkflowExecutor | 固定执行 `authenticate → prepare → confirm → commit → verify`，模型不得自由选择写入节点 |
 | 状态真值 | 关系数据与业务 API | 模型上下文不是业务真值；回复成功必须来自 verified state |
 | 安全策略 | 代码强制 | owner、tenant、scope、确认、幂等和禁止动作均在 Runtime/Tool 层校验 |
 | 评测 | 自研 Harness | 300 个静态 case，硬判分与 Rubric Judge 分层，不使用用户模拟模型 |
@@ -36,34 +37,44 @@
 
 ## 2. 总体架构设计
 
-系统不是所有请求共用一条固定链路，而是在输入安全和可信 actor context 建立后，按意图与风险分流。只读请求进入受限 AgentLoop，事务请求进入确定性状态机，未知或高风险请求进入人工接管：
+系统不是所有请求共用一条固定链路，而是在输入安全和可信 actor context 建立后，按意图与风险分流。只读请求进入有界循环执行器，事务请求进入确定性工作流执行器，未知或高风险请求进入人工接管：
 
 ```mermaid
-flowchart LR
+flowchart TD
     U[用户/客服渠道] --> UI[Web 演示工作台]
     UI --> G[输入安全与账号上下文]
     G --> R[意图、风险和路由]
-    R -->|FAQ/政策| K[混合检索与有引用回答]
-    R -->|商品搜索/对比| S[约束抽取、检索、排序、事实对比]
-    R -->|订单查询| Q[鉴权后只读查询]
-    R -->|退款/取消/修改| W[确定性事务状态机]
+    R -->|FAQ/商品/订单等只读请求| L[Readonly AgentLoop.run]
+    L --> B[build_prompt]
+    B --> D[模型返回一个结构化 Decision]
+    D --> VAL[validate]
+    VAL -->|call_tool| TOOL[ToolExecutor 只读工具]
+    TOOL --> OBS[observe]
+    VAL -->|respond/finish/ask_user/handoff| REDUCE[reduce]
+    OBS --> REDUCE
+    REDUCE --> CP[原子 checkpoint]
+    CP --> TERM[terminate]
+    TERM -->|仍为 running_readonly 且预算充足| L
+    TERM -->|respond/finish| O[回复]
+    TERM -->|ask_user| A[等待用户]
+    TERM -->|handoff| H[人工转接]
+    R -->|退款/取消/修改等写请求| W[确定性 WorkflowExecutor]
     R -->|未知/高风险| H[人工转接]
     W --> P[资格检查与变更预览]
-    P --> C[向用户展示影响并显式确认]
-    C --> X[幂等提交]
+    P --> CONF[向用户展示影响并显式确认]
+    CONF --> X[幂等提交]
     X --> V[回读并验证最终状态]
-    K --> O[回复]
-    S --> O
-    Q --> O
     V --> O
     H --> O
     O --> UI
-    O --> T[Trace、评测、反馈]
-    T --> M[受控会话记忆]
+    O --> TRACE[Trace、评测、反馈]
+    TRACE --> M[受控会话记忆]
 ```
 
 架构规则：
 
+- `Router` 只能在可信风险分类后选择执行器；一旦进入写流程，后续节点只能由 WorkflowExecutor 的版本化转移表驱动，不能回退到模型自由循环。
+- Readonly AgentLoop 是真正的有界 `while` 循环，但每一轮只产生一个 Decision、至多调用一个工具，并在进入下一轮前原子提交 checkpoint；不得用一个长事务包住整个循环。
 - `Reflect` 只能帮助修正检索、参数收集或只读调用；不能在写操作失败后自行反复退款或取消。
 - 不记录模型的隐藏思维链。Trace 记录结构化决策、规则命中、工具入参/结果摘要和状态变化即可。
 - Memory 必须区分会话状态与长期用户事实。长期记忆需要来源、时间、置信度、有效期和删除机制。
@@ -76,9 +87,9 @@ flowchart LR
 本项目不引入、不封装也不复制任何现成 Agent loop、编排框架、运行时或评测 harness。以下能力全部由 `src/agent/`、`src/orchestration/` 和 `src/harness/` 中的项目代码定义：
 
 - run 生命周期：严格使用第 5.1 节的 `created/routing/running_*/waiting_*/committing/verifying/终态` 集合；
-- agent loop：`decide → validate → execute → observe → update_state → terminate`；
-- 编排引擎：节点调度、条件跳转、最大步数、超时、取消、错误分类、暂停和恢复；
-- 自研只读循环与确定性事务状态机两种执行器；
+- 只读 agent loop：外层有界 `while` + 内层固定单步管线，持续执行 `build_prompt → request_decision → validate → execute → observe → reduce → checkpoint → terminate`；
+- 编排引擎：执行器选择、单步调度、最大步数、deadline、token budget、取消、错误分类、暂停和恢复；
+- ReadonlyAgentLoop 与确定性 WorkflowExecutor 两种执行器，二者共享协议、存储和 trace，但不共享控制流；
 - Tool Registry、JSON Schema 参数校验、权限检查和结果规范化；
 - checkpoint、恢复、幂等、事件日志和并发控制；
 - prompt、模型、政策、工具 schema 的版本固定；
@@ -91,8 +102,11 @@ flowchart LR
 
 | 模块 | 职责 | 必须保证的语义 |
 |---|---|---|
-| `AgentLoop` | 驱动只读场景的决策、校验、执行、观察和终止 | 工具白名单、最大步数和终止条件由代码强制；模型不能直接调用工具 |
-| `OrchestrationEngine` | 创建、恢复、暂停、取消 run，驱动状态机和节点 | 同一 run 串行推进；崩溃后从已提交 checkpoint 恢复 |
+| `AgentLoop` | 只负责有界 `while`，反复调用 StepPipeline，直到暂停、终态或预算门禁触发 | 不直接调用模型/工具或写数据库；只使用已成功 checkpoint 的新 context 决定是否继续 |
+| `AgentStepExecutor` | 接收已构建的 PromptView，完成单轮 `request_decision → validate → execute → observe → reduce` 并返回 StepResult | 每轮至多一个只读工具；不自行循环、不写 checkpoint、不选择下一 workflow 节点 |
+| `StepPipeline` | 编排固定单轮八阶段，负责 build_prompt、调用 AgentStepExecutor、原子 checkpoint 和 terminate 检查 | `build_prompt → request_decision → validate → execute → observe → reduce → checkpoint → terminate` 顺序不可更改；checkpoint 是唯一持久化边界 |
+| `WorkflowExecutor` | 驱动写操作的版本化确定性节点，不允许模型选择任意下一节点 | 严格执行认证、资格、prepare、confirm、commit、verify；未知写入状态禁止盲目重试 |
+| `OrchestrationEngine` | 创建 run、选择执行器、获取推进 lease，并处理恢复、暂停和取消 | 不执行单轮阶段、不重复写业务 checkpoint；同一 run 串行推进，崩溃后从最后已提交 checkpoint 恢复 |
 | `WorkflowRegistry` | 注册版本化 workflow 与节点关系 | 发布后的版本不可原地修改；旧 run 可继续按旧版本执行 |
 | `RunContext` | 保存用户消息、slots、证据引用、工具结果和状态 | 结构化、可序列化、字段有来源，不保存隐藏思维链 |
 | `Router/Planner` | 意图和风险路由，只读场景生成有限动作 | 输出必须通过 schema 和 allowlist；不得直接执行工具 |
@@ -127,19 +141,68 @@ class ToolSpec:
 
 class RunContext:
     run_id: str
-    workflow_id: str
-    workflow_version: str
+    status: str
+    execution_mode: str | None   # readonly_loop | workflow；路由前/直接 handoff 可为空
+    workflow_id: str | None
+    workflow_version: str | None
     state: dict
     step_count: int
+    checkpoint_version: int
+
+class LoopResult:
+    context: RunContext
+    exit_reason: str            # completed | waiting_user | waiting_human | failed | cancelled | expired | checkpoint_conflict
+    last_step: StepResult | None
 ```
 
-loop step 或状态机节点只能返回 `StepResult`，不能自行决定持久化；OrchestrationEngine 负责“执行 step → 校验 patch/events → 原子写 checkpoint → 选择下一 step”。写工具调用使用独立的 `prepare/confirm/commit/verify` 协议，避免通用循环重试。
+AgentStepExecutor 或 workflow 节点只能返回 `StepResult`，不能自行决定持久化。只读路径由 StepPipeline 校验 patch/events、原子写 checkpoint 并生成新 context；写路径由 WorkflowExecutor 在每个确定性节点后执行同等原子 checkpoint。`AgentLoop.run()` 只根据已经提交的新 `RunContext` 决定是否继续下一轮；OrchestrationEngine 只负责加载 run、选择 AgentLoop/WorkflowExecutor、处理暂停/恢复/取消，不反向调用 AgentLoop 的内部方法。写工具调用使用独立的 `prepare/confirm/commit/verify` 协议，避免通用循环重试。
 
 ### 3.4 自研 Agent Loop
 
-只读 loop 的单步协议固定为：读取 `RunContext` → 调用模型生成结构化 `Decision` → schema/权限/风险校验 → 执行至多一个允许动作 → 写入 observation/event → 原子 checkpoint → 判断终止或进入下一步。loop 本身不允许模型修改状态、不接受任意节点名、不执行模型生成代码，并强制 `max_steps/deadline/cancellation_token`。
+只读执行器由三层组成：`AgentStepExecutor.execute_step()` 是可测试的单轮模型/工具原语，`StepPipeline.advance()` 固定八阶段并产生已 checkpoint 的新 context，`AgentLoop.run()` 是有界 `while` 主循环。工具 observation 必须先归一化并写入新的 `RunContext`，下一轮构造 PromptView 时才能看到它。
 
-事务请求在路由后退出通用 loop，进入版本化状态机。状态机的转移表、资格规则、确认 token、幂等键和补偿路径均为项目内代码；模型只能在指定节点完成意图识别、槽位抽取和面向用户的措辞生成。
+```python
+def run(context: RunContext, limits: RunLimits, pipeline: StepPipeline) -> LoopResult:
+    if context.status in TERMINAL_STATUSES:
+        return LoopResult(context=context, exit_reason=context.status)
+    if context.status in {WAITING_USER, WAITING_HUMAN}:
+        return LoopResult(context=context, exit_reason=context.status)
+    if context.status != RUNNING_READONLY:
+        return fail_closed(context, "invalid_loop_entry_state")
+
+    while context.status == RUNNING_READONLY:
+        # 检查发生在模型调用前，工具调用前还要再次检查。
+        exit_reason = check_cancel_deadline_steps_and_tokens(context, limits)
+        if exit_reason is not None:
+            # cancel -> cancelled；预算/deadline/无进展 -> waiting_human；
+            # 若接管 ticket 无法持久化则 fail closed。
+            return persist_safe_exit_and_return(context, exit_reason)
+
+        advanced = pipeline.advance(context=context, limits=limits)
+        context = advanced.context  # pipeline 已完成每轮独立短事务
+
+        if context.status in TERMINAL_STATUSES:
+            return LoopResult(context=context, exit_reason=context.status)
+        if context.status in {WAITING_USER, WAITING_HUMAN}:
+            return LoopResult(context=context, exit_reason=context.status)
+        if context.status != RUNNING_READONLY:
+            return fail_closed(context, "unexpected_loop_state")
+        # 只有 RUNNING_READONLY 且 checkpoint 已成功时才进入下一轮。
+```
+
+循环硬约束：
+
+- 默认 `max_steps=6`，每次模型决策都消耗一个 step；工具内部的一次只读重试不额外消耗 Agent step，但写入 trace。
+- 每轮最多一个工具；只允许 `read_only` 风险工具。模型建议 `prepare/low_write/commit` 时立即拒绝并进入 `waiting_human`，不能在 loop 中执行，也不能原地把同一 run 改成 workflow；真正的写请求必须由可信 Router 在新 run 创建/路由阶段选择 WorkflowExecutor。
+- deadline 使用 run 创建时锁定的绝对时间；模型调用、工具调用和进入下一轮之前都检查。超时后不得再调用模型或工具。
+- token budget 按模型实际 usage 累计；若供应商未返回 usage，则按保守上界扣减，不能因计量缺失无限循环。
+- cancellation 在每轮开始、模型返回后和工具调用前检查；已开始的只读 I/O 按 adapter deadline 结束，写操作不在该循环中发生。
+- checkpoint 失败立即退出并返回系统错误；不得用未持久化的 observation 继续请求模型。
+- `waiting_user/waiting_human/completed/failed/cancelled` 均退出循环；`waiting_confirmation/committing/verifying/running_workflow` 出现在只读执行器时属于模式越界，必须 fail closed。新消息或恢复请求重新加载 checkpoint 后再进入路由或对应执行器。
+- `max_steps`、token budget、deadline 或无进展门禁触发时，不得把未完成任务标记为 `completed`；应原子创建接管 ticket 并进入 `waiting_human`，接管持久化失败时进入 `failed`。取消信号单独进入 `cancelled`。
+- 一个 `run()` 调用不持有跨轮数据库事务或行锁；并发推进依赖 row version/lease 保证只有一个调用者成功。
+
+事务请求在路由后退出通用 loop，进入版本化 WorkflowExecutor。状态机的转移表、资格规则、确认 token、幂等键和补偿路径均为项目内代码；模型只能在指定节点完成意图识别、槽位抽取和面向用户的措辞生成。
 
 ### 3.5 自研 Eval Harness
 
@@ -426,8 +489,8 @@ EvalHarness 不依赖外部 benchmark runtime。其执行顺序固定为：加�
 |---|---|---|---|
 | `created` | run 已创建，尚未处理 | 无 | `routing`、`cancelled` |
 | `routing` | 执行输入防护、意图和风险路由 | `created`、`waiting_user` | `running_readonly`、`running_workflow`、`waiting_human`、`failed` |
-| `running_readonly` | 受限 AgentLoop 正在执行只读 step | `routing` | 自身、`waiting_user`、`waiting_human`、`completed`、`failed`、`cancelled` |
-| `running_workflow` | 确定性状态机正在推进 | `routing`、`waiting_user`、`waiting_confirmation` | 自身、`waiting_user`、`waiting_confirmation`、`committing`、`waiting_human`、`failed` |
+| `running_readonly` | 有界 AgentLoop 正在执行只读 step | `routing` | 自身、`waiting_user`、`waiting_human`、`completed`、`failed`、`cancelled` |
+| `running_workflow` | WorkflowExecutor 正按确定性节点推进 | `routing`、`waiting_user`、`waiting_confirmation` | 自身、`waiting_user`、`waiting_confirmation`、`committing`、`waiting_human`、`failed` |
 | `waiting_user` | 等待用户补充槽位 | 两类执行器 | `routing`、`running_workflow`、`cancelled`、`expired` |
 | `waiting_confirmation` | mutation 已 prepare，等待明确确认 | `running_workflow` | `committing`、`running_workflow`、`cancelled`、`expired` |
 | `committing` | Runtime 专用 commit 工具执行中 | `waiting_confirmation` | `verifying`、`waiting_human`、`failed` |
@@ -440,13 +503,15 @@ EvalHarness 不依赖外部 benchmark runtime。其执行顺序固定为：加�
 
 `completed/failed/cancelled/expired` 为终态。终态 run 不能继续推进；新用户消息必须创建新 run，并通过 `parent_run_id` 关联历史。
 
+`execution_mode` 在 `created/routing` 阶段可为空，但一旦由 Router 选定便对该 run 不可变。`waiting_user → routing` 只允许补槽并重新校验原模式；若新消息改变了任务风险或需要从只读切换为写流程，应结束当前交互并创建带 `parent_run_id` 的新 run，不能原地跨执行器切换。
+
 ### 5.2 Run 状态转移规则
 
 | 当前状态 | 触发事件 | Guard | 动作 | 下一状态 |
 |---|---|---|---|---|
 | `created` | `RUN_STARTED` | actor context 有效 | 写初始 checkpoint | `routing` |
 | `routing` | `ROUTE_SELECTED` | route/risk schema 合法 | 绑定 workflow version | 只读或 workflow 执行态 |
-| `running_readonly` | `DECISION_CALL_TOOL` | 只读工具在白名单 | 调用、记录 observation | `running_readonly` |
+| `running_readonly` | `DECISION_CALL_TOOL` | 只读工具在白名单且循环预算充足 | 调用、记录 observation、原子 checkpoint | `running_readonly`，checkpoint 成功后进入下一轮 |
 | `running_readonly` | `DECISION_ASK_USER` | missing slots 非空 | 保存待收集槽位 | `waiting_user` |
 | `running_readonly` | `DECISION_FINISH` | 有充分 evidence/tool result | 生成最终回复 | `completed` |
 | `running_workflow` | `SLOTS_MISSING` | 缺少必需字段 | 生成最小追问 | `waiting_user` |
@@ -462,21 +527,31 @@ EvalHarness 不依赖外部 benchmark runtime。其执行顺序固定为：加�
 
 ### 5.3 AgentLoop 内部状态
 
-只读 AgentLoop 不使用任意图跳转，只维护以下 step phase：
+只读 AgentLoop 不使用任意图跳转。外层只允许 `while context.status == running_readonly`，内层每轮维护以下固定 step phase：
 
 ```text
-load_context
-  → build_prompt_view
+build_prompt
   → request_decision
-  → validate_decision
-  → execute_action
-  → normalize_observation
-  → reduce_state
-  → commit_checkpoint
-  → check_termination
+  → validate
+  → execute
+  → observe
+  → reduce
+  → checkpoint
+  → terminate
 ```
 
-每次 step 的 `step_count` 加 1。默认建议 `max_steps=6`；检索/商品比较最多 4 个工具 step，剩余 step 用于澄清或输出。达到上限时不得继续请求模型，进入 `waiting_human` 或返回“暂时无法完成”的安全回复。
+`terminate` 不是无条件结束 run，而是决定“退出 `run()`”还是“使用新 checkpoint 继续下一轮”。只有以下条件全部成立才允许继续：checkpoint 已提交、状态仍为 `running_readonly`、未取消、绝对 deadline 未到、`step_count < max_steps` 且 token budget 仍为正。
+
+每次模型决策使 `step_count` 加 1。默认 `max_steps=6`；检索/商品比较最多 4 个工具 step，剩余 step 用于澄清或输出。达到上限时不得继续请求模型，应创建接管 ticket、checkpoint 后进入 `waiting_human`，并返回“暂时无法自动完成”的安全回复；不得把未完成任务标记为 `completed`。连续两轮产生等价 Decision/工具参数，或同一只读错误重复达到策略上限时，按同样规则安全接管，避免形式上未超步数但实际空转。
+
+| `run()` 检查结果 | 行为 | 是否再次调用模型 |
+|---|---|---:|
+| `running_readonly` 且所有预算充足 | 从最新 checkpoint 构建下一轮 PromptView | 是 |
+| `waiting_user` | 返回最小追问并等待新消息 | 否 |
+| `waiting_human` | 返回接管状态 | 否 |
+| `completed` | 返回最终回答 | 否 |
+| `failed/cancelled/expired` | 返回安全终态 | 否 |
+| checkpoint/状态版本冲突 | 当前调用退出，调用方回读最新 run | 否 |
 
 ### 5.4 事务状态机
 
@@ -673,9 +748,9 @@ ID 建议使用不可预测的 UUID/ULID 字符串。所有表包含 `created_at
 | `tenant_id` | VARCHAR(64) | NOT NULL | 冗余租户边界，用于强制过滤 |
 | `actor_ref` | VARCHAR(128) | NOT NULL | 当前可信 actor |
 | `status` | VARCHAR(32) | NOT NULL | 第 5.1 节定义的状态 |
-| `execution_mode` | VARCHAR(24) | NOT NULL | readonly_loop/workflow |
-| `workflow_id` | VARCHAR(64) | NOT NULL | workflow ID |
-| `workflow_version` | VARCHAR(32) | NOT NULL | 不可变版本 |
+| `execution_mode` | VARCHAR(24) | NULL/条件约束 | 执行器选定后只允许 readonly_loop/workflow；created/routing 或直接 handoff 时可为空 |
+| `workflow_id` | VARCHAR(64) | NULL/条件约束 | 执行器选定后必填；直接 handoff 时可为空 |
+| `workflow_version` | VARCHAR(32) | NULL/条件约束 | workflow_id 存在时必填，选定后不可变 |
 | `policy_version` | VARCHAR(64) | NOT NULL | 当前政策版本 |
 | `model_config_hash` | VARCHAR(80) | NOT NULL | 模型和采样配置哈希 |
 | `prompt_version` | VARCHAR(64) | NOT NULL | prompt 版本 |
@@ -690,7 +765,7 @@ ID 建议使用不可预测的 UUID/ULID 字符串。所有表包含 `created_at
 | `updated_at` | TIMESTAMP | NOT NULL | 更新时间 |
 | `row_version` | BIGINT | NOT NULL | 乐观锁 |
 
-索引：`(conversation_id, created_at)`、`(tenant_id, status, updated_at)`、`(status, deadline_at)`。对每个 conversation 建议增加“最多一个非终态 run”的条件唯一约束或等价应用锁。
+索引：`(conversation_id, created_at)`、`(tenant_id, status, updated_at)`、`(status, deadline_at)`。对每个 conversation 建议增加“最多一个非终态 run”的条件唯一约束或等价应用锁。数据库 CHECK 必须保证：`running_readonly` 只能对应 `readonly_loop`，`running_workflow/committing/verifying/waiting_confirmation` 只能对应 `workflow`；执行模式和 workflow 版本一经选定不可修改。`handoff` 是路由结果并由 `waiting_human` + 事件/ticket 表达，不是第三种 execution_mode。
 
 ### 6.5 `run_checkpoints`
 
@@ -1206,6 +1281,12 @@ Judge 输入包括 case、Agent 最终回复、脱敏 trace 摘要、实际引�
 
 ### 9.1 路由与工作流
 
+`route_intent_risk` 返回强类型 `RouteDecision`：`outcome=execute | handoff`。仅当 `outcome=execute` 时必须带 `execution_mode=readonly_loop | workflow` 和锁定的 workflow ID/version；`outcome=handoff` 直接创建 ticket 并进入 `waiting_human`，不把 `handoff` 写入 `execution_mode`。执行模式由代码根据 intent、risk 和 ToolSpec 风险复核，不能只采信模型字段；持久化非空值与 `runtime.agent_runs.execution_mode` 保持一致：
+
+- `readonly_loop`：FAQ、商品、订单、物流、支付状态等只读请求；只能解析到 `read_only` 工具。
+- `workflow`：prepare、低风险写入和 commit 类动作；进入版本化 WorkflowExecutor 后，模型不能改变节点顺序。
+- `outcome=handoff`：意图/风险不确定、权限上下文冲突、循环无进展或安全策略要求人工处理；这是路由/运行结果，不是执行器类型。
+
 推荐节点：
 
 - `ingress_guard`：限流、注入检测、PII 标识、渠道身份上下文。
@@ -1368,15 +1449,25 @@ sequenceDiagram
 
     Client->>API: 用户消息
     API->>Store: 保存 message/create run
-    API->>Runtime: advance(run_id)
+    API->>Runtime: run(run_id)
     Runtime->>Store: load checkpoint + actor context
-    Runtime->>Model: PromptView + allowed tools
-    Model-->>Runtime: Decision JSON
-    Runtime->>Policy: validate decision/resource/risk
-    Policy-->>Runtime: allow/deny + rule IDs
-    Runtime->>Tool: ToolContext + validated args
-    Tool-->>Runtime: normalized ToolResult
-    Runtime->>Store: events + checkpoint（原子）
+    Runtime->>Runtime: route execution_mode
+    alt readonly_loop
+        loop running_readonly 且预算充足
+            Runtime->>Model: PromptView + readonly tools
+            Model-->>Runtime: one Decision JSON
+            Runtime->>Policy: validate decision/resource/risk
+            Policy-->>Runtime: allow/deny + rule IDs
+            opt call_tool
+                Runtime->>Tool: ToolContext + validated readonly args
+                Tool-->>Runtime: normalized ToolResult
+            end
+            Runtime->>Store: events + checkpoint（逐轮原子）
+        end
+    else workflow
+        Runtime->>Runtime: 按版本化转移表执行当前节点
+        Runtime->>Store: node events + checkpoint（逐节点原子）
+    end
     Runtime-->>API: wait/response/final status
     API-->>Client: assistant response + pending action
 ```
@@ -1527,7 +1618,7 @@ curl -fsS http://127.0.0.1:18437/health/ready
 
 已使用服务器现有 `postgres:18-alpine` 镜像完成隔离冒烟测试：在最终规划的 `256 MiB/0.75 CPU` 限制下 PostgreSQL 18.6 成功启动，`pg_isready` 通过，`CREATE EXTENSION pg_trgm` 成功，完成 `uuid + jsonb + timestamptz` 建表、插入和查询，实测空载内存约 33 MiB。测试容器已删除，未触碰现有业务容器或宿主 PostgreSQL。
 
-当前仓库尚未实现 app/Dockerfile/Compose，因此上述结论是“服务器与已选基础设施可运行”，不是“完整 Agent 应用已可启动”。Phase 0 必须新增一个 `deployment_smoke` gate：app + DB 容器总内存上限为 640 MiB、首页可打开、ready 为 200、能创建会话并持久化，停止/重启后会话仍存在。
+Phase 0 已实现 app/Dockerfile/Compose，并在本服务器通过 `scripts/deployment_smoke.sh`：app + DB 容器按总内存上限 640 MiB 启动，首页与 live/ready 可访问，会话可创建并在 app/DB 重启后保留；工程骨架提交为 `cb1b193`。这只证明部署骨架与数据库可运行，不代表 Phase 2 双执行器、业务工具或 300-case release baseline 已完成。
 
 ### 10.6 环境变量合同
 
@@ -1608,11 +1699,14 @@ CommerceAgent/
 │       └── src/styles/      # CSS Modules/全局 tokens
 ├── src/
 │   ├── agent/
-│   │   ├── loop.py          # 自研 decide/validate/execute/observe loop
+│   │   ├── loop.py          # AgentLoop.run() 有界 while，只负责循环控制
+│   │   ├── step_executor.py # 单轮 Decision/校验/至多一次只读工具
 │   │   ├── decision.py      # 强类型 Decision 协议
 │   │   └── limits.py        # 步数、deadline、取消和预算
 │   ├── orchestration/
-│   │   ├── engine.py        # run 驱动、暂停、恢复、取消
+│   │   ├── engine.py        # 双执行器选择、run 驱动、暂停、恢复、取消
+│   │   ├── pipeline.py      # 只读循环每轮固定八阶段管线
+│   │   ├── workflow_executor.py # 写操作确定性节点执行器
 │   │   ├── state_machine.py # 自研确定性事务状态机
 │   │   ├── context.py       # RunContext 与状态 patch
 │   │   ├── step.py          # Step/StepResult 协议
@@ -1664,18 +1758,18 @@ CommerceAgent/
 
 ## 13. 实施计划摘要
 
-以 2 名后端/Agent 工程师、0.5 名前端/平台工程师和兼职客服业务专家估算。由于 agent loop、编排引擎和 harness 均从零实现，需要分别安排建设与验证：
+本摘要与详细执行计划使用同一套 Phase 0～7 编号；状态与 checklist 以 [分阶段实施与验收清单](./phased-implementation-execution-plan.md) 为唯一执行依据。
 
-| 阶段 | 时间 | 交付物 | 退出条件 |
-|---|---:|---|---|
-| 0. 协议、评测与工程骨架 | 1 周 | 核心协议、300-case、rubric、mock contract、React/FastAPI 骨架、Dockerfile/Compose、DB migration | 协议冻结；case 可解析；首页、live/ready、DB 持久化在本机通过 deployment smoke |
-| 1. 自研 Loop 与编排 | 2 周 | AgentLoop、OrchestrationEngine、WorkflowRegistry、ToolRegistry、checkpoint、TraceStore | 步数/超时/取消、暂停/恢复、并发、版本和 crash recovery 测试通过 |
-| 2. 只读 MVP + 对话页 | 2 周 | intent/route、商品详情/对比、订单/物流、对话三栏页、SSE、Trace 抽屉 | 只读评测达 gate；刷新/SSE 断线可恢复；三条只读场景可演示 |
-| 3. 事务工作流 | 2 周 | 退款/取消/修改、prepare-confirm-commit、幂等、回读校验、前端 preview/确认卡 | 60 个 workflow 静态决策达标；写合同 100%；重复点击不重复提交 |
-| 4. 自研 Harness 与安全 | 2 周 | EvalHarness、澄清/权限/接管、Rubric Judge、报告器、`/evals` 面板 | 300 case 全链路可执行，forbidden tool 0 次，面板可定位失败 case |
-| 5. 内测与灰度 | 2 周 | 客服人工验收、影子流量、首批脱敏业务 case、前端可用性修复、告警和回滚 | 隐藏业务集/P0 安全达门槛；本机连续运行 24h 无 OOM，容器上限 640 MiB，数据恢复通过 |
-
-小团队只读 MVP 约 **7 周**，达到可灰度 beta 约 **11 周**；单人完整实现建议按 14～16 周规划。该估算不包含内部订单/售后 API 尚未建设的时间。自研框架的排期不能沿用采用现成编排框架时的估算。
+| 阶段 | 当前状态 | 核心产物 | 退出条件 |
+|---|---|---|---|
+| Phase 0：可运行工程骨架 | `completed` | FastAPI/React 骨架、Docker/Compose、最小 conversation 闭环 | 本机 live/ready、持久化与重启恢复通过 |
+| Phase 1：协议、持久化与 Eval Core | `completed` | 核心协议、migration/repository、checkpoint/event、case loader 与 hard evaluator | 原子性、并发、租户隔离和数据合同通过 |
+| Phase 2：自研 Runtime 与最小 Harness | `in_progress` | 有界 `AgentLoop.run()`、AgentStepExecutor、StepPipeline、WorkflowExecutor、OrchestrationEngine、最小 hard runner | 多轮只读调用可终止/恢复；逐轮 checkpoint；写动作不能进入自由循环 |
+| Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单工具、完整消息 API/SSE、Trace UI | 三类只读场景可展示，无越权和无证据编造 |
+| Phase 4：确定性事务 Workflow | `not_started` | refund/cancel/address/return/exchange、确认卡、幂等提交与回读 | 未确认、重放、跨账号和重复写入均为 0 |
+| Phase 5：EvalHarness、Judge 与面板 | `not_started` | 300-case runner、Rubric Judge、报告持久化与评测 UI | hard fail 不可被 Judge 覆盖，forbidden tool 为 0 |
+| Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、降级、备份恢复、数据保护和运维脚本 | P0 安全与恢复断言全部通过 |
+| Phase 7：全链路验收 | `not_started` | 候选版本、正式评测报告、运行手册和发布证据 | 所有阶段门禁完成并明确标记 internal beta |
 
 ## 14. 关键风险与应对
 
@@ -1690,6 +1784,7 @@ CommerceAgent/
 | 模型/基础设施锁定 | 自建模型网关和存储接口；prompt、模型与自研 Runtime 版本进入 trace |
 | 公开语料许可不清 | 不将 JDDC/ECD/CSDS/AmazonQA 文本打包进商业产品，先取得授权或只借鉴 schema/统计分布 |
 | 自研 Runtime 出现恢复或并发错误 | event + checkpoint 原子写；同一 run 加版本锁；注入崩溃测试；状态 schema migration 测试进入 CI |
+| 只读 AgentLoop 空转或无限循环 | `max_steps + deadline + token budget + cancellation + 重复动作检测` 五重限制；每轮 checkpoint 后再继续 |
 | 自研框架范围膨胀 | 首版只实现单 Agent、两类执行器和必要节点协议，不做多 Agent、可视化编排市场或通用插件生态 |
 | 当前服务器内存紧张 | Demo 只启动 app + DB，两容器上限 640 MiB，Uvicorn/Eval 单并发；监控 OOM/swap，超阈值立即暂停评测 |
 | 磁盘剩余仅 6.5 GiB | 不保存原始模型 payload；报告、trace 和 Docker build cache 设保留期；低于 3 GiB 停止批量评测 |
@@ -1697,17 +1792,15 @@ CommerceAgent/
 
 ## 15. 近期可执行清单
 
-第一周优先完成：
+当前只推进 Phase 2 v2.3，按以下顺序闭合双执行器增量：
 
-1. 建立 `pyproject.toml`、`apps/web`、multi-stage Dockerfile、Compose 和 PostgreSQL 首个 migration，先跑通本机 deployment smoke。
-2. 评审已经生成的 300 个静态 case，重点复核 60 个工具金标和 20 个安全 case。
-3. 冻结 `RunContext`、`StepResult`、`Decision`、`ToolSpec`、`DomainEvent` 和 case schema，再写业务 step。
-4. 实现最小 AgentLoop/OrchestrationEngine：一个只读检索 loop 和一个 `prepare → confirm → commit → verify` 退款状态机。
-5. 完成 Web 演示骨架：三栏对话页、run 状态、SSE client、Trace 抽屉和确认卡空状态。
-6. 实现 EvalHarness 的 loader、fixture driver、trace adapter、硬 evaluator、Rubric Judge adapter 和报告器。
-7. 为 12 个 mock 工具定义请求/响应/错误 contract，使 60 个 workflow case 可以回放。
-8. 跑通 300-case baseline，按 track 输出通过率、forbidden tool、延迟和 token，并在 `/evals` 显示。
-9. 自研 TraceStore，并完成进程在任意节点退出后的恢复测试。
+1. 冻结 `RouteDecision`、execution_mode/workflow 可空阶段与不可变规则，新增对应 migration、repository 和合同测试。
+2. 将现有 `AgentLoop.run_step()` 的单轮职责唯一迁移到 `AgentStepExecutor.execute_step()`，消除“单步 workflow 被误称为 loop”的歧义。
+3. 让 `StepPipeline.advance()` 成为八阶段和单轮原子 checkpoint 的唯一所有者，禁止 Engine/Executor 重复提交。
+4. 实现有界 `AgentLoop.run()`，覆盖多轮 observation、取消、deadline、步数/token 预算、无进展、暂停和恢复。
+5. 实现 WorkflowExecutor 最小入口和确定性测试 workflow，证明 write ToolSpec 永远不会进入 AgentLoop。
+6. 将 RunDriver/fixture/trace 升级为直接驱动真实 `AgentLoop.run()` 到等待或终态，加入双只读工具的多轮 case。
+7. 执行 Phase 2 v2.3 的 unit/workflow/contract/recovery/harness 验证，全部通过后更新 checklist、执行记录并创建原子 commit；在此之前不得启动 Phase 3。
 
 ## 16. 数据来源与许可参考
 

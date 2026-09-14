@@ -1,10 +1,11 @@
 # 电商客服 Agent 分阶段实施与验收清单
 
-> 版本：v2.2
-> 日期：2026-09-13  
+> 版本：v2.3
+>
+> 日期：2026-09-14
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～2 已验收，Phase 3 尚未开始）
+> 当前整体状态：`in_progress`（Phase 0～1 已验收；Phase 2 因双执行器设计增量重新打开）
 
 ## 1. Codex 使用规则
 
@@ -47,7 +48,8 @@ Codex 执行每个阶段时必须：
 - AgentLoop、OrchestrationEngine、状态机、ToolRegistry、PolicyEngine 和 EvalHarness 全部由本项目实现。
 - 代码主目录只使用 `src/`，不创建旧的包目录名。
 - 模型只产生结构化 Decision，不直接执行工具、SQL、shell 或任意 HTTP。
-- 只读请求进入受限 AgentLoop；写操作进入确定性状态机。
+- 只读请求进入有界 `AgentLoop.run()` while 循环；每轮只调用一次 `StepPipeline.advance()`：AgentStepExecutor 只产生单轮结果，StepPipeline 完成原子 checkpoint，AgentLoop 才能基于新 context 决定是否继续。
+- `prepare/low_write/commit` 等写操作不得进入 AgentLoop，必须进入确定性 WorkflowExecutor。
 - 写操作必须经过 `authenticate → prepare → confirm → commit → verify`。
 - 未经 `StateVerified` 不得向用户声称写操作成功。
 - 评测固定使用 300 个静态 case，不调用 user simulator。
@@ -89,15 +91,15 @@ Codex 执行每个阶段时必须：
 - [x] 固定来源下载和校验脚本：[`scripts/download_eval_sources.py`](../../scripts/download_eval_sources.py)。
 - [x] 确定性数据构建脚本：[`scripts/build_static_eval_dataset.py`](../../scripts/build_static_eval_dataset.py)。
 
-以上 `[x]` 仅表示文件资产已存在，不表示 Runtime、Harness 或 300-case baseline 已完成。
+### 3.2 当前实现基线与缺口
 
-### 3.2 尚未实现
-
-- [ ] Python 项目骨架、API、Runtime 和 workflow。
-- [ ] React 页面、SSE client 和评测面板。
-- [ ] PostgreSQL migration 和 repository。
-- [ ] Dockerfile、Compose 和应用级 deployment smoke。
-- [ ] 300-case 实际 Agent baseline 与 Judge 报告。
+- [x] Phase 0 已完成 Python/API、React/Vite、Docker/Compose 与最小 conversation 骨架，并通过本机 deployment smoke。
+- [x] Phase 1 已完成核心协议、PostgreSQL migration/repository、原子 checkpoint、事件回放和 Eval Core。
+- [x] Phase 2 v2.2 已完成单步 `run_step()`、ModelGateway、工具/政策边界与最小 hard-eval Harness；这只是双执行器改造的输入基线。
+- [ ] 完成 Phase 2 v2.3：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、WorkflowExecutor、执行模式约束和多轮 Harness。
+- [ ] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；当前 React 页面只是工程骨架。
+- [ ] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。
+- [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。
 
 ## 4. 阶段总览
 
@@ -105,7 +107,7 @@ Codex 执行每个阶段时必须：
 |---|---|---|---|
 | Phase 0：可运行工程骨架 | `completed` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
 | Phase 1：协议、持久化与 Eval Core | `completed` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
-| Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、AgentLoop、编排、工具/政策、hard runner | 循环可终止/恢复，分 track hard eval 可执行 |
+| Phase 2：自研 Runtime 与最小 Harness | `in_progress` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
 | Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
@@ -309,7 +311,7 @@ python -m pytest tests/harness/test_loader.py tests/harness/test_hard_eval.py te
 
 ### 7.1 目标与依赖
 
-目标：用 fake model/fake tools 先完整验证自研执行语义，再连接真实模型 API，并交付能按 track 驱动 Runtime 的最小 hard-eval Harness，供 Phase 3/4 使用。
+目标：用 fake model/fake tools 完整验证双执行器语义：只读请求由有界 `AgentLoop.run()` 在 `while` 中自动推进多个单步，写请求由确定性 WorkflowExecutor 推进；再连接真实模型 API，并交付能按 track 驱动 Runtime 到暂停或终态的最小 hard-eval Harness，供 Phase 3/4 使用。
 
 依赖：Phase 1 验收完成。
 
@@ -335,15 +337,27 @@ ModelGateway：
 
 Loop 与编排：
 
-- [x] 实现 `AgentLoop.run_step()`，一步最多一个动作。
+- [x] 已有 `AgentLoop.run_step()` 单步基线，一步最多一个动作。
 - [x] 固化 `build_prompt → request_decision → validate → execute → observe → reduce → checkpoint → terminate` 顺序。
-- [x] 实现 `max_steps=6`、deadline、token budget 和 cancellation checks。
+- [x] 在单步入口实现 `max_steps=6`、deadline、token budget 和 cancellation checks。
 - [x] 实现 `OrchestrationEngine.create/advance/resume/cancel`。
 - [x] 实现 `WorkflowRegistry` 和版本锁定，已发布版本不可原地修改。
 - [x] 实现设计文档第 5.1 节全部 run 状态和非法跳转拒绝。
 - [x] 实现每 step 原子 checkpoint、崩溃恢复和事件回放。
 - [x] 实现 `TraceStore`，只保留结构化决定和脱敏 observation。
 - [x] Runtime 注册完成后扩展 `/health/ready`：检查 Tool/Workflow/Policy registry 完整性和模型配置是否存在，但不调用模型。
+- [ ] 将现有 `AgentLoop.run_step()` 单轮职责迁移/重命名为 `AgentStepExecutor.execute_step()`，并保持兼容入口只作为过渡，不允许出现两套单步实现。
+- [ ] 实现 `AgentLoop.run()` 有界 `while` 主循环；循环必须使用每轮 checkpoint 返回的新 `RunContext`，不得反复使用旧 context。
+- [ ] 每轮只调用一次 `StepPipeline.advance()`；只有八阶段全部完成且 checkpoint 已提交、状态仍为 `running_readonly` 时才能进入下一轮。
+- [ ] 每轮重新构建 PromptView，使第 N 轮脱敏 observation 成为第 N+1 轮的可信输入；禁止把 adapter 原始结果直接拼入 prompt。
+- [ ] 在每轮开始、模型返回后、工具调用前和进入下一轮前检查 cancellation、绝对 deadline、`max_steps` 与 token budget；usage 缺失时按保守上界扣减。
+- [ ] 实现循环无进展检测：连续等价 Decision/工具参数或重复只读错误达到上限后安全退出，禁止空转到 deadline。
+- [ ] 定义强类型 `RouteDecision(outcome=execute | handoff)`：execute 必须选择并持久化 `execution_mode=readonly_loop | workflow`；handoff 直接进入 `waiting_human` 且不能作为 execution_mode 持久化。
+- [ ] 新增双执行器协议、数据库 migration 和 repository 约束：created/routing/直接 handoff 允许 execution_mode/workflow 为空；选定后不可修改；run 状态与 execution_mode 必须满足设计文档第 6.4 节 CHECK。
+- [ ] 实现执行器选择与模式防火墙：AgentLoop 只接受 `read_only` 工具，任何 `prepare/low_write/commit` Decision 在副作用前拒绝并进入 `waiting_human`；同一 run 禁止原地切换 execution_mode，真正的写请求由可信 Router 创建/选择 workflow run。
+- [ ] 实现 Readonly loop 的暂停/恢复：`waiting_user/waiting_human` 立即退出；恢复时从最新 checkpoint 和创建时锁定的 model/prompt/workflow/policy/tool 版本重新进入。
+- [ ] 重构依赖方向为 `OrchestrationEngine → AgentLoop → StepPipeline → AgentStepExecutor`；禁止 StepPipeline/AgentStepExecutor 反向调度 OrchestrationEngine，避免递归和双重 checkpoint。
+- [ ] 实现 WorkflowExecutor 入口合同；写流程只按版本化转移表推进，不复用 AgentLoop 的自由 `while` 控制流。
 
 最小 Harness：
 
@@ -351,6 +365,8 @@ Loop 与编排：
 - [x] 实现 `src.harness.runner` 的 `--track/--case-id/--judge off/--timeout` 参数、失败隔离、取消和确定性 JSON 报告。
 - [x] 最小 Harness 只执行 hard eval，不包含 Judge、批次持久化或 Web 面板；这些能力在 Phase 5 完成。
 - [x] 添加 opt-in live ModelGateway smoke：仅检查真实端点认证、结构化 Decision、错误归一化和延迟，不输出 request header、密钥或完整 payload。
+- [ ] 将 `RunDriver` 从“只驱动一个 `run_step()`”升级为驱动 `AgentLoop.run()` 到暂停/终态；fixture 支持多轮 Decision 和多次只读工具 observation。
+- [ ] 增加至少一条 `tool A → observation A → tool B → observation B → finish` 的 deterministic case，并证明 Runtime 仍看不到 expected/source/forbidden/track。
 
 ### 7.3 验证命令
 
@@ -360,8 +376,12 @@ conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
 python -m pytest tests/unit
 python -m pytest tests/workflow/test_readonly_loop.py
+python -m pytest tests/workflow/test_bounded_readonly_loop.py tests/workflow/test_executor_routing.py
+python -m pytest tests/recovery/test_readonly_loop_resume.py
+scripts/run_phase1_contract_tests.sh tests/contract/test_dual_executor_routing.py
 scripts/run_phase1_contract_tests.sh tests/recovery/test_postgres_checkpoint_recovery.py tests/recovery/test_postgres_event_replay.py tests/recovery/test_postgres_mutation_recovery.py
 python -m pytest tests/harness/test_deterministic_runtime.py tests/harness/test_run_driver.py tests/harness/test_runtime_adapter.py tests/harness/test_runner.py
+python -m pytest tests/harness/test_multistep_runtime.py
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track intent_route --judge off
 RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gateway_live.py
 ```
@@ -378,12 +398,20 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gate
 - [x] fake model/fake tools 可跑通 complete、wait_user、wait_human、fail 和 cancel 路径。
 - [x] 最小 Harness 能筛选 case/track、隔离 fixture、驱动 Runtime 并生成 hard-eval JSON。
 - [x] 真实模型 smoke 返回合法 Decision 并记录脱敏的模型版本与延迟。
-- [x] Phase 2 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [x] Phase 2 所有 TODO 和验证命令均完成。
+- [ ] `AgentLoop.run()` 能连续执行至少两个只读工具调用，并让后一轮模型看到前一轮的脱敏 observation，最终自动到达 `completed`。
+- [ ] `waiting_user/waiting_human/completed/failed/cancelled/expired` 均立即退出 while，不发生额外模型或工具调用。
+- [ ] `max_steps/deadline/token budget/cancellation/无进展` 任一门禁触发后均有限终止，且最终状态和事件已 checkpoint。
+- [ ] AgentLoop 遇到 `prepare/low_write/commit` 工具建议时副作用次数为 0；相同请求由 WorkflowExecutor 按确定性节点处理。
+- [ ] 数据库拒绝 run 状态与 execution_mode 不匹配、`handoff` 作为 execution_mode，以及执行器/workflow 版本在选定后的修改。
+- [ ] 在相邻两轮 checkpoint 前后注入崩溃，恢复后从最新已提交 context 继续，不跳步、不重复持久化事件。
+- [ ] 多步 Harness 驱动的是 `AgentLoop.run()` 而不是测试专用伪循环，并输出完整的 step/tool/termination trace。
+- [ ] Phase 2 双执行器增量完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
+- [ ] Phase 2 v2.3 所有新增 TODO 和验证命令均完成。
 
 ### 7.5 阶段产物
 
 - `src/models/`、`src/agent/`、`src/orchestration/`
+- `src/agent/loop.py` 的有界 `run()`、`src/agent/step_executor.py` 的单轮执行，以及 `src/orchestration/workflow_executor.py`
 - `src/tools/registry.py`、`executor.py`
 - `src/policies/engine.py`
 - `src/telemetry/trace.py`
@@ -397,7 +425,7 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_model_gate
 
 目标：完成 FAQ/政策、商品详情/对比、订单/物流查询三类可展示的只读链路。
 
-依赖：Phase 2 验收完成。
+依赖：Phase 2 v2.3 双执行器增量验收完成。
 
 ### 8.2 实现 TODO checklist
 
@@ -423,6 +451,8 @@ Memory：
 
 API 与 SSE：
 
+- [ ] message API 根据可信 `execution_mode` 调用 `AgentLoop.run()` 或 WorkflowExecutor；只读 loop 持续执行到等待/终态，不能只执行一轮后静默返回。
+- [ ] SSE 对每轮已提交 checkpoint 发布结构化进度；客户端断线不能取消服务端循环，重连后按事件 ID 回放。
 - [ ] 扩展 Phase 0 的 `POST/GET /v1/conversations` 为完整 actor/分页合同，并实现 `GET/POST /v1/conversations/{id}/messages`。
 - [ ] 实现 `GET /v1/runs/{run_id}` 和脱敏 `GET /v1/runs/{run_id}/events`。
 - [ ] 实现 SSE 事件 ID、heartbeat、`Last-Event-ID` 续传和 run 回读恢复。
@@ -460,6 +490,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - [ ] 商品对比仅使用对齐后的结构化字段和当前证据。
 - [ ] 订单/物流查询强制 owner + tenant，跨账号工具调用为 0。
 - [ ] 三个预置场景可从 Web 首页完整走通。
+- [ ] 至少一个只读预置场景在单次 run 中完成两次工具调用后自动回答，证明前端/API 接入的是真正多轮 AgentLoop。
 - [ ] SSE 中断并重连后无丢事件、无重复消息；失败时能回读 run。
 - [ ] 页面刷新后会话与最终状态恢复。
 - [ ] Trace UI 只显示脱敏事件、工具和规则摘要。
@@ -491,6 +522,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 通用事务协议：
 
 - [ ] 实现 `authenticate/load_resource/check_eligibility/collect_slots/prepare/confirm/commit/verify`。
+- [ ] 所有 mutation route 显式选择 `execution_mode=workflow`；任何路径都不能把 write ToolSpec 交给 `AgentLoop.run()`。
 - [ ] 为取消、地址、退款、退货、换货发布独立 workflow version。
 - [ ] 实现 prepare preview：操作、资源、商品、数量、金额/差价、渠道、时效、政策版本。
 - [ ] confirmation token 绑定 actor、tenant、resource、mutation、args、preview、policy/workflow 版本和过期时间。
@@ -914,7 +946,7 @@ format/lint
 - 阶段提交：`d3b3b13`。
 - 工作区：阶段提交后仅保留用户预存的 `AGENTS.md` 未提交修改；本阶段文件均已提交。
 
-### 2026-09-14 — Phase 2 — 自研 Runtime 与最小 Harness 阶段验收
+### 2026-09-14 — Phase 2 — 自研 Runtime 与最小 Harness v2.2 单步基线验收
 
 - 状态：completed
 - 变更文件：
@@ -936,7 +968,18 @@ format/lint
   - owner/resource binding、workflow/step/scope 解析、同步 adapter deadline、模型与 prompt 指纹审计：`795e5c4`。
   - API readiness 的无网络 registry 检查：`8035717`。
   - 五轨代表性 Runtime 执行：`f1b1813`。
-- 剩余 TODO：无。Phase 3 才接入真实业务 adapter、只读 API/SSE 与页面，不将其前移到本阶段。
+- 剩余 TODO：当时无；2026-09-14 用户确认采用双执行器后，本记录只证明 `run_step()` 单步基线，不再证明 Phase 2 v2.3 的有界 `while` 主循环已经完成。
+- BLOCKED：无。
+
+### 2026-09-14 — Phase 2 — 双执行器与有界 while 设计增量
+
+- 状态：in_progress
+- 设计决定：只读任务使用 `AgentLoop.run()` 有界 while；每轮经 StepPipeline 调用 AgentStepExecutor 并先原子 checkpoint，再决定继续。写任务使用确定性 WorkflowExecutor，禁止进入模型自由循环。
+- 文档变更：
+  - `docs/plan/feasibility-and-implementation-plan.md`
+  - `docs/plan/phased-implementation-execution-plan.md`
+- 已有可复用基础：八阶段单步管线、运行版本锁定、ToolExecutor 安全边界、checkpoint/recovery、最小 Harness。
+- 剩余 TODO：实现本阶段新增的 `AgentLoop.run()`、执行器选择、WorkflowExecutor 入口、多轮 fixture/trace 以及新增恢复与安全测试。
 - BLOCKED：无。
 
 ## 15. 停止或请求用户输入的条件
