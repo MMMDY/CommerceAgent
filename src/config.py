@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     api_base: str | None = None
     api_key: SecretStr | None = None
     model_timeout_seconds: float = 15.0
-    model_max_tokens: int = 512
+    model_max_tokens: int = 2048
     model_retry_attempts: int = Field(default=2, ge=1, le=2)
     judge_model: str | None = None
     judge_api_base: str | None = None
