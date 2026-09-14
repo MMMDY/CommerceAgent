@@ -1,5 +1,5 @@
 from src.config import Settings
-from src.orchestration.readiness import check_runtime_ready
+from src.orchestration.readiness import RuntimeRegistrationContainer, check_runtime_ready
 from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.policies.engine import FactCondition, PolicyEffect, PolicyEngine, PolicyRule
 from src.protocols import RetryPolicy, ToolRisk, ToolSpec
@@ -49,3 +49,37 @@ def test_runtime_readiness_requires_local_configuration_and_every_registry() -> 
     )
     settings = Settings(model="m", api_base="https://provider.test", api_key="key")
     assert check_runtime_ready(settings=settings, **kwargs) == (True, "ready")
+
+
+def test_runtime_readiness_rejects_each_incomplete_registration() -> None:
+    settings = Settings(model="m", api_base="https://provider.test", api_key="key")
+    tools = _tools()
+    workflows = WorkflowRegistry((WorkflowDefinition("w", "1", ("s",)),))
+    policy = _policy()
+
+    assert check_runtime_ready(
+        settings=settings,
+        tools=ToolRegistry(()),
+        workflows=workflows,
+        policy=policy,
+    ) == (False, "tool_registry_incomplete")
+    assert check_runtime_ready(
+        settings=settings,
+        tools=tools,
+        workflows=WorkflowRegistry(()),
+        policy=policy,
+    ) == (False, "workflow_registry_incomplete")
+    assert check_runtime_ready(
+        settings=settings,
+        tools=tools,
+        workflows=workflows,
+        policy=None,
+    ) == (False, "policy_registry_incomplete")
+
+
+def test_unconfigured_runtime_container_fails_closed() -> None:
+    container = RuntimeRegistrationContainer.unconfigured(
+        settings=Settings(model="m", api_base="https://provider.test", api_key="key")
+    )
+
+    assert container.check() == (False, "tool_registry_incomplete")

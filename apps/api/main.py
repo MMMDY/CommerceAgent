@@ -10,8 +10,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
+from apps.api.bootstrap import ReadinessDependencies
 from src.config import Settings, get_settings
-from src.db import check_ready, get_engine
+from src.db import get_engine
 from src.repositories.conversations import Conversation, ConversationRepository
 
 DEMO_TENANT_ID = "demo-tenant"
@@ -56,8 +57,9 @@ def _web_dist() -> Path:
     return Path(__file__).resolve().parents[2] / "apps" / "web" / "dist"
 
 
-def create_app() -> FastAPI:
+def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
     app = FastAPI(title="CommerceAgent", version="0.1.0")
+    readiness_dependencies = readiness or ReadinessDependencies.default()
 
     @app.get("/health/live")
     def live() -> dict[str, str]:
@@ -65,7 +67,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health/ready")
     def ready() -> JSONResponse:
-        is_ready, reason = check_ready()
+        is_ready, reason = readiness_dependencies.check()
         if is_ready:
             return JSONResponse({"status": "ready"})
         return JSONResponse(
