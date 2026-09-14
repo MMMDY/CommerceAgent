@@ -1066,6 +1066,21 @@ format/lint
 - 剩余 TODO：RAG grounding hard-eval、evidence 引用卡、memory、demo scenarios API、异步 worker/SSE 事件推送和 Phase 3 最终验收。
 - BLOCKED：无（外部模型临时不可用不阻断本地实现）。
 
+### 2026-09-14 — Phase 4 — 确定性事务 Workflow 与接管闭环
+
+- 状态：`in_progress`（实现切片已提交，阶段级安全/恢复验收仍有未勾选项）。
+- 已完成：取消、修改地址、退款、退货、换货五类 prepare/confirm/commit/verify workflow；确认 token 绑定、刷新、单次消费和幂等预留；低风险发票/物流问题 workflow；unknown/mismatch 接管 ticket、审计事件和人工 resolve API；前端 409/刷新处理；确定性 workflow Harness 的 60 个 case。
+- 数据库：前向迁移至 `20260914_0009`，新增 `runtime.handoff_tickets`；PostgreSQL 仍只在 Compose 内部网络，未删除既有 volume。
+- 执行验证：
+  - `python -m pytest -q` → `177 passed, 39 skipped`（跳过项需显式 `DATABASE_TEST_URL` 或 live 开关）。
+  - `python -m ruff check src apps tests`、`python -m mypy src apps` → pass。
+  - `npm --prefix apps/web run build` → pass。
+  - `python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track tool_workflow --judge off` → `60/60 hard-pass`。
+  - `docker compose --profile maintenance run --rm migrate`、`GET /health/ready` → pass。
+- 关键提交：`4f48d55 feat: complete phase4 workflow harness and handoff`。
+- 剩余 TODO：补齐五类 workflow 的 PostgreSQL 回放/并发/超时/trace 脱敏专项证据，并完成 Phase 4 checklist 后再将状态改为 `completed`。
+- BLOCKED：无；未验证项不能作为已完成的生产级保证对外宣称。
+
 ## 15. 停止或请求用户输入的条件
 
 Codex 应在以下情况停止扩张实现，完成仍可安全完成的检查后，向用户说明所需决策：
