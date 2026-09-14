@@ -1,0 +1,223 @@
+"""Runtime composition used by the demo HTTP API.
+
+The API intentionally composes the project's own loop, pipeline and tool
+executor instead of introducing a third-party agent framework.  This module
+keeps that wiring out of the route handlers and provides a single bounded
+``execute_run`` entry point.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Literal, cast
+from uuid import UUID, uuid4
+
+from src.agent.loop import AgentLoop, AgentRunResult
+from src.agent.validation import DecisionBoundary, DecisionValidator
+from src.config import Settings
+from src.db import get_engine
+from src.models.gateway import OpenAICompatibleGateway
+from src.orchestration.persistence import RepositoryCheckpointStore
+from src.orchestration.pipeline import PromptBuilder, StepPipeline
+from src.orchestration.route_catalog import REQUIRED_SLOTS
+from src.protocols import (
+    DecisionType,
+    Message,
+    PromptView,
+    RunContext,
+    ToolContext,
+    ToolResult,
+)
+from src.repositories.knowledge import KnowledgeRepository
+from src.repositories.messages import MessageRepository
+from src.repositories.model_invocations import ModelInvocationRepository
+from src.repositories.runs import RunRepository
+from src.tools.adapters.knowledge import KnowledgeToolAdapter
+from src.tools.adapters.mock.read_only import MockReadOnlyAdapter, MockResourceAuthorizer
+from src.tools.executor import ToolExecutor
+
+ROUTE_TOOLS: dict[str, tuple[str, ...]] = {
+    "catalog_query": ("search_catalog", "get_product_detail", "compare_products"),
+    "order_query": ("list_my_orders", "get_order_status"),
+    "delivery_query": ("get_delivery_tracking",),
+    "refund_query": ("get_refund_status",),
+    "shipping_policy": ("retrieve_knowledge",),
+    "refund_policy": ("retrieve_knowledge",),
+    "return_policy": ("retrieve_knowledge",),
+    "payment_policy": ("retrieve_knowledge",),
+    "sales_policy": ("retrieve_knowledge",),
+    "customer_service": ("retrieve_knowledge",),
+    "technical_support": ("retrieve_knowledge",),
+    "product_query": ("retrieve_knowledge", "get_product_detail"),
+}
+
+
+class ApiPromptBuilder(PromptBuilder):
+    def __init__(
+        self,
+        messages: MessageRepository,
+        *,
+        conversation_id: UUID,
+        tenant_id: str,
+        actor_id: str,
+        route: str,
+        workflow_id: str,
+        workflow_version: str,
+        tool_names: tuple[str, ...],
+    ) -> None:
+        self._messages = messages
+        self._conversation_id = conversation_id
+        self._tenant_id = tenant_id
+        self._actor_id = actor_id
+        self._route = route
+        self._workflow_id = workflow_id
+        self._workflow_version = workflow_version
+        self._tool_names = tool_names
+
+    def build(self, *, context: RunContext) -> PromptView:
+        records = self._messages.list_for_actor(
+            conversation_id=self._conversation_id,
+            tenant_id=self._tenant_id,
+            actor_id=self._actor_id,
+            limit=100,
+        )
+        conversation = tuple(
+            Message(
+                role=cast(Literal["user", "assistant", "system"], item.role),
+                content=item.content_redacted,
+            )
+            for item in records
+        )
+        observation = context.state.get("last_tool_data")
+        if observation is not None:
+            conversation = conversation + (
+                Message(
+                    role="assistant",
+                    content="[trusted_tool_observation] "
+                    + json.dumps(observation, ensure_ascii=False),
+                ),
+            )
+        evidence_ids = tuple(
+            str(item) for item in context.state.get("evidence_ids", ()) if isinstance(item, str)
+        )
+        return PromptView(
+            system_policy_version="phase3-readonly-v1",
+            workflow_id=self._workflow_id,
+            workflow_version=self._workflow_version,
+            current_step="retrieve",
+            allowed_decisions=tuple(item.value for item in DecisionType),
+            conversation=conversation,
+            known_slots={},
+            required_slots=REQUIRED_SLOTS.get(str(context.state.get("intent", "")), ()),
+            allowed_tools=self._tool_names,
+            evidence_ids=evidence_ids,
+            remaining_steps=max(0, 6 - context.step_count),
+        )
+
+
+def execute_readonly_run(
+    *,
+    settings: Settings,
+    context: RunContext,
+    route: str,
+    messages: MessageRepository,
+    run_repository: RunRepository,
+) -> AgentRunResult:
+    """Execute a routed readonly run to a terminal/pause state."""
+
+    from src.orchestration.runtime_bootstrap import build_runtime_registrations
+
+    registrations = build_runtime_registrations(settings=settings)
+    gateway = OpenAICompatibleGateway(settings)
+    mock = MockReadOnlyAdapter()
+    adapters: dict[str, Callable[[ToolContext, dict[str, object]], ToolResult]] = {
+        name: mock.for_tool(name) for name in mock_names()
+    }
+    # Knowledge retrieval is backed by PostgreSQL; fixtures cover catalog and
+    # order APIs so the demo remains useful without business integrations.
+    engine = get_engine()
+    adapters["retrieve_knowledge"] = KnowledgeToolAdapter(KnowledgeRepository(engine))
+    executor = ToolExecutor(
+        adapters,
+        policy=registrations.policy,
+        resource_authorizer=MockResourceAuthorizer(),
+    )
+    loop = AgentLoop(
+        model=gateway,
+        validator=DecisionValidator(),
+        registry=registrations.tools,
+        executor=executor,
+        model_invocations=ModelInvocationRepository(engine),
+        policy_facts={"request.authenticated": True},
+    )
+    checkpoint_store = RepositoryCheckpointStore(run_repository)
+    workflow_id = context.workflow_id or route
+    workflow_version = context.workflow_version or "1"
+    tool_names = ROUTE_TOOLS.get(route, ("retrieve_knowledge",))
+    builder = ApiPromptBuilder(
+        messages,
+        conversation_id=context.conversation_id,
+        tenant_id=context.tenant_id,
+        actor_id=context.actor_id,
+        route=route,
+        workflow_id=workflow_id,
+        workflow_version=workflow_version,
+        tool_names=tool_names,
+    )
+    pipeline = StepPipeline(
+        step_executor=loop.step_executor, checkpoints=checkpoint_store, prompt_builder=builder
+    )
+    boundary = DecisionBoundary(
+        route=route,
+        allowed_types=frozenset(DecisionType),
+        allowed_tools=frozenset(tool_names),
+        trusted_evidence_ids=frozenset(
+            str(item) for item in context.state.get("evidence_ids", ()) if isinstance(item, str)
+        ),
+        # Some providers echo the selected tool name in ``route``.  Accept
+        # only aliases from this route's code-owned tool allowlist.
+        allowed_routes=frozenset((route, *tool_names)),
+    )
+    tool_context = ToolContext(
+        request_id=uuid4(),
+        run_id=context.run_id,
+        conversation_id=context.conversation_id,
+        tenant_id=context.tenant_id,
+        actor_id=context.actor_id,
+        scopes=(
+            "catalog:read",
+            "knowledge:read",
+            "order:read",
+            "delivery:read",
+            "payment:read",
+            "refund:read",
+        ),
+        workflow_id=workflow_id,
+        workflow_version=workflow_version,
+        current_step="retrieve",
+        policy_version=registrations.policy.version if registrations.policy else None,
+    )
+    deadline = datetime.now(UTC) + timedelta(seconds=settings.model_timeout_seconds * 4 + 10)
+    return loop.run(
+        context=context,
+        pipeline=pipeline,
+        boundary=boundary,
+        tool_context=tool_context,
+        deadline_at=deadline,
+        token_budget_remaining=settings.model_max_tokens * 3,
+    )
+
+
+def mock_names() -> tuple[str, ...]:
+    return (
+        "search_catalog",
+        "get_product_detail",
+        "compare_products",
+        "list_my_orders",
+        "get_order_status",
+        "get_delivery_tracking",
+        "get_payment_status",
+        "get_refund_status",
+    )

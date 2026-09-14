@@ -74,6 +74,7 @@ class AgentStepExecutor:
         executor: ToolExecutor,
         model_invocations: ModelInvocationRecorder | None = None,
         traces: TraceStore | None = None,
+        policy_facts: dict[str, object] | None = None,
     ) -> None:
         self._model = model
         self._validator = validator
@@ -81,6 +82,7 @@ class AgentStepExecutor:
         self._executor = executor
         self._model_invocations = model_invocations
         self._traces = traces
+        self._policy_facts = policy_facts
 
     @property
     def model_config_hash(self) -> str:
@@ -251,6 +253,7 @@ class AgentStepExecutor:
                     spec=spec,
                     context=tool_context,
                     arguments=decision.args,
+                    policy_facts=self._policy_facts,
                     deadline_at=deadline_at,
                 )
             except Exception:
@@ -356,6 +359,7 @@ class AgentLoop:
         executor: ToolExecutor,
         model_invocations: ModelInvocationRecorder | None = None,
         traces: TraceStore | None = None,
+        policy_facts: dict[str, object] | None = None,
     ) -> None:
         self._step_executor = AgentStepExecutor(
             model=model,
@@ -364,6 +368,7 @@ class AgentLoop:
             executor=executor,
             model_invocations=model_invocations,
             traces=traces,
+            policy_facts=policy_facts,
         )
 
     @property

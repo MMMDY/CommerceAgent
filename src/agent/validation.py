@@ -29,6 +29,7 @@ class DecisionBoundary:
     allowed_types: frozenset[DecisionType]
     allowed_tools: frozenset[str]
     trusted_evidence_ids: frozenset[str]
+    allowed_routes: frozenset[str] = frozenset()
 
 
 class DecisionValidator:
@@ -37,7 +38,7 @@ class DecisionValidator:
     ) -> None:
         if decision.type not in boundary.allowed_types:
             raise DecisionValidationError("decision type is not allowed")
-        if decision.route != boundary.route:
+        if decision.route != boundary.route and decision.route not in boundary.allowed_routes:
             raise DecisionValidationError("decision route does not match runtime route")
         if not set(decision.evidence_ids).issubset(boundary.trusted_evidence_ids):
             raise DecisionValidationError("decision references untrusted evidence")

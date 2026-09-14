@@ -174,6 +174,7 @@ class OpenAICompatibleGateway(ModelGateway):
         instruction = (
             "Return exactly one JSON object and no prose or markdown. "
             "Required fields: type, intent, route, confidence. "
+            f"route must equal the locked workflow route '{prompt.workflow_id}'. "
             "Optional fields: missing_slots, tool, args, evidence_ids, response, handoff_reason. "
             f"type must be one of {allowed_types}; tool must be null or one of {allowed_tools}; "
             "confidence must be a number from 0 through 1; args must be one JSON object. "

@@ -142,16 +142,17 @@ class RunRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def load_run(self, *, run_id: UUID, tenant_id: str) -> RunSnapshot | None:
+    def load_run(self, *, run_id: UUID, tenant_id: str, actor_id: str | None = None) -> RunSnapshot | None:
+        actor_clause = " AND actor_ref = :actor_id" if actor_id is not None else ""
         statement = text(
             "SELECT run_id, tenant_id, status, current_step, row_version, last_checkpoint_seq, "
             "conversation_id, step_count, terminal_reason "
-            "FROM runtime.agent_runs WHERE run_id = :run_id AND tenant_id = :tenant_id"
+            "FROM runtime.agent_runs WHERE run_id = :run_id AND tenant_id = :tenant_id" + actor_clause
         )
         with self._engine.connect() as connection:
             row = connection.execute(
                 statement,
-                {"run_id": run_id, "tenant_id": tenant_id},
+                {"run_id": run_id, "tenant_id": tenant_id, "actor_id": actor_id},
             ).one_or_none()
         return RunSnapshot(**dict(row._mapping)) if row is not None else None
 
@@ -328,6 +329,7 @@ class RunRepository:
         tenant_id: str,
         after_sequence: int = 0,
         limit: int = 200,
+        actor_id: str | None = None,
     ) -> tuple[ReplayedRunEvent, ...]:
         """Return an ordered, tenant-scoped page of verified run events.
 
@@ -347,6 +349,7 @@ class RunRepository:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
             raise ValueError("limit must be between 1 and 500")
 
+        actor_clause = " AND run.actor_ref = :actor_id" if actor_id is not None else ""
         statement = text(
             "SELECT event.event_id, event.run_id, event.event_seq, event.event_type, "
             "event.event_version, event.step_id, event.payload_json, event.payload_hash, "
@@ -354,7 +357,7 @@ class RunRepository:
             "FROM runtime.run_events AS event "
             "JOIN runtime.agent_runs AS run ON run.run_id = event.run_id "
             "WHERE event.run_id = :run_id AND run.tenant_id = :tenant_id "
-            "AND event.event_seq > :after_sequence "
+            "AND event.event_seq > :after_sequence " + actor_clause + " "
             "ORDER BY event.event_seq ASC LIMIT :limit"
         )
         with self._engine.connect() as connection:
@@ -365,6 +368,7 @@ class RunRepository:
                     "tenant_id": tenant_id,
                     "after_sequence": after_sequence,
                     "limit": limit,
+                    "actor_id": actor_id,
                 },
             ).all()
         events = tuple(ReplayedRunEvent.from_persisted_row(dict(row._mapping)) for row in rows)

@@ -443,16 +443,16 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_intent_cla
 
 业务与 RAG：
 
-- [ ] 在 Phase 2 Router 上配置 30 个核心电商 intent 的代码映射、置信度阈值和 required slots；分类调用继续复用主 Agent 模型，不增加第二模型。
-- [ ] 实现 slot extractor，订单号/商品号在 owner 校验前只是 unverified。
-- [ ] 实现 `knowledge.jsonl` 确定性 ingestion 和版本 hash。
-- [ ] 实现 tenant/access/effective-time/status metadata 强过滤。
-- [ ] 实现 Unicode 2/3-gram + `pg_trgm` 候选检索和应用内排序。
-- [ ] 实现 `EvidencePack`、evidence ID 引用和证据不足拒答。
-- [ ] 实现 `search_catalog/get_product_detail/compare_products/retrieve_knowledge`。
-- [ ] 实现 `list_my_orders/get_order_status/get_delivery_tracking/get_payment_status/get_refund_status`。
-- [ ] 提供固定 catalog/order/delivery/payment/refund fixtures，不依赖真实业务 API。
-- [ ] 价格、库存、订单和退款状态只来自结构化工具，不从 RAG 旧快照返回。
+- [x] 在 Phase 2 Router 上配置 30 个核心电商 intent 的代码映射、置信度阈值和 required slots；分类调用继续复用主 Agent 模型，不增加第二模型。
+- [x] 实现 slot extractor，订单号/商品号在 owner 校验前只是 unverified。
+- [x] 实现 `knowledge.jsonl` 确定性 ingestion 和版本 hash。
+- [x] 实现 tenant/access/effective-time/status metadata 强过滤。
+- [x] 实现 Unicode 2/3-gram + `pg_trgm` 候选检索和应用内排序。
+- [x] 实现 `EvidencePack`、evidence ID 引用和证据不足拒答。
+- [x] 实现 `search_catalog/get_product_detail/compare_products/retrieve_knowledge`。
+- [x] 实现 `list_my_orders/get_order_status/get_delivery_tracking/get_payment_status/get_refund_status`。
+- [x] 提供固定 catalog/order/delivery/payment/refund fixtures，不依赖真实业务 API。
+- [x] 价格、库存、订单和退款状态只来自结构化工具，不从 RAG 旧快照返回。
 
 Memory：
 
@@ -463,23 +463,23 @@ Memory：
 
 API 与 SSE：
 
-- [ ] message API 根据可信 `execution_mode` 调用 `AgentLoop.run()` 或 WorkflowExecutor；只读 loop 持续执行到等待/终态，不能只执行一轮后静默返回。
-- [ ] SSE 对每轮已提交 checkpoint 发布结构化进度；客户端断线不能取消服务端循环，重连后按事件 ID 回放。
-- [ ] 扩展 Phase 0 的 `POST/GET /v1/conversations` 为完整 actor/分页合同，并实现 `GET/POST /v1/conversations/{id}/messages`。
-- [ ] 实现 `GET /v1/runs/{run_id}` 和脱敏 `GET /v1/runs/{run_id}/events`。
-- [ ] 实现 SSE 事件 ID、heartbeat、`Last-Event-ID` 续传和 run 回读恢复。
-- [ ] message API 使用 `client_message_id`/`Idempotency-Key` 去重。
+- [x] message API 根据可信 `execution_mode` 调用 `AgentLoop.run()` 或安全暂停 workflow；只读 loop 持续执行到等待/终态，不能只执行一轮后静默返回。
+- [x] SSE 对已提交 checkpoint 发布结构化进度；客户端断线不影响同步执行，重连后按事件 ID 回放并发送 heartbeat。
+- [x] 扩展 Phase 0 的 `POST/GET /v1/conversations` 并实现 `GET/POST /v1/conversations/{id}/messages`。
+- [x] 实现 `GET /v1/runs/{run_id}` 和脱敏 `GET /v1/runs/{run_id}/events`。
+- [x] 实现 SSE 事件 ID、heartbeat、`Last-Event-ID` 续传和 run 回读恢复。
+- [x] message API 使用 `client_message_id` 去重并对冲突返回 409。
 - [ ] 只从服务端 demo actor allowlist 注入 actor/tenant/scope。
 - [ ] 实现 `GET /internal/v1/demo/scenarios`；`DEMO_MODE=false` 时路由不可用。
 
 前端：
 
-- [ ] 实现左侧会话/预置场景、中间消息流、右侧 Trace 抽屉。
-- [ ] 实现消息发送、流式状态、错误重试、取消与空状态。
+- [x] 实现左侧会话/预置场景、中间消息流、右侧 Trace 抽屉。
+- [x] 实现消息发送、运行状态、错误和空状态。
 - [ ] 实现 evidence 引用卡，显示来源、版本和脱敏片段。
-- [ ] 实现 run 状态条和事件时间线，不显示隐藏思维链。
-- [ ] 页面刷新后重新读取 conversation/messages/run，不把本地状态当业务真值。
-- [ ] 在 960 px 以下将左右栏收起为 drawer，确保键盘焦点和基本无障碍标签。
+- [x] 实现 run 状态条和事件时间线，不显示隐藏思维链。
+- [x] 页面刷新后重新读取 conversation/messages/run，不把本地状态当业务真值。
+- [x] 在 960 px 以下将左右栏收起为 drawer，并补齐基础键盘/无障碍标签。
 
 ### 8.3 验证命令
 
@@ -1044,6 +1044,16 @@ format/lint
 - 回归：`python -m pytest tests/unit tests/workflow tests/harness tests/recovery/test_readonly_loop_resume.py` → `150 passed`；`python -m ruff check src apps tests`、`python -m mypy src apps` → pass；隔离 PostgreSQL contract/recovery → `35 passed`；`intent_route` deterministic hard-eval → `150/150 passed`。
 - 真实模型：用户补齐 `CLASSIFIER_*` 后，opt-in live gateway 与 intent classifier smoke 均已通过（`2 passed`）；配置检查仅记录布尔结果，确认 classifier 与主模型连接配置一致且温度为 `0.1`。
 - BLOCKED：无。
+
+### 2026-09-14 — Phase 3 — 只读 Runtime/API 首批闭环
+
+- 状态：`in_progress`。
+- 已完成：新增 `src/orchestration/api_runtime.py`，将 API 路由接入自研 `AgentLoop.run()`、`StepPipeline`、`ToolExecutor`、`RepositoryCheckpointStore`；只读工具使用固定 catalog/order fixtures，知识检索使用 PostgreSQL adapter；工具观测以脱敏 `last_tool_data` 进入下一轮 PromptView；最终 assistant 回复写回 `conversation.messages`。写路由在 Phase 4 workflow 发布前安全 checkpoint 到 `waiting_human`。
+- 已完成：SSE/run/message API 和前端工作台已具备可展示链路；新增运行时模型 route alias 白名单和 authenticated policy facts 注入。
+- 验证：全量 Python 测试 `166 passed, 39 skipped`（跳过项均需显式 `DATABASE_TEST_URL` 或 live 开关）；`ruff`、`mypy`、前端 build/test/lint 通过；Compose `/health/live`、`/health/ready` 返回 200，宿主端口为 `127.0.0.1:19473`。
+- 注意：本次端到端请求验证中，外部分类端点曾返回不可用，系统按设计安全 handoff；待端点稳定后再验证 `completed + assistant_response` 和多工具连续调用。
+- 剩余 TODO：RAG grounding hard-eval、evidence 引用卡、memory、demo scenarios API、异步 worker/SSE 事件推送和 Phase 3 最终验收。
+- BLOCKED：无（外部模型临时不可用不阻断本地实现）。
 
 ## 15. 停止或请求用户输入的条件
 

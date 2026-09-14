@@ -49,6 +49,15 @@ DEFAULT_INTENT_ROUTE_RULES: tuple[IntentRouteRule, ...] = tuple(
     )
 )
 
+# Human-agent requests are part of the taxonomy but intentionally have no
+# automatic executor.  Keeping them in the same versioned catalog prevents an
+# unrecognised label from accidentally falling through to a readonly loop.
+DEFAULT_INTENT_ROUTE_RULES += (
+    IntentRouteRule(
+        "human_agent", _READONLY, "human_agent", "1", force_handoff=True
+    ),
+)
+
 # Slot names are hints for the classifier/prompt only.  Values are always
 # unverified until a trusted tool reads the resource.
 REQUIRED_SLOTS: dict[str, tuple[str, ...]] = {

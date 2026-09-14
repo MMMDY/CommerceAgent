@@ -46,6 +46,7 @@ class IntentRouteRule:
     workflow_id: str
     workflow_version: str
     min_confidence: float = 0.8
+    force_handoff: bool = False
 
 
 class IntentRouter:
@@ -65,6 +66,8 @@ class IntentRouter:
         rule = self._rules.get(candidate.intent)
         if rule is None:
             return self._handoff("UNKNOWN_INTENT")
+        if rule.force_handoff:
+            return self._handoff("INTENT_REQUIRES_HUMAN")
         if candidate.confidence < rule.min_confidence:
             return self._handoff("LOW_CLASSIFICATION_CONFIDENCE")
 

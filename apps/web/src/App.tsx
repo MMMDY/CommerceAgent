@@ -30,6 +30,7 @@ export function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sseConnected, setSseConnected] = useState(false);
 
   const closeDrawer = () => setDrawer(null);
   const conversationPath = useMemo(
@@ -47,6 +48,14 @@ export function App() {
   useEffect(() => {
     if (!conversationPath) return;
     void api<Message[]>(`${conversationPath}/messages`).then(setMessages).catch((reason: Error) => setError(reason.message));
+  }, [conversationPath]);
+
+  useEffect(() => {
+    if (!conversationPath) return;
+    const stream = new EventSource(`${conversationPath}/stream`);
+    stream.onopen = () => setSseConnected(true);
+    stream.onerror = () => setSseConnected(false);
+    return () => stream.close();
   }, [conversationPath]);
 
   const send = async (content: string) => {
@@ -79,7 +88,7 @@ export function App() {
       <section className={styles.workspace} aria-live="polite">
         <p className={styles.eyebrow}>{route === "chat" ? "只读演示" : route}</p><h2>{route === "chat" ? "对话工作台" : route === "run" ? "执行详情" : "评测面板"}</h2>
         {route !== "chat" ? <p>从左侧返回对话，或通过 API 查询已持久化的 run 与事件。</p> : <>
-          <div className={styles.statusBar}><span>{conversation ? "会话已连接" : "正在连接…"}</span>{run ? <span>Run · {run.status}</span> : null}</div>
+          <div className={styles.statusBar}><span>{conversation ? "会话已连接" : "正在连接…"}{sseConnected ? " · SSE 已连接" : ""}</span>{run ? <span>Run · {run.status}</span> : null}</div>
           <div className={styles.messageList} aria-label="消息流">{messages.length === 0 ? <p className={styles.empty}>选择一个预置场景或输入问题开始。</p> : messages.map((message) => <article className={message.role === "user" ? styles.userMessage : styles.assistantMessage} key={message.id}><span>{message.role === "user" ? "你" : "Agent"}</span><p>{message.content}</p></article>)}</div>
           {error ? <p role="alert" className={styles.error}>{error}</p> : null}
           <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); void send(input); }}><input aria-label="输入消息" value={input} onChange={(event) => setInput(event.target.value)} placeholder="例如：订单 ORD-DEMO-001 到哪了？" disabled={!conversation || busy} /><button type="submit" disabled={!conversation || busy || !input.trim()}>{busy ? "发送中" : "发送"}</button></form>

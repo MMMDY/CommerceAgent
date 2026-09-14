@@ -354,6 +354,14 @@ def reduce_step(*, context: RunContext, prompt: PromptView, result: LoopResult) 
         if error is not None:
             observation["error_code"] = error.code.value
             observation["retryable"] = error.retryable
+        elif tool_result.data is not None:
+            # Keep the historical observation contract stable while retaining
+            # the redacted payload for the next model turn.
+            state["last_tool_data"] = tool_result.data
+            if isinstance(tool_result.data, dict):
+                ids = tool_result.data.get("evidence_ids")
+                if isinstance(ids, list) and all(isinstance(item, str) for item in ids):
+                    state["evidence_ids"] = ids
         state["last_observation"] = observation
     next_step = (
         prompt.current_step
