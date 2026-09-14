@@ -1083,7 +1083,7 @@ format/lint
   - `npm --prefix apps/web run build` → pass。
   - `python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --track tool_workflow --judge off` → `60/60 hard-pass`。
   - `docker compose --profile maintenance run --rm migrate`、`GET /health/ready` → pass（宿主端口 `127.0.0.1:19473`）。
-- 关键提交：`4f48d55`（实现）、`5bcb5a2`（阶段记录）；本轮最终验证与测试补充提交见后续 commit。
+- 关键提交：`4f48d55`（实现）、`5bcb5a2`（阶段记录）、`231a01c`（最终 workflow contract/recovery 验收）；最终验收后工作区保持 clean。
 - 剩余 TODO：无（Phase 5 的 Rubric Judge/300-case 报告属于后续阶段）。
 - BLOCKED：无。
 
