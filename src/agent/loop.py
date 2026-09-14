@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Protocol
 
 from src.agent.validation import DecisionBoundary, DecisionValidationError, DecisionValidator
-from src.models.gateway import ModelGateway, ModelGatewayError
+from src.models.gateway import ModelDecision, ModelGateway, ModelGatewayError
 from src.protocols import Decision, DecisionType, PromptView, RunContext, StepStatus, ToolContext
 from src.telemetry.trace import TraceStore
 from src.tools.executor import ExecutionOutcome, ToolExecutor
@@ -20,7 +20,7 @@ class ModelInvocationRecorder(Protocol):
         *,
         context: RunContext,
         prompt: PromptView,
-        result: object,
+        result: ModelDecision,
         provider: str,
         model: str,
         config_hash: str,
