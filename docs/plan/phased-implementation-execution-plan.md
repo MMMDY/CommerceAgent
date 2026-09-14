@@ -1028,6 +1028,13 @@ format/lint
 - 关键提交：`88751a0`、`c711e5d`、`8f6c6dd`、`e13c3db`、`1f4e5f2`。
 - 已确认配置阻塞：不读取或输出任何密钥的本地配置检查显示主 Agent 已配置、`CLASSIFIER_*` 未配置；因此 `/health/ready` 和 Compose 按 fail-closed 设计拒绝启动，两个 `RUN_LIVE_MODEL_TEST=1` 命令未执行。待用户将 `.env` 中四个 `CLASSIFIER_*` 填为与主 Agent 相同的 model/base/key 和 `0.1` 后，才能完成真实端点验证和 Phase 2 最终验收。
 
+### 2026-09-14 — Phase 2 — 路由前 Run 创建闭环
+
+- 状态：`in_progress`。
+- 已完成：`RunCreationSpec`、Engine 与 `RunLifecycleRepository` 现在可真实创建 `created` 状态且 `execution_mode/workflow` 均为空的 run；Router 之后以一次受约束更新绑定执行器和 workflow。此路径不再依赖测试中的原始 SQL 插入。
+- 关键提交：`212e523`。
+- 验证：`tests/unit/test_run_creation.py`、`tests/unit/test_orchestration_engine.py` 通过；隔离 PostgreSQL `tests/contract/test_run_lifecycle_repository.py` 为 `4 passed`。
+
 ## 15. 停止或请求用户输入的条件
 
 Codex 应在以下情况停止扩张实现，完成仍可安全完成的检查后，向用户说明所需决策：
