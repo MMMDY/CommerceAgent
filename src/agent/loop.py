@@ -9,6 +9,7 @@ from typing import Protocol
 from src.agent.validation import DecisionBoundary, DecisionValidationError, DecisionValidator
 from src.models.gateway import ModelGateway, ModelGatewayError
 from src.protocols import Decision, DecisionType, PromptView, RunContext, StepStatus, ToolContext
+from src.telemetry.trace import TraceStore
 from src.tools.executor import ExecutionOutcome, ToolExecutor
 from src.tools.registry import ToolRegistry, ToolRegistryError
 
@@ -45,12 +46,14 @@ class AgentLoop:
         registry: ToolRegistry,
         executor: ToolExecutor,
         model_invocations: ModelInvocationRecorder | None = None,
+        traces: TraceStore | None = None,
     ) -> None:
         self._model = model
         self._validator = validator
         self._registry = registry
         self._executor = executor
         self._model_invocations = model_invocations
+        self._traces = traces
 
     def run_step(
         self,
@@ -115,6 +118,25 @@ class AgentLoop:
                     reason="model_audit_failed",
                 )
         decision = model_result.decision
+        if self._traces is not None:
+            try:
+                self._traces.append(
+                    kind="decision",
+                    payload={
+                        "type": decision.type.value,
+                        "intent": decision.intent,
+                        "route": decision.route,
+                        "tool": decision.tool,
+                        "evidence_count": len(decision.evidence_ids),
+                    },
+                )
+            except Exception:
+                return LoopResult(
+                    status=StepStatus.FAIL,
+                    response=None,
+                    decision_type=None,
+                    reason="trace_persistence_failed",
+                )
         if decision.type is DecisionType.CALL_TOOL:
             try:
                 spec = self._registry.get(name=decision.tool or "", version="1")

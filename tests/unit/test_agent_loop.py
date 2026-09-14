@@ -19,6 +19,7 @@ from src.protocols import (
     ToolRisk,
     ToolSpec,
 )
+from src.telemetry.trace import TraceStore
 from src.tools.executor import ToolExecutor
 from src.tools.registry import ToolRegistry
 
@@ -318,3 +319,42 @@ def test_loop_executes_at_most_one_fake_tool_per_step() -> None:
     )
     assert result.status is StepStatus.CONTINUE
     assert result.execution is not None and result.execution.attempts == 1
+
+
+def test_loop_trace_contains_only_structured_decision_metadata() -> None:
+    traces = TraceStore()
+    context = _context()
+    loop = AgentLoop(
+        model=DeterministicFakeModel(
+            (
+                Decision(
+                    type=DecisionType.RESPOND,
+                    intent="x",
+                    route="r",
+                    confidence=1,
+                    response="private response",
+                ),
+            )
+        ),
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
+        traces=traces,
+    )
+    loop.run_step(
+        context=context,
+        prompt=_prompt(),
+        boundary=DecisionBoundary("r", frozenset({DecisionType.RESPOND}), frozenset(), frozenset()),
+        tool_context=ToolContext(
+            request_id=uuid4(),
+            run_id=context.run_id,
+            conversation_id=context.conversation_id,
+            tenant_id="t",
+            actor_id="a",
+            scopes=(),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+    )
+    record = traces.records()[0]
+    assert record.kind == "decision"
+    assert "private response" not in str(record.payload)
