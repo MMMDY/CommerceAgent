@@ -39,6 +39,16 @@ def test_order_reads_are_owner_scoped_even_if_another_order_id_is_supplied() -> 
     ) is False
 
 
+def test_delivery_read_is_owner_scoped_even_when_order_and_tracking_are_combined() -> None:
+    """The compound demo route still receives no cross-account delivery fact."""
+
+    adapter = MockReadOnlyAdapter()
+    allowed = adapter.get_delivery_tracking(context("demo-user-001"), {"order_id": "ORD-DEMO-001"})
+    denied = adapter.get_delivery_tracking(context("demo-user-001"), {"order_id": "ORD-DEMO-003"})
+    assert allowed.error is None
+    assert denied.error is not None
+
+
 def test_list_orders_never_leaks_orders_from_other_actor() -> None:
     adapter = MockReadOnlyAdapter()
     result = adapter.list_my_orders(context("demo-user-002"), {})

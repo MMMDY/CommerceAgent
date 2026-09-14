@@ -219,7 +219,7 @@ EvalHarness 不依赖外部 benchmark runtime。其执行顺序固定为：加�
 - `purpose=intent_classification`：读取裁剪后的 `RoutingPromptView`，使用独立的 `intent-classifier` Prompt 和 `IntentClassification` Schema；不暴露工具，也不执行 AgentLoop。
 - `purpose=agent_decision`：只在执行器与 workflow 已由代码锁定后读取 `PromptView`，返回结构化 `Decision`。
 
-分类 profile 从 `.env` 的 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY` 读取配置，但启动时必须逐项校验其值与主 Agent 的 `MODEL/API_BASE/API_KEY` 相同；不一致时 readiness 失败，禁止启动自动路由。分类温度固定为 `0.1`，Agent 决策温度仍由 Agent profile 独立配置。两类调用共享 provider、模型快照、连接池、超时与重试实现，并分别固定 token limit、Prompt 版本和 Schema 哈希；`model_invocations` 记录不同的 `purpose/model_config_hash/prompt_version`，以便独立分析分类延迟和准确率。API Key 原值不得进入哈希输入、日志或 trace。Rubric Judge 不属于意图分类器，仍按独立 Judge 配置执行。
+分类 profile 从 `.env` 的 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY` 读取配置，但启动时必须逐项校验其值与主 Agent 的 `MODEL/API_BASE/API_KEY` 相同；不一致时 readiness 失败，禁止启动自动路由。分类温度固定为 `0.1`，Agent 决策温度仍由 Agent profile 独立配置。`CLASSIFIER_MAX_TOKENS` 默认 `1024`（范围 `16..2048`）：虽只输出短 JSON，推理型兼容模型可能先消耗隐藏推理 token，`256` 会造成 `finish_reason=length` 且可见内容为空，继而安全 handoff。两类调用共享 provider、模型快照、连接池、超时与重试实现，并分别固定 token limit、Prompt 版本和 Schema 哈希；`model_invocations` 记录不同的 `purpose/model_config_hash/prompt_version`，以便独立分析分类延迟和准确率。API Key 原值不得进入哈希输入、日志或 trace。Rubric Judge 不属于意图分类器，仍按独立 Judge 配置执行。
 
 模型不能访问数据库连接、内部用户 ID、租户密钥、确认 token 原文或任意网络工具。
 

@@ -226,9 +226,9 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         del actor_id
         return [
             {
-                "id": "order_status",
-                "label": "查订单",
-                "prompt": "查询我的订单 ORD-DEMO-001 当前状态",
+                "id": "order_delivery",
+                "label": "查订单与物流",
+                "prompt": "查询我的订单 ORD-DEMO-001 当前状态和物流预计送达时间；请分别核对订单与物流信息后再回答。",
             },
             {"id": "product_info", "label": "查商品", "prompt": "TAH6206 支持什么蓝牙版本？"},
             {"id": "policy", "label": "查政策", "prompt": "请说明退款政策"},

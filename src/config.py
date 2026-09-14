@@ -28,7 +28,11 @@ class Settings(BaseSettings):
     classifier_api_base: str | None = None
     classifier_api_key: SecretStr | None = None
     classifier_temperature: float | None = None
-    classifier_max_tokens: int = Field(default=256, ge=16, le=2048)
+    # Reasoning-capable OpenAI-compatible models can spend several hundred
+    # hidden tokens before emitting the small JSON classification.  256 makes
+    # a valid request terminate with an empty visible response; 1024 remains
+    # bounded while leaving room for the schema-constrained result.
+    classifier_max_tokens: int = Field(default=1024, ge=16, le=2048)
     judge_model: str | None = None
     judge_api_base: str | None = None
     judge_api_key: SecretStr | None = None

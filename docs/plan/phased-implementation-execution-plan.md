@@ -528,6 +528,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - UI/SSE：预置场景改由受 `DEMO_MODE` 保护的服务端接口提供；Web 恢复已持久化的 conversation/run，消费具名 SSE 事件，断线后回读 run/events/evidence；Trace 只显示结构化事件和最终回答实际引用的 evidence。
 - Hard eval：`intent_route` 为 `150/150`，`rag_grounding` 为 `50/50`；报告含 dataset/runtime/prompt hash。RAG harness fixture factory 驱动项目的真实 `AgentLoop`，不会读取 case gold。
 - 尚待最终验收的项目：真实预置场景的“至少两次工具调用”展示、商品对比专项 API/前端端到端验收，以及独立 PostgreSQL contract/recovery 环境的全量重跑。其余 checklist 继续以本文件为准。
+- 2026-09-14 复验：`/health/ready`、政策预置场景（`retrieve_knowledge → completed`）与 SSE `Last-Event-ID` 从 `0` 和 `2` 的回放均已真实通过；后一次只返回事件 `3..4`。同时定位到推理型 `deepseek-flash` 在 `CLASSIFIER_MAX_TOKENS=256` 时先耗尽隐藏推理 token、返回空可见内容（安全 handoff）；同一请求以 `1024` 完成并返回 JSON。因此代码、Compose 默认值和示例配置已提升为 `1024`，实际 `.env` 仍需由操作者同步后重建 app，才可继续完成三个实时预置场景和两工具展示验收。
 
 ## 9. Phase 4：确定性事务 Workflow
 

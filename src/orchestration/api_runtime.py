@@ -43,7 +43,12 @@ from src.tools.executor import ToolExecutor
 
 ROUTE_TOOLS: dict[str, tuple[str, ...]] = {
     "catalog_query": ("search_catalog", "get_product_detail", "compare_products"),
-    "order_query": ("list_my_orders", "get_order_status"),
+    # An order-status request may explicitly ask for its delivery progress as
+    # well.  Both are independent, owner-scoped readonly facts, so exposing
+    # them in the same locked route lets the loop make two committed tool
+    # turns before it answers a compound question.  It does not broaden any
+    # write capability.
+    "order_query": ("list_my_orders", "get_order_status", "get_delivery_tracking"),
     "delivery_query": ("get_delivery_tracking",),
     "refund_query": ("get_refund_status",),
     "shipping_policy": ("retrieve_knowledge",),
