@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
+from src.agent.loop import AgentLoop
+from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.harness.loader import CaseLoader
-from src.harness.run_driver import RunDriver
+from src.harness.run_driver import AgentLoopCaseRuntime, AgentLoopPlan, RunDriver
 from src.harness.runtime import RuntimeTrace
 from src.harness.schema import EvalCase
+from src.models.gateway import DeterministicFakeModel
+from src.protocols import Decision, DecisionType, PromptView, RunContext, RunStatus, ToolContext
+from src.tools.executor import ToolExecutor
+from src.tools.registry import ToolRegistry
 
 
 def _case() -> EvalCase:
@@ -57,3 +65,69 @@ def test_driver_isolates_a_runtime_failure_to_its_case() -> None:
     result = RunDriver(runtime=BrokenRuntime()).run_case(case=_case(), timeout_seconds=1)
     assert result.runtime_error == "runtime_execution_failed"
     assert result.trace.status == "fail"
+
+
+def test_driver_can_drive_the_real_agent_loop_through_a_case_planner() -> None:
+    class Planner:
+        def plan(
+            self, *, case: EvalCase, fixture: dict[str, object], timeout_seconds: float
+        ) -> AgentLoopPlan:
+            del case, fixture, timeout_seconds
+            context = RunContext(
+                run_id=uuid4(),
+                conversation_id=uuid4(),
+                tenant_id="t",
+                actor_id="a",
+                workflow_id="route",
+                workflow_version="1",
+                status=RunStatus.RUNNING_READONLY,
+            )
+            return AgentLoopPlan(
+                context=context,
+                prompt=PromptView(
+                    system_policy_version="p",
+                    workflow_id="route",
+                    workflow_version="1",
+                    current_step="answer",
+                    allowed_decisions=("respond",),
+                    conversation=(),
+                    known_slots={},
+                    required_slots=(),
+                    allowed_tools=(),
+                    evidence_ids=(),
+                    remaining_steps=6,
+                ),
+                boundary=DecisionBoundary(
+                    "cart_management", frozenset({DecisionType.RESPOND}), frozenset(), frozenset()
+                ),
+                tool_context=ToolContext(
+                    request_id=uuid4(),
+                    run_id=context.run_id,
+                    conversation_id=context.conversation_id,
+                    tenant_id="t",
+                    actor_id="a",
+                    scopes=(),
+                ),
+                deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+            )
+
+    runtime = AgentLoopCaseRuntime(
+        loop=AgentLoop(
+            model=DeterministicFakeModel(
+                (
+                    Decision(
+                        type=DecisionType.RESPOND,
+                        intent="add_product",
+                        route="cart_management",
+                        confidence=1,
+                        response="ok",
+                    ),
+                )
+            ),
+            validator=DecisionValidator(),
+            registry=ToolRegistry(()),
+            executor=ToolExecutor({}),
+        ),
+        planner=Planner(),
+    )
+    assert RunDriver(runtime=runtime).run_case(case=_case(), timeout_seconds=1).hard_eval.passed
