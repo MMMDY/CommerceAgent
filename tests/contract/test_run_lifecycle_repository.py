@@ -12,8 +12,8 @@ from sqlalchemy import Engine, create_engine, text
 from src.models.gateway import ModelDecision
 from src.orchestration.run_creation import ExecutionMode, RunCreationSpec
 from src.protocols import Decision, DecisionType, PromptView, RunContext, RunStatus
-from src.repositories.run_lifecycle import RunLifecycleRepository
 from src.repositories.model_invocations import ModelInvocationRepository
+from src.repositories.run_lifecycle import RunLifecycleRepository
 
 
 @pytest.fixture(scope="module")
