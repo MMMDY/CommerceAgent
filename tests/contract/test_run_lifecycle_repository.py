@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import Engine, create_engine, text
 
 from src.models.gateway import ModelDecision
+from src.orchestration.router import RouteDecision, RouteOutcome
 from src.orchestration.run_creation import ExecutionMode, RunCreationSpec
 from src.protocols import (
     Decision,
@@ -23,7 +24,7 @@ from src.protocols import (
     RunStatus,
 )
 from src.repositories.model_invocations import ModelInvocationRepository
-from src.repositories.run_lifecycle import RunLifecycleRepository
+from src.repositories.run_lifecycle import RunLifecycleRepository, RunRoutingRepository
 
 
 @pytest.fixture(scope="module")
@@ -169,6 +170,70 @@ def test_published_v2_does_not_retarget_existing_v1_run(engine: Engine) -> None:
     assert existing is not None
     assert existing.workflow_version == "1.0"
     assert existing.current_step == "v1"
+
+
+def test_pre_route_run_can_be_created_then_selected_by_the_router(engine: Engine) -> None:
+    now = datetime.now(UTC)
+    tenant_id = f"pre-route-{uuid4()}"
+    conversation_id = uuid4()
+    context = RunContext(
+        run_id=uuid4(),
+        conversation_id=conversation_id,
+        tenant_id=tenant_id,
+        actor_id="route-actor",
+        status=RunStatus.CREATED,
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO conversation.conversations "
+                "(id, tenant_id, actor_id, client_request_id, status, created_at, updated_at) "
+                "VALUES (:id, :tenant_id, 'route-actor', :request_id, 'active', :now, :now)"
+            ),
+            {
+                "id": conversation_id,
+                "tenant_id": tenant_id,
+                "request_id": str(uuid4()),
+                "now": now,
+            },
+        )
+    lifecycle = RunLifecycleRepository(engine)
+    lifecycle.create_run(
+        context=context,
+        spec=RunCreationSpec(
+            execution_mode=None,
+            policy_version="policy-route-v1",
+            model_config_hash="sha256:model-route-v1",
+            prompt_version="route-prompt-v1",
+            current_step="route",
+            deadline_at=now + timedelta(minutes=5),
+        ),
+    )
+    pre_route = lifecycle.load_definition(run_id=context.run_id, tenant_id=tenant_id)
+    assert pre_route is not None
+    assert pre_route.execution_mode is None
+    assert pre_route.workflow_id is None
+
+    RunRoutingRepository(engine).select_route(
+        context=context,
+        decision=RouteDecision(
+            outcome=RouteOutcome.EXECUTE,
+            execution_mode=ExecutionMode.READONLY_LOOP,
+            workflow_id="faq",
+            workflow_version="1",
+            intent="faq",
+            reason_code="ROUTE_RULE_MATCHED",
+        ),
+    )
+    with engine.connect() as connection:
+        selected = connection.execute(
+            text(
+                "SELECT status, execution_mode, workflow_id, workflow_version "
+                "FROM runtime.agent_runs WHERE run_id = :run_id"
+            ),
+            {"run_id": context.run_id},
+        ).one()
+    assert tuple(selected) == ("running_readonly", "readonly_loop", "faq", "1")
 
 
 def test_model_invocation_records_actual_gateway_and_prompt_fingerprints(

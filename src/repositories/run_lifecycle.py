@@ -20,12 +20,12 @@ class RunDefinitionSnapshot:
 
     run_id: UUID
     tenant_id: str
-    workflow_id: str
-    workflow_version: str
+    workflow_id: str | None
+    workflow_version: str | None
     policy_version: str
     model_config_hash: str
     prompt_version: str
-    execution_mode: ExecutionMode
+    execution_mode: ExecutionMode | None
     current_step: str
     max_steps: int
     deadline_at: datetime
@@ -74,7 +74,9 @@ class RunLifecycleRepository:
                     "tenant_id": context.tenant_id,
                     "actor_ref": context.actor_id,
                     "status": context.status.value,
-                    "execution_mode": spec.execution_mode.value,
+                    "execution_mode": (
+                        spec.execution_mode.value if spec.execution_mode is not None else None
+                    ),
                     "workflow_id": context.workflow_id,
                     "workflow_version": context.workflow_version,
                     "policy_version": spec.policy_version,
@@ -105,7 +107,8 @@ class RunLifecycleRepository:
         if row is None:
             return None
         values = dict(row._mapping)
-        values["execution_mode"] = ExecutionMode(values["execution_mode"])
+        if values["execution_mode"] is not None:
+            values["execution_mode"] = ExecutionMode(values["execution_mode"])
         return RunDefinitionSnapshot(**values)
 
 

@@ -79,9 +79,10 @@ def test_engine_create_durably_uses_the_exact_selected_workflow_version() -> Non
     context = _context(version="1")
     spec = _spec(current_step="v1_start")
 
-    assert engine.create(context, spec=spec) is context
-    assert creations.calls == [(context, spec)]
-    assert creations.calls[0][0].workflow_version == "1"
+    created = engine.create(context, spec=spec)
+    assert created.execution_mode is ExecutionMode.WORKFLOW
+    assert creations.calls == [(created, spec)]
+    assert created.workflow_version == "1"
 
 
 def test_engine_create_rejects_a_model_fingerprint_other_than_the_active_gateway() -> None:
@@ -123,3 +124,27 @@ def test_engine_create_rejects_an_expired_run_before_persistence() -> None:
     with pytest.raises(ValueError, match="deadline"):
         _engine(creations=creations).create(_context(), spec=expired)
     assert creations.calls == []
+
+
+def test_engine_creates_a_durable_pre_route_run_without_an_executor_selection() -> None:
+    creations = _RunCreations()
+    context = RunContext(
+        run_id=uuid4(),
+        conversation_id=uuid4(),
+        tenant_id="tenant",
+        actor_id="actor",
+        status=RunStatus.CREATED,
+    )
+    spec = _spec().model_copy(update={"execution_mode": None, "current_step": "route"})
+
+    assert _engine(creations=creations).create(context, spec=spec) is context
+    assert creations.calls == [(context, spec)]
+
+
+def test_engine_rejects_executor_fields_on_a_pre_route_creation() -> None:
+    creations = _RunCreations()
+    context = _context()
+    spec = _spec().model_copy(update={"execution_mode": None, "current_step": "route"})
+
+    with pytest.raises(ValueError, match="pre-route"):
+        _engine(creations=creations).create(context, spec=spec)

@@ -16,7 +16,7 @@ class RunCreationSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    execution_mode: ExecutionMode
+    execution_mode: ExecutionMode | None = None
     policy_version: str = Field(min_length=1, max_length=64)
     model_config_hash: str = Field(min_length=1, max_length=80)
     prompt_version: str = Field(min_length=1, max_length=64)

@@ -73,7 +73,6 @@ class OrchestrationEngine:
         cannot accidentally believe an unpersisted run was created.
         """
 
-        workflow = self._workflow_for(context)
         if context.status is not RunStatus.CREATED:
             raise ValueError("a new run must start in created status")
         if context.step_count != 0 or context.checkpoint_version != 0:
@@ -86,12 +85,24 @@ class OrchestrationEngine:
             raise ValueError("run creation spec is required for durable creation")
         if spec.model_config_hash != self._loop.model_config_hash:
             raise ValueError("run model configuration does not match the active gateway")
-        if spec.current_step not in workflow.steps:
-            raise ValueError("initial step is not in the locked workflow")
         if datetime.now(spec.deadline_at.tzinfo) >= spec.deadline_at:
             raise ValueError("run deadline must be in the future")
-        self._run_creation_store.create_run(context=context, spec=spec)
-        return context
+        if spec.execution_mode is None:
+            if any(
+                value is not None
+                for value in (context.execution_mode, context.workflow_id, context.workflow_version)
+            ):
+                raise ValueError("pre-route run cannot contain an executor or workflow")
+            self._run_creation_store.create_run(context=context, spec=spec)
+            return context
+        if context.execution_mode not in {None, spec.execution_mode}:
+            raise ValueError("run execution mode does not match the creation spec")
+        workflow = self._workflow_for(context)
+        if spec.current_step not in workflow.steps:
+            raise ValueError("initial step is not in the locked workflow")
+        bound = context.model_copy(update={"execution_mode": spec.execution_mode})
+        self._run_creation_store.create_run(context=bound, spec=spec)
+        return bound
 
     def execute_readonly(
         self,
