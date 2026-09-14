@@ -33,6 +33,7 @@ class ModelInvocationRepository:
             "workflow_version": prompt.workflow_version,
             "step": prompt.current_step,
         }
+        prompt_hash = _hash(prompt.model_dump_json())
         output_metadata = {
             "type": result.decision.type.value,
             "intent": result.decision.intent,
@@ -47,6 +48,7 @@ class ModelInvocationRepository:
             model=model,
             config_hash=config_hash,
             input_metadata=input_metadata,
+            prompt_hash=prompt_hash,
             output_metadata=output_metadata,
             latency_ms=result.latency_ms,
             status="succeeded",
@@ -62,6 +64,7 @@ class ModelInvocationRepository:
         config_hash: str,
         input_metadata: Mapping[str, object],
         output_metadata: Mapping[str, object],
+        prompt_hash: str,
         latency_ms: int,
         status: str,
     ) -> None:
@@ -91,7 +94,7 @@ class ModelInvocationRepository:
                     "model": model,
                     "config_hash": config_hash,
                     "input": input_json,
-                    "input_hash": _hash(input_json),
+                    "input_hash": prompt_hash,
                     "output": output_json,
                     "output_hash": _hash(output_json),
                     "status": status,
