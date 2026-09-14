@@ -28,11 +28,121 @@
   gap: 0.75rem;
 }
 
+.scenarios {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.scenarios button,
+.composer button {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  color: #15233b;
+  cursor: pointer;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+}
+
+.scenarios button:hover,
+.composer button:hover:not(:disabled) {
+  border-color: #235bd6;
+  background: #eef4ff;
+}
+
 .workspace {
   display: grid;
   align-content: center;
   max-width: 760px;
   margin: 0 auto;
+  width: min(100%, 760px);
+}
+
+.statusBar {
+  display: flex;
+  justify-content: space-between;
+  margin: 1rem 0;
+  color: #60718c;
+  font-size: 0.85rem;
+}
+
+.messageList {
+  display: grid;
+  gap: 0.75rem;
+  min-height: 260px;
+  align-content: end;
+}
+
+.userMessage,
+.assistantMessage {
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+  max-width: 85%;
+}
+
+.userMessage {
+  justify-self: end;
+  background: #235bd6;
+  color: #fff;
+}
+
+.assistantMessage {
+  justify-self: start;
+  background: #fff;
+  border: 1px solid #dfe5ef;
+}
+
+.userMessage p,
+.assistantMessage p {
+  margin: 0.35rem 0 0;
+  white-space: pre-wrap;
+}
+
+.empty,
+.error {
+  color: #60718c;
+}
+
+.error {
+  color: #b42318;
+}
+
+.composer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.composer input {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.composer button {
+  background: #235bd6;
+  color: #fff;
+  text-align: center;
+}
+
+.composer button:disabled,
+.scenarios button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.traceEvent {
+  display: grid;
+  gap: 0.2rem;
+  border-bottom: 1px solid #eef2f7;
+  padding: 0.65rem 0;
+  font-size: 0.8rem;
+}
+
+.traceEvent small {
+  color: #60718c;
 }
 
 .eyebrow {
