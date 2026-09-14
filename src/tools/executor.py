@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
+from src.policies.engine import PolicyEffect, PolicyEngine
 from src.protocols import ToolContext, ToolError, ToolErrorCode, ToolResult, ToolRisk, ToolSpec
 
 
@@ -18,15 +20,30 @@ class ToolExecutor:
     """Executes only registered, scoped tools; never accepts model system fields."""
 
     def __init__(
-        self, adapters: dict[str, Callable[[ToolContext, dict[str, object]], ToolResult]]
+        self,
+        adapters: dict[str, Callable[[ToolContext, dict[str, object]], ToolResult]],
+        *,
+        policy: PolicyEngine | None = None,
     ) -> None:
         self._adapters = dict(adapters)
+        self._policy = policy
 
     def execute(
-        self, *, spec: ToolSpec, context: ToolContext, arguments: dict[str, object]
+        self,
+        *,
+        spec: ToolSpec,
+        context: ToolContext,
+        arguments: dict[str, object],
+        policy_facts: dict[str, Any] | None = None,
     ) -> ExecutionOutcome:
         if not set(spec.required_scopes).issubset(context.scopes):
             return ExecutionOutcome(self._error(spec, ToolErrorCode.PERMISSION_DENIED, False), 0)
+        if self._policy is not None:
+            if policy_facts is None:
+                return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
+            decision = self._policy.evaluate(action=spec.name, facts=policy_facts)
+            if decision.effect is not PolicyEffect.ALLOW:
+                return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
         adapter = self._adapters.get(spec.name)
         if adapter is None:
             return ExecutionOutcome(self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), 0)
@@ -34,7 +51,12 @@ class ToolExecutor:
         max_attempts = spec.retry_policy.max_attempts if spec.risk is ToolRisk.READ_ONLY else 1
         while attempts < max_attempts:
             attempts += 1
-            result = adapter(context, arguments)
+            try:
+                result = adapter(context, arguments)
+            except Exception:
+                return ExecutionOutcome(
+                    self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                )
             if (
                 result.error is None
                 or not result.error.retryable
