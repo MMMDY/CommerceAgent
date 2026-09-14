@@ -96,9 +96,19 @@ class OpenAICompatibleGateway(ModelGateway):
 
     def _request(self, prompt: PromptView, *, repair: bool) -> ModelDecision:
         started = perf_counter()
-        instruction = "Return only a JSON object matching the Decision schema."
+        allowed_types = json.dumps(prompt.allowed_decisions, ensure_ascii=False)
+        allowed_tools = json.dumps(prompt.allowed_tools, ensure_ascii=False)
+        instruction = (
+            "Return exactly one JSON object and no prose or markdown. "
+            "Required fields: type, intent, route, confidence. "
+            "Optional fields: missing_slots, tool, args, evidence_ids, response, handoff_reason. "
+            f"type must be one of {allowed_types}; tool must be null or one of {allowed_tools}; "
+            "confidence must be a number from 0 through 1; args must be one JSON object. "
+            "Never include tenant_id, actor_id, owner_id, scopes, idempotency_key, "
+            "confirmation_token, or policy_version in args."
+        )
         if repair:
-            instruction += " Repair the prior format failure; do not add prose."
+            instruction += " This is the single format-repair attempt; output valid JSON only."
         payload = {
             "model": self._model,
             "temperature": 0,

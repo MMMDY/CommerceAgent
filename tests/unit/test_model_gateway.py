@@ -30,6 +30,10 @@ def test_gateway_parses_decision_without_exposing_authorization() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         seen["path"] = request.url.path
         assert request.headers["Authorization"] == "Bearer secret"
+        payload = request.read().decode()
+        assert "Required fields: type, intent, route, confidence" in payload
+        assert "confirmation_token" in payload
+        assert "secret" not in payload
         return httpx.Response(
             200,
             json={
