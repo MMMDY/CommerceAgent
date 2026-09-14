@@ -5,7 +5,7 @@
 > 日期：2026-09-14
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～1 已验收；Phase 2 因双执行器设计增量重新打开）
+> 当前整体状态：`in_progress`（Phase 0～2 已验收；等待进入 Phase 3）
 
 ## 1. Codex 使用规则
 
@@ -69,7 +69,7 @@ Codex 执行每个阶段时必须：
 | 质量工具 | pytest + Ruff + mypy；Vitest + ESLint + `tsc --noEmit` |
 | 运行 | Docker multi-stage build + Docker Compose |
 | 服务拓扑 | `app` 384 MiB + `db` 256 MiB，总上限 640 MiB |
-| 端口 | 宿主 `127.0.0.1:18437` 映射容器 `8000`；DB 仅内部网络 |
+| 端口 | 宿主 `127.0.0.1:19473` 映射容器 `8000`；DB 仅内部网络 |
 | RAG | PostgreSQL metadata filter + `pg_trgm` + 应用内排序；dense retrieval 默认关闭 |
 | 评测 | 自研 EvalHarness；硬判分 + Rubric Judge；默认并发 1；release 使用独立 Judge |
 
@@ -97,7 +97,7 @@ Codex 执行每个阶段时必须：
 - [x] Phase 0 已完成 Python/API、React/Vite、Docker/Compose 与最小 conversation 骨架，并通过本机 deployment smoke。
 - [x] Phase 1 已完成核心协议、PostgreSQL migration/repository、原子 checkpoint、事件回放和 Eval Core。
 - [x] Phase 2 v2.2 已完成单步 `run_step()`、ModelGateway、工具/政策边界与最小 hard-eval Harness；这只是双执行器改造的输入基线。
-- [ ] 完成 Phase 2 v2.5：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、复用主模型且温度为 0.1 的意图分类器、WorkflowExecutor、执行模式约束和多轮 Harness。
+- [x] 完成 Phase 2 v2.5：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、复用主模型且温度为 0.1 的意图分类器、WorkflowExecutor、执行模式约束和多轮 Harness。
 - [ ] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；当前 React 页面只是工程骨架。
 - [ ] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。
 - [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。
@@ -108,7 +108,7 @@ Codex 执行每个阶段时必须：
 |---|---|---|---|
 | Phase 0：可运行工程骨架 | `completed` | app/web/db/Compose/最小 conversation 闭环 | 目标机可启动、ready、重启不丢 conversation |
 | Phase 1：协议、持久化与 Eval Core | `completed` | 核心 schema、repository、case loader、hard evaluator | 原子 checkpoint、租户隔离、数据合同测试通过 |
-| Phase 2：自研 Runtime 与最小 Harness | `in_progress` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
+| Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `not_started` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `not_started` | prepare/confirm/commit/verify 与确认卡 | 未确认、重放、跨账号和重复写入均为 0 |
 | Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
@@ -167,7 +167,7 @@ Phase 0 工程骨架
 - [x] 创建 `compose.yaml`，只含 `app` 和 `db` 默认服务。
 - [x] `app` 限制 384 MiB/1.5 CPU，`db` 限制 256 MiB/0.75 CPU。
 - [x] DB volume 挂载到 `/var/lib/postgresql`，不使用旧版 data 挂载点。
-- [x] 宿主只暴露 `127.0.0.1:18437`，PostgreSQL 不映射宿主端口。
+- [x] 宿主只暴露 `127.0.0.1:19473`，PostgreSQL 不映射宿主端口。
 - [x] 应用使用非 superuser runtime 账号，migration 权限与 runtime 权限分离。
 - [x] 提供幂等 DB bootstrap：管理账号只负责创建 migration/runtime 角色；migration 使用 `DATABASE_MIGRATION_URL`，应用只使用受限 `DATABASE_URL`。
 - [x] Compose 的 `db` 服务只用 `POSTGRES_USER/POSTGRES_PASSWORD` 初始化 admin；app 不接收 admin 凭据，只接收 `DATABASE_URL`，migration 命令只接收 `DATABASE_MIGRATION_URL`。
@@ -196,8 +196,8 @@ docker compose build
 python scripts/check_secrets.py --compose-service app
 docker compose up -d
 docker compose ps
-curl -fsS http://127.0.0.1:18437/health/live
-curl -fsS http://127.0.0.1:18437/health/ready
+curl -fsS http://127.0.0.1:19473/health/live
+curl -fsS http://127.0.0.1:19473/health/ready
 scripts/deployment_smoke.sh
 ```
 
@@ -417,7 +417,7 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_intent_cla
 - [x] 在相邻两轮 checkpoint 前后注入崩溃，恢复后从最新已提交 context 继续，不跳步、不重复持久化事件。
 - [x] 多步 Harness 驱动的是 `AgentLoop.run()` 而不是测试专用伪循环，并输出完整的 step/tool/termination trace。
 - [x] Phase 2 双执行器增量完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [ ] Phase 2 v2.5 所有新增 TODO 和验证命令均完成。
+- [x] Phase 2 v2.5 所有新增 TODO 和验证命令均完成。
 
 ### 7.5 阶段产物
 
@@ -803,8 +803,8 @@ npm --prefix apps/web test -- --run
 npm --prefix apps/web run build
 docker compose config --quiet
 docker compose up -d --build
-curl -fsS http://127.0.0.1:18437/health/live
-curl -fsS http://127.0.0.1:18437/health/ready
+curl -fsS http://127.0.0.1:19473/health/live
+curl -fsS http://127.0.0.1:19473/health/ready
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --repetitions 3 --mode release
 scripts/soak_monitor.sh --duration 24h --interval 60s --output evals/reports/release-soak.json --detach
 scripts/soak_monitor.sh --status --output evals/reports/release-soak.json
@@ -1034,6 +1034,16 @@ format/lint
 - 已完成：`RunCreationSpec`、Engine 与 `RunLifecycleRepository` 现在可真实创建 `created` 状态且 `execution_mode/workflow` 均为空的 run；Router 之后以一次受约束更新绑定执行器和 workflow。此路径不再依赖测试中的原始 SQL 插入。
 - 关键提交：`212e523`。
 - 验证：`tests/unit/test_run_creation.py`、`tests/unit/test_orchestration_engine.py` 通过；隔离 PostgreSQL `tests/contract/test_run_lifecycle_repository.py` 为 `4 passed`。
+
+### 2026-09-14 — Phase 2 — 最终验收
+
+- 状态：`completed`。
+- 部署：发现既有 Phase 0 验收容器占用 `127.0.0.1:18437`；检查后切换到空闲的 `127.0.0.1:19473`，并同步 Compose、运行手册、设计方案和部署冒烟脚本。PostgreSQL 不暴露宿主端口。
+- 数据库：保留既有 Docker volume；将历史 volume 中的 migration/runtime 角色口令同步至当前部署配置后，仅执行前向 Alembic migration 至 `20260914_0006`。`/health/live` 与 `/health/ready` 均返回 200。
+- 部署冒烟：`scripts/deployment_smoke.sh` 通过；已验证创建会话、重启 app/DB、ready 恢复，以及会话仍可查询。
+- 回归：`python -m pytest tests/unit tests/workflow tests/harness tests/recovery/test_readonly_loop_resume.py` → `150 passed`；`python -m ruff check src apps tests`、`python -m mypy src apps` → pass；隔离 PostgreSQL contract/recovery → `35 passed`；`intent_route` deterministic hard-eval → `150/150 passed`。
+- 真实模型：用户补齐 `CLASSIFIER_*` 后，opt-in live gateway 与 intent classifier smoke 均已通过（`2 passed`）；配置检查仅记录布尔结果，确认 classifier 与主模型连接配置一致且温度为 `0.1`。
+- BLOCKED：无。
 
 ## 15. 停止或请求用户输入的条件
 

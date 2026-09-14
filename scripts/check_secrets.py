@@ -12,7 +12,9 @@ from pathlib import Path
 
 PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
-    re.compile(r"\b(?:api[_-]?key|authorization)\s*[:=]\s*['\"]?[A-Za-z0-9._-]{16,}", re.I),
+    # A quoted literal distinguishes a credential embedded in source/config from
+    # normal Python expressions such as ``api_key=self._classifier_api_key``.
+    re.compile(r"\b(?:api[_-]?key|authorization)\s*[:=]\s*['\"][A-Za-z0-9._-]{16,}", re.I),
 )
 ALLOWED_ENV_KEYS = {
     "APP_ENV",
@@ -31,6 +33,11 @@ ALLOWED_ENV_KEYS = {
     "MODEL",
     "API_BASE",
     "API_KEY",
+    "CLASSIFIER_MODEL",
+    "CLASSIFIER_API_BASE",
+    "CLASSIFIER_API_KEY",
+    "CLASSIFIER_TEMPERATURE",
+    "CLASSIFIER_MAX_TOKENS",
     "JUDGE_MODEL",
     "JUDGE_API_BASE",
     "JUDGE_API_KEY",
