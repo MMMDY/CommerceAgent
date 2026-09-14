@@ -4,12 +4,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 
 from src.agent.validation import DecisionBoundary, DecisionValidationError, DecisionValidator
 from src.models.gateway import ModelGateway, ModelGatewayError
 from src.protocols import Decision, DecisionType, PromptView, RunContext, StepStatus, ToolContext
 from src.tools.executor import ExecutionOutcome, ToolExecutor
 from src.tools.registry import ToolRegistry, ToolRegistryError
+
+
+class ModelInvocationRecorder(Protocol):
+    def record_success(
+        self,
+        *,
+        context: RunContext,
+        prompt: PromptView,
+        result: object,
+        provider: str,
+        model: str,
+        config_hash: str,
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,11 +44,13 @@ class AgentLoop:
         validator: DecisionValidator,
         registry: ToolRegistry,
         executor: ToolExecutor,
+        model_invocations: ModelInvocationRecorder | None = None,
     ) -> None:
         self._model = model
         self._validator = validator
         self._registry = registry
         self._executor = executor
+        self._model_invocations = model_invocations
 
     def run_step(
         self,
@@ -73,7 +89,7 @@ class AgentLoop:
                 reason="deadline_exceeded",
             )
         try:
-            decision = self._model.decide(prompt).decision
+            model_result = self._model.decide(prompt)
         except ModelGatewayError:
             return LoopResult(
                 status=StepStatus.FAIL,
@@ -81,6 +97,24 @@ class AgentLoop:
                 decision_type=None,
                 reason="model_unavailable",
             )
+        if self._model_invocations is not None:
+            try:
+                self._model_invocations.record_success(
+                    context=context,
+                    prompt=prompt,
+                    result=model_result,
+                    provider=getattr(self._model, "provider", "unknown"),
+                    model=getattr(self._model, "model_name", "unknown"),
+                    config_hash=getattr(self._model, "config_hash", "unknown"),
+                )
+            except Exception:
+                return LoopResult(
+                    status=StepStatus.FAIL,
+                    response=None,
+                    decision_type=None,
+                    reason="model_audit_failed",
+                )
+        decision = model_result.decision
         if decision.type is DecisionType.CALL_TOOL:
             try:
                 spec = self._registry.get(name=decision.tool or "", version="1")

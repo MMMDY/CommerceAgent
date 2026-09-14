@@ -168,3 +168,43 @@ def test_loop_fails_closed_on_invalid_decision_and_token_budget() -> None:
         token_budget_remaining=0,
     )
     assert exhausted.reason == "token_budget_exhausted"
+
+
+def test_loop_records_only_after_a_model_decision_is_produced() -> None:
+    recorded: list[dict[str, object]] = []
+
+    class Recorder:
+        def record_success(self, **kwargs: object) -> None:
+            recorded.append(kwargs)
+
+    loop = AgentLoop(
+        model=DeterministicFakeModel(
+            (
+                Decision(
+                    type=DecisionType.RESPOND, intent="x", route="r", confidence=1, response="ok"
+                ),
+            )
+        ),
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
+        model_invocations=Recorder(),
+    )
+    context = _context()
+    result = loop.run_step(
+        context=context,
+        prompt=_prompt(),
+        boundary=DecisionBoundary("r", frozenset({DecisionType.RESPOND}), frozenset(), frozenset()),
+        tool_context=ToolContext(
+            request_id=uuid4(),
+            run_id=context.run_id,
+            conversation_id=context.conversation_id,
+            tenant_id="t",
+            actor_id="a",
+            scopes=(),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+    )
+    assert result.status is StepStatus.COMPLETE
+    assert recorded[0]["context"] == context
+    assert recorded[0]["provider"] == "unknown"
