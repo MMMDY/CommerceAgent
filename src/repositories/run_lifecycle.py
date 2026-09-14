@@ -9,8 +9,9 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from src.orchestration.run_creation import ExecutionMode, RunCreationSpec
-from src.protocols import RunContext, RunStatus
+from src.orchestration.router import RouteDecision, RouteOutcome
+from src.orchestration.run_creation import RunCreationSpec
+from src.protocols import ExecutionMode, RunContext, RunStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,3 +107,55 @@ class RunLifecycleRepository:
         values = dict(row._mapping)
         values["execution_mode"] = ExecutionMode(values["execution_mode"])
         return RunDefinitionSnapshot(**values)
+
+
+class RunRoutingRepository:
+    """Persist a Router-owned executor choice exactly once per run."""
+
+    def __init__(self, engine: Engine) -> None:
+        self._engine = engine
+
+    def select_route(self, *, context: RunContext, decision: RouteDecision) -> None:
+        if context.status not in {RunStatus.CREATED, RunStatus.ROUTING}:
+            raise ValueError("only a pre-route run can select an executor")
+        if decision.outcome is RouteOutcome.HANDOFF:
+            statement = text(
+                "UPDATE runtime.agent_runs SET status = 'waiting_human', "
+                "current_step = 'terminal', "
+                "terminal_reason = :reason, updated_at = now() "
+                "WHERE run_id = :run_id AND tenant_id = :tenant_id "
+                "AND status IN ('created', 'routing') AND execution_mode IS NULL"
+            )
+            parameters = {
+                "run_id": context.run_id,
+                "tenant_id": context.tenant_id,
+                "reason": decision.reason_code,
+            }
+        else:
+            assert decision.execution_mode is not None
+            assert decision.workflow_id is not None
+            assert decision.workflow_version is not None
+            status = (
+                RunStatus.RUNNING_READONLY
+                if decision.execution_mode is ExecutionMode.READONLY_LOOP
+                else RunStatus.RUNNING_WORKFLOW
+            )
+            statement = text(
+                "UPDATE runtime.agent_runs SET execution_mode = :execution_mode, "
+                "workflow_id = :workflow_id, workflow_version = :workflow_version, "
+                "status = :status, updated_at = now() "
+                "WHERE run_id = :run_id AND tenant_id = :tenant_id "
+                "AND status IN ('created', 'routing') AND execution_mode IS NULL"
+            )
+            parameters = {
+                "run_id": context.run_id,
+                "tenant_id": context.tenant_id,
+                "execution_mode": decision.execution_mode.value,
+                "workflow_id": decision.workflow_id,
+                "workflow_version": decision.workflow_version,
+                "status": status.value,
+            }
+        with self._engine.begin() as connection:
+            result = connection.execute(statement, parameters)
+        if result.rowcount != 1:
+            raise ValueError("route selection was stale, unavailable, or already selected")

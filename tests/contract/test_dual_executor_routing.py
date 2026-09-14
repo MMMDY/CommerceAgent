@@ -10,6 +10,10 @@ import pytest
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from src.orchestration.router import RouteDecision, RouteOutcome
+from src.protocols import ExecutionMode, RunContext, RunStatus
+from src.repositories.run_lifecycle import RunRoutingRepository
+
 
 @pytest.fixture(scope="module")
 def engine() -> Engine:
@@ -148,3 +152,47 @@ def test_executor_and_workflow_version_are_immutable_after_selection(engine: Eng
                     text(f"UPDATE runtime.agent_runs SET {assignment} WHERE run_id = :run_id"),
                     {"run_id": run_id},
                 )
+
+
+def test_routing_repository_persists_execute_or_handoff_without_handoff_mode(
+    engine: Engine,
+) -> None:
+    run_id = _insert_run(
+        engine,
+        status="routing",
+        execution_mode=None,
+        workflow_id=None,
+        workflow_version=None,
+    )
+    with engine.connect() as connection:
+        conversation_id, tenant_id = connection.execute(
+            text(
+                "SELECT conversation_id, tenant_id FROM runtime.agent_runs "
+                "WHERE run_id = :run_id"
+            ),
+            {"run_id": run_id},
+        ).one()
+    context = RunContext(
+        run_id=run_id,
+        conversation_id=conversation_id,
+        tenant_id=tenant_id,
+        actor_id="actor",
+        status=RunStatus.ROUTING,
+    )
+    repository = RunRoutingRepository(engine)
+    repository.select_route(
+        context=context,
+        decision=RouteDecision(
+            outcome=RouteOutcome.EXECUTE,
+            execution_mode=ExecutionMode.READONLY_LOOP,
+            workflow_id="faq",
+            workflow_version="1",
+            intent="faq",
+            reason_code="ROUTE_RULE_MATCHED",
+        ),
+    )
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT status, execution_mode FROM runtime.agent_runs WHERE run_id = :run_id"),
+            {"run_id": run_id},
+        ).one() == ("running_readonly", "readonly_loop")

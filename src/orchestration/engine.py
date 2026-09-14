@@ -8,9 +8,10 @@ from uuid import UUID
 
 from src.agent.loop import AgentLoop, AgentRunResult
 from src.agent.validation import DecisionBoundary
+from src.orchestration.router import RouteDecision, RouteOutcome
 from src.orchestration.run_creation import RunCreationSpec, RunCreationStore
 from src.orchestration.state_machine import require_transition
-from src.orchestration.workflows import WorkflowRegistry
+from src.orchestration.workflows import WorkflowDefinition, WorkflowRegistry
 from src.protocols import (
     DomainEvent,
     EventType,
@@ -43,6 +44,10 @@ class RecoveryCheckpointStore(CheckpointStore, Protocol):
     def resume(self, *, run_id: UUID, tenant_id: str) -> RunContext | None: ...
 
 
+class RouteSelectionStore(Protocol):
+    def select_route(self, *, context: RunContext, decision: RouteDecision) -> None: ...
+
+
 class OrchestrationEngine:
     def __init__(
         self,
@@ -65,9 +70,7 @@ class OrchestrationEngine:
         cannot accidentally believe an unpersisted run was created.
         """
 
-        workflow = self._workflows.get(
-            workflow_id=context.workflow_id, version=context.workflow_version
-        )
+        workflow = self._workflow_for(context)
         if context.status is not RunStatus.CREATED:
             raise ValueError("a new run must start in created status")
         if context.step_count != 0 or context.checkpoint_version != 0:
@@ -100,7 +103,7 @@ class OrchestrationEngine:
     ) -> AgentRunResult:
         """Start only a readonly executor; the loop owns every step boundary."""
 
-        self._workflows.get(workflow_id=context.workflow_id, version=context.workflow_version)
+        self._workflow_for(context)
         if context.status is not RunStatus.RUNNING_READONLY:
             raise ValueError("readonly executor requires a readonly running run")
         return self._loop.run(
@@ -111,6 +114,49 @@ class OrchestrationEngine:
             deadline_at=deadline_at,
             cancelled=cancelled,
             token_budget_remaining=token_budget_remaining,
+        )
+
+    def select_route(
+        self,
+        *,
+        context: RunContext,
+        decision: RouteDecision,
+        routes: RouteSelectionStore,
+    ) -> RunContext:
+        """Freeze a code-reviewed route before either executor can start."""
+
+        if context.status not in {RunStatus.CREATED, RunStatus.ROUTING}:
+            raise ValueError("only a pre-route run can select an executor")
+        if decision.outcome is RouteOutcome.HANDOFF:
+            routes.select_route(context=context, decision=decision)
+            state = dict(context.state)
+            state["route_reason"] = decision.reason_code
+            return context.model_copy(
+                update={"status": RunStatus.WAITING_HUMAN, "state": state}
+            )
+        assert decision.execution_mode is not None
+        assert decision.workflow_id is not None
+        assert decision.workflow_version is not None
+        self._workflows.get(
+            workflow_id=decision.workflow_id,
+            version=decision.workflow_version,
+        )
+        routes.select_route(context=context, decision=decision)
+        state = dict(context.state)
+        state["route_reason"] = decision.reason_code
+        status = (
+            RunStatus.RUNNING_READONLY
+            if decision.execution_mode.value == "readonly_loop"
+            else RunStatus.RUNNING_WORKFLOW
+        )
+        return context.model_copy(
+            update={
+                "execution_mode": decision.execution_mode,
+                "workflow_id": decision.workflow_id,
+                "workflow_version": decision.workflow_version,
+                "status": status,
+                "state": state,
+            }
         )
 
     def resume(self, *, run_id: UUID, tenant_id: str) -> RunContext:
@@ -124,8 +170,16 @@ class OrchestrationEngine:
             raise RuntimeError("checkpoint store does not support recovery") from error
         if context is None:
             raise ValueError("run checkpoint is unavailable")
-        self._workflows.get(workflow_id=context.workflow_id, version=context.workflow_version)
+        self._workflow_for(context)
         return context
+
+    def _workflow_for(self, context: RunContext) -> WorkflowDefinition:
+        if context.workflow_id is None or context.workflow_version is None:
+            raise ValueError("run has no selected workflow")
+        return self._workflows.get(
+            workflow_id=context.workflow_id,
+            version=context.workflow_version,
+        )
 
     def cancel(self, context: RunContext) -> RunContext:
         require_transition(context.status, RunStatus.CANCELLED)

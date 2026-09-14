@@ -3,20 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.protocols import RunContext
-
-
-class ExecutionMode(StrEnum):
-    """The two runtime execution shapes persisted with every run."""
-
-    READONLY_LOOP = "readonly_loop"
-    WORKFLOW = "workflow"
+from src.protocols import ExecutionMode, RunContext
 
 
 class RunCreationSpec(BaseModel):

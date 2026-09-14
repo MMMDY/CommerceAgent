@@ -7,8 +7,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.orchestration.run_creation import ExecutionMode
-from src.protocols import IntentClassification, RiskHint, ToolRisk
+from src.protocols import ExecutionMode, IntentClassification, RiskHint, ToolRisk
 
 
 class RouteOutcome(StrEnum):

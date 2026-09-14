@@ -96,13 +96,21 @@ class RunStatus(StrEnum):
     EXPIRED = "expired"
 
 
+class ExecutionMode(StrEnum):
+    """The only two persisted automatic execution shapes."""
+
+    READONLY_LOOP = "readonly_loop"
+    WORKFLOW = "workflow"
+
+
 class RunContext(Contract):
     run_id: UUID
     conversation_id: UUID
     tenant_id: str = Field(min_length=1, max_length=64)
     actor_id: str = Field(min_length=1, max_length=128)
-    workflow_id: str = Field(min_length=1, max_length=128)
-    workflow_version: str = Field(min_length=1, max_length=64)
+    execution_mode: ExecutionMode | None = None
+    workflow_id: str | None = Field(default=None, min_length=1, max_length=128)
+    workflow_version: str | None = Field(default=None, min_length=1, max_length=64)
     status: RunStatus
     state: dict[str, Any] = Field(default_factory=dict)
     step_count: int = Field(default=0, ge=0, le=6)
