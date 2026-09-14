@@ -9,7 +9,7 @@ from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.harness.loader import CaseLoader
 from src.harness.run_driver import AgentLoopCaseRuntime, AgentLoopPlan, RunDriver
 from src.harness.runtime import RuntimeTrace
-from src.harness.schema import EvalCase
+from src.harness.schema import EvalCase, RuntimeCaseInput
 from src.models.gateway import DeterministicFakeModel
 from src.protocols import Decision, DecisionType, PromptView, RunContext, RunStatus, ToolContext
 from src.tools.executor import ToolExecutor
@@ -25,15 +25,17 @@ def _case() -> EvalCase:
 class _Runtime:
     def __init__(self) -> None:
         self.fixture: dict[str, object] | None = None
+        self.case: RuntimeCaseInput | None = None
 
     def execute_case(
         self,
         *,
-        case: EvalCase,
+        case: RuntimeCaseInput,
         fixture: dict[str, object],
         timeout_seconds: float,
         cancelled: object,
     ) -> RuntimeTrace:
+        self.case = case
         self.fixture = fixture
         fixture["mutated"] = True
         return RuntimeTrace(
@@ -55,6 +57,10 @@ def test_driver_passes_only_isolated_fixture_and_evaluates_after_runtime() -> No
     assert result.hard_eval.passed
     assert runtime.fixture is not case.context
     assert "mutated" not in case.context
+    assert runtime.case is not None
+    assert not hasattr(runtime.case, "expected")
+    assert not hasattr(runtime.case, "forbidden_tools")
+    assert not hasattr(runtime.case, "source")
 
 
 def test_driver_isolates_a_runtime_failure_to_its_case() -> None:
@@ -70,7 +76,11 @@ def test_driver_isolates_a_runtime_failure_to_its_case() -> None:
 def test_driver_can_drive_the_real_agent_loop_through_a_case_planner() -> None:
     class Planner:
         def plan(
-            self, *, case: EvalCase, fixture: dict[str, object], timeout_seconds: float
+            self,
+            *,
+            case: RuntimeCaseInput,
+            fixture: dict[str, object],
+            timeout_seconds: float,
         ) -> AgentLoopPlan:
             del case, fixture, timeout_seconds
             context = RunContext(

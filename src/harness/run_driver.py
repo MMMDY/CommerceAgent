@@ -15,7 +15,7 @@ from src.agent.loop import AgentLoop
 from src.agent.validation import DecisionBoundary
 from src.harness.hard_eval import evaluate
 from src.harness.runtime import FixtureManager, RuntimeTrace, TraceAdapter
-from src.harness.schema import EvalCase, HardEvalResult, NormalizedTrace
+from src.harness.schema import EvalCase, HardEvalResult, NormalizedTrace, RuntimeCaseInput
 from src.protocols import PromptView, RunContext, StepStatus, ToolContext
 
 
@@ -25,7 +25,7 @@ class CaseRuntime(Protocol):
     def execute_case(
         self,
         *,
-        case: EvalCase,
+        case: RuntimeCaseInput,
         fixture: dict[str, object],
         timeout_seconds: float,
         cancelled: Callable[[], bool],
@@ -44,7 +44,7 @@ class AgentLoopPlan:
 
 class CasePlanner(Protocol):
     def plan(
-        self, *, case: EvalCase, fixture: dict[str, object], timeout_seconds: float
+        self, *, case: RuntimeCaseInput, fixture: dict[str, object], timeout_seconds: float
     ) -> AgentLoopPlan: ...
 
 
@@ -58,7 +58,7 @@ class AgentLoopCaseRuntime:
     def execute_case(
         self,
         *,
-        case: EvalCase,
+        case: RuntimeCaseInput,
         fixture: dict[str, object],
         timeout_seconds: float,
         cancelled: Callable[[], bool],
@@ -113,9 +113,14 @@ class RunDriver:
         cancelled: Callable[[], bool] = lambda: False,
     ) -> DrivenCase:
         fixture = self._fixtures.create(case)
+        runtime_input = RuntimeCaseInput(
+            case_id=case.id,
+            locale=case.locale,
+            messages=case.messages,
+        )
         try:
             runtime_trace = self._runtime.execute_case(
-                case=case,
+                case=runtime_input,
                 fixture=fixture,
                 timeout_seconds=timeout_seconds,
                 cancelled=cancelled,

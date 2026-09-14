@@ -1,8 +1,7 @@
-"""CLI for the static hard-evaluation harness.
+"""CLI for the deterministic Phase 2 hard-evaluation harness.
 
-No Judge is invoked here.  Until a production Runtime is wired in Phase 3, the
-default runtime intentionally emits a safe failure trace rather than deriving
-an answer from the evaluation's gold fields.
+No Judge is invoked here.  Runtime behavior comes from an independent,
+strictly validated fixture that drives the project's real AgentLoop boundary.
 """
 
 from __future__ import annotations
@@ -14,31 +13,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
 
+from src.harness.deterministic_runtime import (
+    DeterministicRuntimeFactory,
+    RuntimeFixtureError,
+    RuntimeFixtureLoader,
+)
 from src.harness.loader import CaseLoader, DatasetContractError
 from src.harness.run_driver import RunDriver
-from src.harness.runtime import RuntimeTrace
-from src.harness.schema import EvalCase
-
-
-class _FailClosedRuntime:
-    def execute_case(
-        self,
-        *,
-        case: EvalCase,
-        fixture: dict[str, object],
-        timeout_seconds: float,
-        cancelled: object,
-    ) -> RuntimeTrace:
-        return RuntimeTrace(
-            route=None,
-            intent=None,
-            next_action=None,
-            args={},
-            tools_called=(),
-            evidence_ids=(),
-            response="",
-            status="fail",
-        )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -48,6 +29,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--case-id")
     parser.add_argument("--judge", choices=("off",), default="off")
     parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument(
+        "--runtime-fixture",
+        type=Path,
+        help="strict JSONL runtime fixture (default: <dataset-stem>.runtime.jsonl)",
+    )
     return parser
 
 
@@ -65,7 +51,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         loader = CaseLoader(args.dataset)
         cases = loader.load(track=args.track, case_id=args.case_id)
-        driver = RunDriver(runtime=_FailClosedRuntime())
+        fixture_path = args.runtime_fixture or args.dataset.with_suffix(".runtime.jsonl")
+        runtime_loader = RuntimeFixtureLoader(fixture_path)
+        runtime = DeterministicRuntimeFactory(runtime_loader.load())
+        driver = RunDriver(runtime=runtime)
         results = []
         for case in cases:
             if cancelled:
@@ -87,6 +76,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "schema_version": "1.0",
             "dataset_hash": loader.dataset_hash(),
             "judge": "off",
+            "runtime": "deterministic_fixture",
+            "runtime_fixture_hash": runtime_loader.fixture_hash(),
             "cancelled": cancelled,
             "selected_cases": len(cases),
             "completed_cases": len(results),
@@ -98,6 +89,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     except DatasetContractError as error:
         raise SystemExit(f"dataset contract error: {error}") from error
+    except RuntimeFixtureError as error:
+        raise SystemExit(f"runtime fixture contract error: {error}") from error
     finally:
         signal.signal(signal.SIGINT, previous)
 

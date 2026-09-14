@@ -47,6 +47,18 @@ class EvalCase(Contract):
         return cls(expected=ExpectedOutcome.from_raw(expected), **raw)
 
 
+class RuntimeCaseInput(Contract):
+    """The evaluation fields that a candidate Runtime is allowed to observe.
+
+    Gold outcomes, forbidden-tool assertions, tags, source metadata, and track
+    labels intentionally do not cross this boundary.
+    """
+
+    case_id: str = Field(pattern=r"^[a-z][a-z0-9_]{2,127}$")
+    locale: Literal["zh-CN"]
+    messages: tuple[EvalMessage, ...]
+
+
 class NormalizedTrace(Contract):
     case_id: str
     route: str | None = None
