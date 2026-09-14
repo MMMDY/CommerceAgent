@@ -12,6 +12,7 @@ from src.protocols import (
     ToolRisk,
     ToolSpec,
 )
+from src.telemetry.trace import TraceStore
 from src.tools.executor import ToolExecutor
 
 
@@ -124,3 +125,61 @@ def test_executor_rejects_an_untrusted_adapter_result_before_observation() -> No
         {"read": lambda _c, _a: ToolResult(tool_name="read", tool_version="1", data={"count": "1"})}
     ).execute(spec=spec, context=_context(), arguments={})
     assert malformed.result.error is not None
+
+
+def test_executor_records_only_redacted_tool_execution_metadata() -> None:
+    traces = TraceStore()
+    executor = ToolExecutor(
+        {
+            "read": lambda _context, _arguments: ToolResult(
+                tool_name="read",
+                tool_version="1",
+                data={"customer_phone": "13800138000", "api_key": "adapter-secret"},
+            )
+        },
+        traces=traces,
+    )
+
+    outcome = executor.execute(
+        spec=_spec(),
+        context=_context(),
+        arguments={
+            "phone": "13800138000",
+            "confirmation_token": "confirmation-secret",
+            "api_key": "request-secret",
+        },
+    )
+
+    assert outcome.result.error is None
+    records = traces.records()
+    assert len(records) == 1
+    assert records[0].kind == "tool_observed"
+    assert records[0].payload == {
+        "tool_name": "read",
+        "tool_version": "1",
+        "risk": "read_only",
+        "attempts": 1,
+        "outcome": "succeeded",
+    }
+    serialized = str(records[0].payload)
+    for forbidden in ("13800138000", "confirmation-secret", "request-secret", "adapter-secret"):
+        assert forbidden not in serialized
+
+
+def test_executor_records_denied_execution_without_invoking_adapter() -> None:
+    traces = TraceStore()
+    outcome = ToolExecutor(
+        {"read": lambda _context, _arguments: (_ for _ in ()).throw(AssertionError())},
+        traces=traces,
+    ).execute(spec=_spec(), context=_context(()), arguments={})
+
+    assert outcome.result.error is not None
+    assert traces.records()[0].payload == {
+        "tool_name": "read",
+        "tool_version": "1",
+        "risk": "read_only",
+        "attempts": 0,
+        "outcome": "failed",
+        "error_code": "PERMISSION_DENIED",
+        "retryable": False,
+    }

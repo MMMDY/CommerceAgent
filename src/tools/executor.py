@@ -8,6 +8,7 @@ from typing import Any
 
 from src.policies.engine import PolicyEffect, PolicyEngine
 from src.protocols import ToolContext, ToolError, ToolErrorCode, ToolResult, ToolRisk, ToolSpec
+from src.telemetry.trace import TraceStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,9 +25,11 @@ class ToolExecutor:
         adapters: dict[str, Callable[[ToolContext, dict[str, object]], ToolResult]],
         *,
         policy: PolicyEngine | None = None,
+        traces: TraceStore | None = None,
     ) -> None:
         self._adapters = dict(adapters)
         self._policy = policy
+        self._traces = traces
 
     def execute(
         self,
@@ -37,19 +40,29 @@ class ToolExecutor:
         policy_facts: dict[str, Any] | None = None,
     ) -> ExecutionOutcome:
         if not set(spec.required_scopes).issubset(context.scopes):
-            return ExecutionOutcome(self._error(spec, ToolErrorCode.PERMISSION_DENIED, False), 0)
+            return self._record(
+                spec, ExecutionOutcome(self._error(spec, ToolErrorCode.PERMISSION_DENIED, False), 0)
+            )
         if self._policy is not None:
             if policy_facts is None:
-                return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
+                return self._record(
+                    spec, ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
+                )
             try:
                 decision = self._policy.evaluate(action=spec.name, facts=policy_facts)
             except ValueError:
-                return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
+                return self._record(
+                    spec, ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
+                )
             if decision.effect is not PolicyEffect.ALLOW:
-                return ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
+                return self._record(
+                    spec, ExecutionOutcome(self._error(spec, ToolErrorCode.POLICY_DENIED, False), 0)
+                )
         adapter = self._adapters.get(spec.name)
         if adapter is None:
-            return ExecutionOutcome(self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), 0)
+            return self._record(
+                spec, ExecutionOutcome(self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), 0)
+            )
         attempts = 0
         max_attempts = spec.retry_policy.max_attempts if spec.risk is ToolRisk.READ_ONLY else 1
         while attempts < max_attempts:
@@ -57,24 +70,61 @@ class ToolExecutor:
             try:
                 result = adapter(context, arguments)
             except Exception:
-                return ExecutionOutcome(
-                    self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                return self._record(
+                    spec,
+                    ExecutionOutcome(
+                        self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                    ),
                 )
             if result.tool_name != spec.name or result.tool_version != spec.version:
-                return ExecutionOutcome(
-                    self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                return self._record(
+                    spec,
+                    ExecutionOutcome(
+                        self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                    ),
                 )
             if result.error is None and not self._valid_output(result.data, spec.output_schema):
-                return ExecutionOutcome(
-                    self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                return self._record(
+                    spec,
+                    ExecutionOutcome(
+                        self._error(spec, ToolErrorCode.INTERNAL_ERROR, False), attempts
+                    ),
                 )
             if (
                 result.error is None
                 or not result.error.retryable
                 or result.error.code is ToolErrorCode.STATUS_UNKNOWN
             ):
-                return ExecutionOutcome(result, attempts)
-        return ExecutionOutcome(result, attempts)
+                return self._record(spec, ExecutionOutcome(result, attempts))
+        return self._record(spec, ExecutionOutcome(result, attempts))
+
+    def _record(self, spec: ToolSpec, outcome: ExecutionOutcome) -> ExecutionOutcome:
+        """Append non-sensitive execution metadata without affecting the tool outcome.
+
+        Arguments, adapter data, error messages, execution context, and policy facts can
+        contain customer PII or trusted system values.  They are deliberately excluded
+        before passing the observation to ``TraceStore``.
+        """
+
+        if self._traces is None:
+            return outcome
+        error = outcome.result.error
+        payload: dict[str, object] = {
+            "tool_name": spec.name,
+            "tool_version": spec.version,
+            "risk": spec.risk.value,
+            "attempts": outcome.attempts,
+            "outcome": "succeeded" if error is None else "failed",
+        }
+        if error is not None:
+            payload["error_code"] = error.code.value
+            payload["retryable"] = error.retryable
+        try:
+            self._traces.append(kind="tool_observed", payload=payload)
+        except Exception:
+            # Observability must not alter the trusted execution boundary.
+            pass
+        return outcome
 
     @staticmethod
     def _error(spec: ToolSpec, code: ToolErrorCode, retryable: bool) -> ToolResult:
