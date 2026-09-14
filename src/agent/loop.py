@@ -17,6 +17,7 @@ from src.protocols import (
     RunStatus,
     StepStatus,
     ToolContext,
+    ToolRisk,
 )
 from src.telemetry.trace import TraceStore
 from src.tools.executor import ExecutionOutcome, ToolExecutor
@@ -206,6 +207,8 @@ class AgentStepExecutor:
                     context=tool_context,
                     require_model_visible=True,
                 )
+                if spec.risk is not ToolRisk.READ_ONLY:
+                    raise DecisionValidationError("write tool is forbidden in readonly loop")
                 self._validator.validate(decision=decision, boundary=boundary, tool_spec=spec)
             except (DecisionValidationError, ToolRegistryError):
                 _record_stage(stage_observer, "validate", "failed")

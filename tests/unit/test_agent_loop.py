@@ -175,6 +175,84 @@ def test_loop_fails_closed_on_invalid_decision_and_token_budget() -> None:
     assert exhausted.reason == "token_budget_exhausted"
 
 
+def test_readonly_loop_rejects_a_write_tool_before_adapter_side_effect() -> None:
+    calls = 0
+
+    def adapter(_: ToolContext, __: dict[str, object]) -> ToolResult:
+        nonlocal calls
+        calls += 1
+        return ToolResult(tool_name="prepare_refund", tool_version="1", data={})
+
+    context = _context()
+    loop = AgentLoop(
+        model=DeterministicFakeModel(
+            (
+                Decision(
+                    type=DecisionType.CALL_TOOL,
+                    intent="refund_request",
+                    route="r",
+                    confidence=1,
+                    tool="prepare_refund",
+                    args={},
+                ),
+            )
+        ),
+        validator=DecisionValidator(),
+        registry=ToolRegistry(
+            (
+                ToolSpec(
+                    name="prepare_refund",
+                    version="1",
+                    input_schema={
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                    output_schema={"type": "object", "properties": {}},
+                    risk=ToolRisk.PREPARE,
+                    required_scopes=(),
+                    timeout_ms=1_000,
+                    retry_policy=RetryPolicy(max_attempts=1),
+                    model_visible=True,
+                ),
+            )
+        ),
+        executor=ToolExecutor({"prepare_refund": adapter}),
+    )
+
+    result = loop.run_step(
+        context=context,
+        prompt=PromptView(
+            system_policy_version="p",
+            workflow_id="w",
+            workflow_version="1",
+            current_step="s",
+            allowed_decisions=(DecisionType.CALL_TOOL.value,),
+            conversation=(),
+            known_slots={},
+            required_slots=(),
+            allowed_tools=("prepare_refund",),
+            evidence_ids=(),
+            remaining_steps=1,
+        ),
+        boundary=DecisionBoundary(
+            "r", frozenset({DecisionType.CALL_TOOL}), frozenset({"prepare_refund"}), frozenset()
+        ),
+        tool_context=ToolContext(
+            request_id=uuid4(),
+            run_id=context.run_id,
+            conversation_id=context.conversation_id,
+            tenant_id=context.tenant_id,
+            actor_id=context.actor_id,
+            scopes=(),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+    )
+
+    assert result.reason == "decision_rejected"
+    assert calls == 0
+
+
 def test_loop_records_only_after_a_model_decision_is_produced() -> None:
     recorded: list[dict[str, object]] = []
 
