@@ -28,3 +28,30 @@ def test_fake_tool_returns_queued_success_and_failure_in_order() -> None:
     assert adapter(_context(), {"id": "1"}) == success
     assert adapter(_context(), {"id": "2"}) == timeout
     assert len(adapter.calls) == 2
+
+
+def test_fake_tool_covers_denied_timeout_conflict_and_unknown() -> None:
+    outcomes = tuple(
+        ToolResult(
+            tool_name="read",
+            tool_version="1",
+            error=ToolError(code=code, retryable=retryable, message="safe fake error"),
+        )
+        for code, retryable in (
+            (ToolErrorCode.PERMISSION_DENIED, False),
+            (ToolErrorCode.UPSTREAM_TIMEOUT, True),
+            (ToolErrorCode.CONFLICT, False),
+            (ToolErrorCode.STATUS_UNKNOWN, False),
+        )
+    )
+    adapter = DeterministicFakeToolAdapter(outcomes)
+    observed = tuple(
+        adapter(_context(), {}).error.code  # type: ignore[union-attr]
+        for _ in outcomes
+    )
+    assert observed == (
+        ToolErrorCode.PERMISSION_DENIED,
+        ToolErrorCode.UPSTREAM_TIMEOUT,
+        ToolErrorCode.CONFLICT,
+        ToolErrorCode.STATUS_UNKNOWN,
+    )
