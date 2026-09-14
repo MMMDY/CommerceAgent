@@ -12,6 +12,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from src.rag.models import Evidence
+
 
 @dataclass(frozen=True, slots=True)
 class KnowledgeChunk:
@@ -143,3 +145,37 @@ class KnowledgeRepository:
                 + " ORDER BY similarity(c.text_redacted, :query) DESC, c.chunk_no LIMIT :limit"
             ), params).all()
         return [KnowledgeSearchRow(*tuple(row)) for row in rows]
+
+    def evidence_for_ids(
+        self, *, tenant_id: str, access_level: str, evidence_ids: tuple[str, ...]
+    ) -> tuple[Evidence, ...]:
+        """Resolve opaque evidence IDs through the same tenant/access boundary."""
+        resolved: list[Evidence] = []
+        for evidence_id in evidence_ids:
+            parts = evidence_id.split(":")
+            if len(parts) != 3 or parts[0] != "knowledge":
+                continue
+            try:
+                document_id, chunk_id = UUID(parts[1]), UUID(parts[2])
+            except ValueError:
+                continue
+            with self._engine.connect() as connection:
+                row = connection.execute(text(
+                    "SELECT c.chunk_id, c.text_redacted, d.source_uri, d.version FROM knowledge.knowledge_chunks c "
+                    "JOIN knowledge.knowledge_documents d ON d.document_id = c.document_id "
+                    "WHERE c.chunk_id = :chunk_id AND d.document_id = :document_id "
+                    "AND d.tenant_id = :tenant_id AND d.access_level = :access_level "
+                    "AND d.status = 'active' AND d.effective_from <= now() "
+                    "AND (d.effective_to IS NULL OR d.effective_to > now())"
+                ), {"chunk_id": chunk_id, "document_id": document_id, "tenant_id": tenant_id,
+                    "access_level": access_level}).first()
+            if row is not None:
+                resolved.append(Evidence(
+                    evidence_id=evidence_id,
+                    document_id=str(document_id),
+                    source_uri=row[2],
+                    version=row[3],
+                    excerpt=row[1][:1200],
+                    score=0.0,
+                ))
+        return tuple(resolved)

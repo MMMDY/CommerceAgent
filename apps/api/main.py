@@ -12,7 +12,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -21,6 +21,7 @@ from apps.api.bootstrap import ReadinessDependencies
 from src.agent.intent_classifier import IntentClassifier
 from src.config import Settings, get_settings
 from src.db import get_engine
+from src.memory.session import build_session_memory
 from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
 from src.orchestration.api_runtime import execute_readonly_run
 from src.orchestration.persistence import RepositoryCheckpointStore
@@ -29,6 +30,8 @@ from src.orchestration.router import IntentRouter, RouteDecision, RouteOutcome
 from src.orchestration.run_creation import RunCreationSpec
 from src.protocols import DomainEvent, EventType, Message, RoutingPromptView, RunContext, RunStatus
 from src.repositories.conversations import Conversation, ConversationRepository
+from src.repositories.knowledge import KnowledgeRepository
+from src.repositories.memory import MemoryRepository, MemoryValidationError
 from src.repositories.messages import MessageConflictError, MessageRecord, MessageRepository
 from src.repositories.model_invocations import ModelInvocationRepository
 from src.repositories.run_lifecycle import RunLifecycleRepository, RunRoutingRepository
@@ -92,6 +95,32 @@ class MessageSendResponse(BaseModel):
     run_status: str
     assistant_response: str | None = None
     waiting_action: str | None = None
+
+
+class PreferenceCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fact_type: str = Field(min_length=1, max_length=64)
+    value: dict[str, object] = Field(min_length=1, max_length=8)
+    ttl_seconds: int = Field(default=2_592_000, ge=60, le=31_536_000)
+
+
+class MemoryFactResponse(BaseModel):
+    fact_id: UUID
+    fact_type: str
+    value: dict[str, object]
+
+
+class SessionMemoryResponse(BaseModel):
+    session: dict[str, object]
+    preferences: list[MemoryFactResponse]
+
+
+class EvidenceResponse(BaseModel):
+    evidence_id: str
+    source_uri: str
+    version: str
+    excerpt: str
 
 
 class RunResponse(BaseModel):
@@ -191,6 +220,93 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                 actor_id=actor_id,
             )
         ]
+
+    @app.get("/internal/v1/demo/scenarios")
+    def demo_scenarios(actor_id: str = Depends(get_demo_actor)) -> list[dict[str, str]]:
+        del actor_id
+        return [
+            {
+                "id": "order_status",
+                "label": "查订单",
+                "prompt": "查询我的订单 ORD-DEMO-001 当前状态",
+            },
+            {"id": "product_info", "label": "查商品", "prompt": "TAH6206 支持什么蓝牙版本？"},
+            {"id": "policy", "label": "查政策", "prompt": "请说明退款政策"},
+        ]
+
+    @app.get("/v1/conversations/{conversation_id}/memory", response_model=SessionMemoryResponse)
+    def get_memory(
+        conversation_id: UUID,
+        actor_id: str = Depends(get_demo_actor),
+        messages: MessageRepository = Depends(_message_repository),
+    ) -> SessionMemoryResponse:
+        try:
+            records = messages.list_for_actor(
+                conversation_id=conversation_id,
+                tenant_id=DEMO_TENANT_ID,
+                actor_id=actor_id,
+                limit=500,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail="conversation_not_found") from error
+        run = None
+        with get_engine().connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT run_id FROM runtime.agent_runs WHERE conversation_id = :conversation_id "
+                    "AND tenant_id = :tenant_id AND actor_ref = :actor_id ORDER BY created_at DESC LIMIT 1"
+                ),
+                {
+                    "conversation_id": conversation_id,
+                    "tenant_id": DEMO_TENANT_ID,
+                    "actor_id": actor_id,
+                },
+            ).first()
+        if row is not None:
+            run = RunRepository(get_engine()).load_run(
+                run_id=row[0], tenant_id=DEMO_TENANT_ID, actor_id=actor_id
+            )
+        preferences = MemoryRepository(get_engine()).active_for_actor(
+            tenant_id=DEMO_TENANT_ID, actor_ref=actor_id
+        )
+        return SessionMemoryResponse(
+            session=build_session_memory(messages=records, run=run),
+            preferences=[
+                MemoryFactResponse(fact_id=item.fact_id, fact_type=item.fact_type, value=item.value)
+                for item in preferences
+                if isinstance(item.value, dict)
+            ],
+        )
+
+    @app.post("/v1/memory/preferences", response_model=MemoryFactResponse, status_code=201)
+    def create_preference(
+        payload: PreferenceCreateRequest,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> MemoryFactResponse:
+        try:
+            fact_id = MemoryRepository(get_engine()).upsert_preference(
+                tenant_id=DEMO_TENANT_ID,
+                actor_ref=actor_id,
+                fact_type=payload.fact_type,
+                value=payload.value,
+                source_type="user",
+                source_ref="api",
+                confidence=1.0,
+                observed_at=datetime.now(UTC),
+                valid_until=datetime.now(UTC) + timedelta(seconds=payload.ttl_seconds),
+            )
+        except MemoryValidationError as error:
+            raise HTTPException(status_code=400, detail="invalid_preference") from error
+        return MemoryFactResponse(fact_id=fact_id, fact_type=payload.fact_type, value=payload.value)
+
+    @app.delete("/v1/memory/preferences/{fact_id}", status_code=204, response_class=Response)
+    def delete_preference(fact_id: UUID, actor_id: str = Depends(get_demo_actor)) -> Response:
+        deleted = MemoryRepository(get_engine()).delete(
+            fact_id=fact_id, tenant_id=DEMO_TENANT_ID, actor_ref=actor_id
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="memory_not_found")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get("/v1/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
     def list_messages(
@@ -423,6 +539,39 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                 "occurred_at": event.occurred_at.isoformat(),
             }
             for event in events
+        ]
+
+    @app.get("/v1/runs/{run_id}/evidence", response_model=list[EvidenceResponse])
+    def get_run_evidence(
+        run_id: UUID,
+        actor_id: str = Depends(get_demo_actor),
+        runs: RunRepository = Depends(_run_repository),
+    ) -> list[EvidenceResponse]:
+        snapshot = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        # Expose only citations selected in the final validated response, not
+        # every candidate returned by retrieval.
+        raw_ids: list[object] = []
+        for event in runs.replay_events(
+            run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id
+        ):
+            if event.event.event_type is EventType.STEP_COMPLETED:
+                candidate = event.event.payload.get("evidence_ids")
+                if isinstance(candidate, list):
+                    raw_ids = candidate
+        evidence_ids = tuple(item for item in raw_ids if isinstance(item, str))
+        evidence = KnowledgeRepository(get_engine()).evidence_for_ids(
+            tenant_id=DEMO_TENANT_ID, access_level="customer", evidence_ids=evidence_ids
+        )
+        return [
+            EvidenceResponse(
+                evidence_id=item.evidence_id,
+                source_uri=item.source_uri,
+                version=item.version,
+                excerpt=item.excerpt,
+            )
+            for item in evidence
         ]
 
     @app.get("/v1/conversations/{conversation_id}/stream")

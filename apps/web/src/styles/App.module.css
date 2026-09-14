@@ -145,6 +145,33 @@
   color: #60718c;
 }
 
+.evidenceList {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.evidenceCard {
+  border: 1px solid #dfe5ef;
+  border-radius: 0.55rem;
+  background: #f8fafc;
+  padding: 0.65rem;
+}
+
+.evidenceCard code,
+.evidenceCard small {
+  display: block;
+  color: #60718c;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.evidenceCard p {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .eyebrow {
   margin: 0 0 0.5rem;
   color: #60718c;

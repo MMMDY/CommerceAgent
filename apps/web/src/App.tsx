@@ -3,15 +3,17 @@ import { useEffect, useMemo, useState } from "react";
 import { resolveRoute } from "./routes";
 import styles from "./styles/App.module.css";
 
-type Message = { id: string; role: "user" | "assistant"; content: string; sequence_no: number };
+type Message = { id: string; role: "user" | "assistant"; content: string; sequence_no: number; run_id: string | null };
 type Conversation = { id: string; status: string };
 type Run = { run_id: string; status: string; current_step: string; step_count: number };
 type EventItem = { id: number; type: string; step_id: string; payload: Record<string, unknown> };
+type Evidence = { evidence_id: string; source_uri: string; version: string; excerpt: string };
+type Scenario = { id: string; label: string; prompt: string };
 
-const scenarios = [
-  { label: "查订单", text: "查询我的订单状态" },
-  { label: "查商品", text: "TAH6206 支持什么蓝牙版本？" },
-  { label: "查政策", text: "请说明退款政策" },
+const fallbackScenarios: Scenario[] = [
+  { id: "order_status", label: "查订单", prompt: "查询我的订单状态" },
+  { id: "product_info", label: "查商品", prompt: "TAH6206 支持什么蓝牙版本？" },
+  { id: "policy", label: "查政策", prompt: "请说明退款政策" },
 ] as const;
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -26,6 +28,8 @@ export function App() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [scenarios, setScenarios] = useState<readonly Scenario[]>(fallbackScenarios);
   const [run, setRun] = useState<Run | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,24 +43,78 @@ export function App() {
   );
 
   useEffect(() => {
-    void api<Conversation>("/v1/conversations", {
-      method: "POST",
-      body: JSON.stringify({ client_request_id: `web-${Date.now()}` }),
-    }).then(setConversation).catch((reason: Error) => setError(reason.message));
+    const restoreOrCreate = async () => {
+      const conversations = await api<Conversation[]>("/v1/conversations");
+      const savedId = window.localStorage.getItem("commerce-agent-conversation-id");
+      const restored = conversations.find((item) => item.id === savedId) ?? conversations[0];
+      if (restored) {
+        setConversation(restored);
+        return;
+      }
+      const created = await api<Conversation>("/v1/conversations", {
+        method: "POST",
+        body: JSON.stringify({ client_request_id: `web-${Date.now()}` }),
+      });
+      setConversation(created);
+    };
+    void restoreOrCreate().catch((reason: Error) => setError(reason.message));
+  }, []);
+
+  useEffect(() => {
+    if (conversation) window.localStorage.setItem("commerce-agent-conversation-id", conversation.id);
+  }, [conversation]);
+
+  useEffect(() => {
+    void api<Scenario[]>("/internal/v1/demo/scenarios")
+      .then(setScenarios)
+      .catch(() => setScenarios(fallbackScenarios));
   }, []);
 
   useEffect(() => {
     if (!conversationPath) return;
-    void api<Message[]>(`${conversationPath}/messages`).then(setMessages).catch((reason: Error) => setError(reason.message));
+    void api<Message[]>(`${conversationPath}/messages`).then(async (loaded) => {
+      setMessages(loaded);
+      const latestRunId = [...loaded].reverse().find((message) => message.run_id)?.run_id;
+      if (!latestRunId) return;
+      const [savedRun, trace, citedEvidence] = await Promise.all([
+        api<Run>(`/v1/runs/${latestRunId}`),
+        api<EventItem[]>(`/v1/runs/${latestRunId}/events`),
+        api<Evidence[]>(`/v1/runs/${latestRunId}/evidence`),
+      ]);
+      setRun(savedRun); setEvents(trace); setEvidence(citedEvidence);
+    }).catch((reason: Error) => setError(reason.message));
   }, [conversationPath]);
 
   useEffect(() => {
     if (!conversationPath) return;
     const stream = new EventSource(`${conversationPath}/stream`);
     stream.onopen = () => setSseConnected(true);
-    stream.onerror = () => setSseConnected(false);
+    stream.onerror = () => {
+      setSseConnected(false);
+      if (!run) return;
+      void Promise.all([
+        api<Run>(`/v1/runs/${run.run_id}`),
+        api<EventItem[]>(`/v1/runs/${run.run_id}/events`),
+        api<Evidence[]>(`/v1/runs/${run.run_id}/evidence`),
+      ]).then(([savedRun, trace, citedEvidence]) => {
+        setRun(savedRun); setEvents(trace); setEvidence(citedEvidence);
+      }).catch(() => undefined);
+    };
+    const appendEvent = (event: MessageEvent<string>) => {
+      try {
+        const payload = JSON.parse(event.data) as Record<string, unknown>;
+        const id = Number(event.lastEventId);
+        if (!Number.isInteger(id) || id <= 0) return;
+        setEvents((current) => current.some((item) => item.id === id)
+          ? current
+          : [...current, { id, type: event.type, step_id: "stream", payload }]);
+      } catch { /* malformed events never become UI state */ }
+    };
+    ["tool_called", "tool_observed", "step_completed", "waiting_for_user", "failed"].forEach((name) => {
+      stream.addEventListener(name, appendEvent as EventListener);
+    });
     return () => stream.close();
-  }, [conversationPath]);
+  }, [conversationPath, run]);
 
   const send = async (content: string) => {
     if (!conversation || !content.trim() || busy) return;
@@ -70,8 +128,11 @@ export function App() {
       const loaded = await api<Message[]>(`${conversationPath}/messages`);
       setMessages(loaded);
       setRun({ run_id: result.run_id, status: result.run_status, current_step: "route", step_count: 0 });
-      const trace = await api<EventItem[]>(`/v1/runs/${result.run_id}/events`);
-      setEvents(trace);
+      const [trace, citedEvidence] = await Promise.all([
+        api<EventItem[]>(`/v1/runs/${result.run_id}/events`),
+        api<Evidence[]>(`/v1/runs/${result.run_id}/evidence`),
+      ]);
+      setEvents(trace); setEvidence(citedEvidence);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "请求失败"); }
     finally { setBusy(false); }
   };
@@ -83,7 +144,7 @@ export function App() {
         <button className={styles.drawerClose} type="button" onClick={closeDrawer}>关闭</button>
         <p className={styles.eyebrow}>CommerceAgent · Phase 3</p><h1>客服 Agent</h1>
         <nav aria-label="主要页面"><a href="/">对话</a><a href="/runs/demo">Run Trace</a><a href="/evals">评测</a></nav>
-        <div className={styles.scenarios}><p className={styles.eyebrow}>预置场景</p>{scenarios.map((scenario) => <button key={scenario.label} type="button" onClick={() => void send(scenario.text)}>{scenario.label}</button>)}</div>
+        <div className={styles.scenarios}><p className={styles.eyebrow}>预置场景</p>{scenarios.map((scenario) => <button key={scenario.id} type="button" onClick={() => void send(scenario.prompt)}>{scenario.label}</button>)}</div>
       </aside>
       <section className={styles.workspace} aria-live="polite">
         <p className={styles.eyebrow}>{route === "chat" ? "只读演示" : route}</p><h2>{route === "chat" ? "对话工作台" : route === "run" ? "执行详情" : "评测面板"}</h2>
@@ -95,7 +156,7 @@ export function App() {
         </>}
       </section>
       <button className={`${styles.drawerToggle} ${styles.traceToggle}`} type="button" onClick={() => setDrawer("trace")}>Trace</button>
-      <aside className={`${styles.sidePanel} ${styles.rightPanel} ${drawer === "trace" ? styles.drawerOpen : ""}`} aria-label="Trace 摘要"><button className={styles.drawerClose} type="button" onClick={closeDrawer}>关闭</button><p className={styles.eyebrow}>Run Trace</p>{run ? <><p>状态：{run.status}</p><p>当前步骤：{run.current_step}</p><p>已完成步骤：{run.step_count}</p></> : <p>尚无执行事件</p>}{events.map((event) => <div className={styles.traceEvent} key={event.id}><code>#{event.id}</code><span>{event.type}</span><small>{event.step_id}</small></div>)}</aside>
+      <aside className={`${styles.sidePanel} ${styles.rightPanel} ${drawer === "trace" ? styles.drawerOpen : ""}`} aria-label="Trace 摘要"><button className={styles.drawerClose} type="button" onClick={closeDrawer}>关闭</button><p className={styles.eyebrow}>Run Trace</p>{run ? <><p>状态：{run.status}</p><p>当前步骤：{run.current_step}</p><p>已完成步骤：{run.step_count}</p></> : <p>尚无执行事件</p>}{events.map((event) => <div className={styles.traceEvent} key={event.id}><code>#{event.id}</code><span>{event.type}</span><small>{event.step_id}</small></div>)}{evidence.length > 0 ? <section className={styles.evidenceList} aria-label="回答证据"><p className={styles.eyebrow}>回答证据</p>{evidence.map((item) => <article className={styles.evidenceCard} key={item.evidence_id}><code>{item.source_uri}</code><small>版本 {item.version}</small><p>{item.excerpt}</p></article>)}</section> : null}</aside>
       {drawer ? <button className={styles.backdrop} aria-label="关闭抽屉" type="button" onClick={closeDrawer} /> : null}
     </main>
   );

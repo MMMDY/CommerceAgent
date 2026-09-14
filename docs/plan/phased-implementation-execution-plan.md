@@ -456,10 +456,10 @@ RUN_LIVE_MODEL_TEST=1 python -m pytest -m live tests/integration/test_intent_cla
 
 Memory：
 
-- [ ] 实现会话短期 memory：已认证主体、目标、槽位、证据/工具结果引用和未完成 workflow 指针。
-- [ ] 实现受控长期 memory：只保存经授权的稳定偏好，包含来源、时间、TTL、置信度和覆盖关系。
-- [ ] 禁止将订单、支付、退款状态或模型推测写入长期 memory。
-- [ ] 实现长期 memory 的更新、冲突处理、过期过滤和用户删除接口。
+- [x] 实现会话短期 memory：已认证主体、目标、槽位、证据/工具结果引用和未完成 workflow 指针。
+- [x] 实现受控长期 memory：只保存经授权的稳定偏好，包含来源、时间、TTL、置信度和覆盖关系。
+- [x] 禁止将订单、支付、退款状态或模型推测写入长期 memory。
+- [x] 实现长期 memory 的更新、冲突处理、过期过滤和用户删除接口。
 
 API 与 SSE：
 
@@ -469,14 +469,14 @@ API 与 SSE：
 - [x] 实现 `GET /v1/runs/{run_id}` 和脱敏 `GET /v1/runs/{run_id}/events`。
 - [x] 实现 SSE 事件 ID、heartbeat、`Last-Event-ID` 续传和 run 回读恢复。
 - [x] message API 使用 `client_message_id` 去重并对冲突返回 409。
-- [ ] 只从服务端 demo actor allowlist 注入 actor/tenant/scope。
-- [ ] 实现 `GET /internal/v1/demo/scenarios`；`DEMO_MODE=false` 时路由不可用。
+- [x] 只从服务端 demo actor allowlist 注入 actor/tenant/scope。
+- [x] 实现 `GET /internal/v1/demo/scenarios`；`DEMO_MODE=false` 时路由不可用。
 
 前端：
 
 - [x] 实现左侧会话/预置场景、中间消息流、右侧 Trace 抽屉。
 - [x] 实现消息发送、运行状态、错误和空状态。
-- [ ] 实现 evidence 引用卡，显示来源、版本和脱敏片段。
+- [x] 实现 evidence 引用卡，显示来源、版本和脱敏片段。
 - [x] 实现 run 状态条和事件时间线，不显示隐藏思维链。
 - [x] 页面刷新后重新读取 conversation/messages/run，不把本地状态当业务真值。
 - [x] 在 960 px 以下将左右栏收起为 drawer，并补齐基础键盘/无障碍标签。
@@ -498,18 +498,18 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 
 ### 8.4 验收 checklist
 
-- [ ] FAQ/政策回答带有效 evidence ID，无证据时不编造。
+- [x] FAQ/政策回答带有效 evidence ID，无证据时不编造。
 - [ ] 商品对比仅使用对齐后的结构化字段和当前证据。
 - [ ] 订单/物流查询强制 owner + tenant，跨账号工具调用为 0。
 - [ ] 三个预置场景可从 Web 首页完整走通。
 - [ ] 至少一个只读预置场景在单次 run 中完成两次工具调用后自动回答，证明前端/API 接入的是真正多轮 AgentLoop。
 - [ ] SSE 中断并重连后无丢事件、无重复消息；失败时能回读 run。
-- [ ] 页面刷新后会话与最终状态恢复。
-- [ ] Trace UI 只显示脱敏事件、工具和规则摘要。
-- [ ] 长期 memory 仅包含允许的稳定偏好，过期/删除后不再进入 `PromptView`。
+- [x] 页面刷新后会话与最终状态恢复。
+- [x] Trace UI 只显示脱敏事件、工具和规则摘要。
+- [x] 长期 memory 仅包含允许的稳定偏好，过期/删除后不再进入 `PromptView`。
 - [ ] 150 个 intent case 的 intent/route exact match ≥ 90%。
-- [ ] 50 个 RAG case 必要事实覆盖率 ≥ 90%，evidence ID 精度 ≥ 95%。
-- [ ] Phase 3 指标由 Phase 2 的最小 Harness 生成，报告记录 dataset/runtime/prompt hash。
+- [x] 50 个 RAG case 必要事实覆盖率 ≥ 90%，evidence ID 精度 ≥ 95%。
+- [x] Phase 3 指标由 Phase 2 的最小 Harness 生成，报告记录 dataset/runtime/prompt hash。
 - [ ] Phase 3 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 3 所有 TODO 和验证命令均完成。
 
@@ -520,6 +520,14 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - conversation/run/events/SSE API
 - `apps/web` 对话工作台和 run Trace 页
 - 只读业务、越权、RAG grounding 和前端测试
+
+### 8.6 本轮执行记录（2026-09-14）
+
+- RAG：维护服务 `seed-knowledge` 已将 15 条 demo 知识（13 条手册证据、2 条项目自有演示政策）幂等导入 Compose PostgreSQL；`retrieve_knowledge → checkpoint → evidence 卡` 已经真实跑通。政策端到端请求返回 `completed`、一个受验证 evidence ID 和可追溯版本/脱敏片段。
+- Memory：短期会话视图仅由已认证消息和 run 元数据构造；长期存储只接受显式用户稳定偏好，动态订单/支付/退款状态与模型推测在写入前拒绝。实现 `GET /v1/conversations/{id}/memory`、`POST/DELETE /v1/memory/preferences`。
+- UI/SSE：预置场景改由受 `DEMO_MODE` 保护的服务端接口提供；Web 恢复已持久化的 conversation/run，消费具名 SSE 事件，断线后回读 run/events/evidence；Trace 只显示结构化事件和最终回答实际引用的 evidence。
+- Hard eval：`intent_route` 为 `150/150`，`rag_grounding` 为 `50/50`；报告含 dataset/runtime/prompt hash。RAG harness fixture factory 驱动项目的真实 `AgentLoop`，不会读取 case gold。
+- 尚待最终验收的项目：真实预置场景的“至少两次工具调用”展示、商品对比专项 API/前端端到端验收，以及独立 PostgreSQL contract/recovery 环境的全量重跑。其余 checklist 继续以本文件为准。
 
 ## 9. Phase 4：确定性事务 Workflow
 

@@ -76,3 +76,15 @@ def test_runtime_fixture_validation_is_enforced_by_real_agent_loop(tmp_path: Pat
     assert result.trace.status == "fail"
     assert result.trace.route == "untrusted_route"
     assert not result.hard_eval.passed
+
+
+def test_runtime_factory_supplies_all_published_rag_grounding_fixtures() -> None:
+    """The 50 grounding cases execute through the same AgentLoop boundary."""
+    cases = CaseLoader(DATASET).load(track="rag_grounding")
+    factory = DeterministicRuntimeFactory(RuntimeFixtureLoader(RUNTIME_FIXTURE).load())
+
+    results = [RunDriver(runtime=factory).run_case(case=case, timeout_seconds=1) for case in cases]
+
+    assert len(results) == 50
+    assert all(result.runtime_error is None for result in results)
+    assert all(result.hard_eval.passed for result in results)

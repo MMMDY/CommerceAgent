@@ -22,6 +22,8 @@ COPY src/ ./src/
 COPY apps/ ./apps/
 COPY alembic.ini ./
 COPY infra/migrations/ ./infra/migrations/
+COPY evals/commerce_bench_zh/knowledge.jsonl ./evals/commerce_bench_zh/knowledge.jsonl
+COPY scripts/ingest_demo_knowledge.py ./scripts/ingest_demo_knowledge.py
 RUN python -m pip install --index-url "$PIP_INDEX_URL" --retries 2 --timeout 30 .
 
 COPY --from=web-builder /build/apps/web/dist ./apps/web/dist

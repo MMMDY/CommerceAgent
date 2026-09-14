@@ -27,10 +27,13 @@ from src.protocols import (
     Message,
     PromptView,
     RunContext,
+    SlotSource,
+    SlotValue,
     ToolContext,
     ToolResult,
 )
 from src.repositories.knowledge import KnowledgeRepository
+from src.repositories.memory import MemoryRepository
 from src.repositories.messages import MessageRepository
 from src.repositories.model_invocations import ModelInvocationRepository
 from src.repositories.runs import RunRepository
@@ -102,6 +105,16 @@ class ApiPromptBuilder(PromptBuilder):
         evidence_ids = tuple(
             str(item) for item in context.state.get("evidence_ids", ()) if isinstance(item, str)
         )
+        preferences = MemoryRepository(get_engine()).active_for_actor(
+            tenant_id=self._tenant_id, actor_ref=self._actor_id
+        )
+        known_slots: dict[str, SlotValue] = {}
+        for preference in preferences:
+            value = preference.value.get("value")
+            if isinstance(value, str | int | float | bool):
+                known_slots[preference.fact_type] = SlotValue(
+                    value=value, source=SlotSource.USER, verified=True
+                )
         return PromptView(
             system_policy_version="phase3-readonly-v1",
             workflow_id=self._workflow_id,
@@ -109,7 +122,7 @@ class ApiPromptBuilder(PromptBuilder):
             current_step="retrieve",
             allowed_decisions=tuple(item.value for item in DecisionType),
             conversation=conversation,
-            known_slots={},
+            known_slots=known_slots,
             required_slots=REQUIRED_SLOTS.get(str(context.state.get("intent", "")), ()),
             allowed_tools=self._tool_names,
             evidence_ids=evidence_ids,

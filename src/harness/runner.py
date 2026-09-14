@@ -7,6 +7,7 @@ strictly validated fixture that drives the project's real AgentLoop boundary.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import signal
 from collections.abc import Sequence
@@ -77,7 +78,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "dataset_hash": loader.dataset_hash(),
             "judge": "off",
             "runtime": "deterministic_fixture",
+            "runtime_hash": runtime_loader.fixture_hash(),
             "runtime_fixture_hash": runtime_loader.fixture_hash(),
+            "prompt_hash": hashlib.sha256(
+                b"commerce-agent:deterministic-runtime-prompt-v1"
+            ).hexdigest(),
             "cancelled": cancelled,
             "selected_cases": len(cases),
             "completed_cases": len(results),

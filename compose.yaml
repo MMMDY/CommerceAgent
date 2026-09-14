@@ -87,6 +87,18 @@ services:
         condition: service_healthy
     networks: [backend]
 
+  seed-knowledge:
+    image: commerce-agent:phase0
+    build: .
+    profiles: [maintenance]
+    command: ["python", "scripts/ingest_demo_knowledge.py"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+
 networks:
   backend:
     internal: true

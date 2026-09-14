@@ -9,7 +9,7 @@ observations, and credentials are deliberately excluded.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
@@ -180,6 +180,17 @@ class StepPipeline:
         observer: Callable[[PipelineStageRecord], None] | None = None,
     ) -> StepPipelineResult:
         journal = PipelineJournal(observer)
+        # Evidence introduced by a prior, successfully checkpointed retrieval
+        # becomes trusted input for the next loop iteration.  This is not a
+        # model-controlled relaxation: only the reducer can persist this list.
+        persisted_evidence = context.state.get("evidence_ids", ())
+        if isinstance(persisted_evidence, list | tuple):
+            boundary = replace(
+                boundary,
+                trusted_evidence_ids=boundary.trusted_evidence_ids.union(
+                    item for item in persisted_evidence if isinstance(item, str)
+                ),
+            )
         try:
             prompt = self._prompt_builder.build(context=context)
             validate_step_inputs(
@@ -404,6 +415,12 @@ def _events_for(result: LoopResult) -> tuple[DomainEvent, ...]:
         }
         if error is not None:
             observed["error_code"] = error.code.value
+        elif tool_result.data is not None:
+            evidence_ids = tool_result.data.get("evidence_ids")
+            if isinstance(evidence_ids, list) and all(
+                isinstance(item, str) for item in evidence_ids
+            ):
+                observed["evidence_ids"] = evidence_ids
         return (
             DomainEvent(
                 event_type=EventType.TOOL_CALLED,
@@ -427,6 +444,11 @@ def _events_for(result: LoopResult) -> tuple[DomainEvent, ...]:
     return (
         DomainEvent(
             event_type=EventType.STEP_COMPLETED,
-            payload={"status": result.status.value},
+            payload={
+                "status": result.status.value,
+                "evidence_ids": list(result.decision.evidence_ids)
+                if result.decision is not None
+                else [],
+            },
         ),
     )
