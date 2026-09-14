@@ -87,6 +87,10 @@ class OpenAICompatibleGateway(ModelGateway):
                 return self._request(prompt, repair=True)
             except (ValueError, KeyError, TypeError) as error:
                 raise ModelGatewayError("model decision is invalid after one repair") from error
+            except httpx.HTTPError as error:
+                raise ModelGatewayError("model provider request failed") from error
+        except httpx.HTTPError as error:
+            raise ModelGatewayError("model provider request failed") from error
 
     def _request(self, prompt: PromptView, *, repair: bool) -> ModelDecision:
         started = perf_counter()

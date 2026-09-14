@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from src.config import Settings
-from src.models.gateway import OpenAICompatibleGateway
+from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
 from src.protocols import PromptView
 
 
@@ -63,6 +64,15 @@ def test_gateway_config_hash_does_not_depend_on_api_key() -> None:
     )
     assert first.config_hash == second.config_hash
     assert "first" not in first.config_hash
+
+
+def test_gateway_normalizes_http_errors_without_provider_payload() -> None:
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(503)))
+    gateway = OpenAICompatibleGateway(
+        Settings(model="m", api_base="https://example.test/v1", api_key="secret"), client
+    )
+    with pytest.raises(ModelGatewayError, match="model provider request failed"):
+        gateway.decide(_prompt())
 
 
 def test_gateway_constrains_legacy_envelope_to_trusted_prompt_route() -> None:
