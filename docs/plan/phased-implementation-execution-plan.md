@@ -614,6 +614,19 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 验收条件：待 `scripts/soak_monitor.sh --status` 返回 `status=completed` 且采样窗口达到 86,400 秒后，才能勾选 Phase 7 soak 及整体完成项。
 - BLOCKED：无；等待后台采样窗口自然结束。
 
+### 2026-09-16 — Phase 5/6/7 — 发布候选持续门禁复验
+
+- 状态：in_progress（24 小时 soak 仍在运行，未提前宣称完成）。
+- 执行验证：
+  - `python -m pytest -q` → `217 passed, 42 skipped`；跳过项均明确要求独立 `DATABASE_TEST_URL` 或 live 开关。
+  - `python -m ruff check src apps tests` → pass；`python -m mypy src apps` → pass（90 source files）。
+  - `npm --prefix apps/web test -- --run`、`npm --prefix apps/web run build` → pass。
+  - `python scripts/release_check.py evals/reports/release-20260916-judge-chat-v3/report.json --require-clean --candidate-commit bd0cb5533f2f0f78a37123af780e104724948a0d` → `release-check passed`。
+  - `scripts/soak_monitor.sh --status --output evals/reports/release-soak.json` → `status=running`；systemd transient unit 的 MainPID `138088` 跨会话存活，当前错误计数 `0`。
+- 关键证据：`evals/reports/release-soak.json` 持续原子更新；监控脚本修复提交 `c8ce07c`。
+- 剩余 TODO：等待 soak 采样窗口达到 `86,400` 秒；完成后更新 Phase 7 checklist、发布摘要和最终候选证据。
+- BLOCKED：无；后台采样正在按计划运行。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
