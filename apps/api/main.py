@@ -26,6 +26,7 @@ from apps.api.bootstrap import ReadinessDependencies
 from src.agent.intent_classifier import IntentClassifier
 from src.config import Settings, get_settings
 from src.db import get_engine
+from src.harness.resources import InsufficientDiskError, ensure_disk_budget
 from src.memory.session import build_session_memory
 from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
 from src.orchestration.api_runtime import execute_readonly_run
@@ -57,6 +58,8 @@ from src.repositories.model_invocations import ModelInvocationRepository
 from src.repositories.mutations import ConfirmationRepository, MutationExecutionRepository
 from src.repositories.run_lifecycle import RunLifecycleRepository, RunRoutingRepository
 from src.repositories.runs import RunRepository, RunSnapshot
+from src.telemetry.lifecycle import ShutdownGate
+from src.telemetry.metrics import Metrics
 from src.workflows.mutations import extract_arguments, hash_secret
 
 DEMO_TENANT_ID = "demo-tenant"
@@ -385,6 +388,18 @@ def get_demo_actor(
     return actor
 
 
+def require_admission(request: Request) -> Iterator[None]:
+    """Reject new runs once graceful shutdown has begun."""
+
+    gate: ShutdownGate = request.app.state.shutdown_gate
+    metrics: Metrics = request.app.state.metrics
+    with gate.admission() as accepted:
+        if not accepted:
+            raise HTTPException(status_code=503, detail="service_draining")
+        metrics.increment("requests_admitted")
+        yield
+
+
 def get_conversation_repository() -> ConversationRepository:
     return ConversationRepository(get_engine())
 
@@ -395,7 +410,15 @@ def _web_dist() -> Path:
 
 def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
     app = FastAPI(title="CommerceAgent", version="0.1.0")
+    app.state.shutdown_gate = ShutdownGate()
+    app.state.metrics = Metrics()
     readiness_dependencies = readiness or ReadinessDependencies.default()
+
+    @app.on_event("shutdown")
+    def graceful_shutdown() -> None:
+        gate: ShutdownGate = app.state.shutdown_gate
+        gate.stop_accepting()
+        gate.wait_for_idle(timeout=5.0)
 
     @app.get("/health/live")
     def live() -> dict[str, str]:
@@ -410,6 +433,11 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             {"status": "not_ready", "reason": reason},
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+
+    @app.get("/internal/v1/metrics")
+    def metrics(actor_id: str = Depends(get_demo_actor)) -> dict[str, int]:
+        del actor_id
+        return dict(app.state.metrics.snapshot())
 
     @app.get("/v1/evals", response_model=list[EvalRunSummary])
     def list_evaluations(
@@ -455,6 +483,11 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         del actor_id
         if payload.mode == "release" and payload.judge != "on":
             raise HTTPException(status_code=400, detail="release mode requires judge")
+        try:
+            ensure_disk_budget(EVAL_REPORT_ROOT)
+        except InsufficientDiskError as error:
+            # Do not disclose host capacity or filesystem details to callers.
+            raise HTTPException(status_code=507, detail="evaluation_storage_unavailable") from error
         eval_id = str(uuid4())
         directory = EVAL_REPORT_ROOT / eval_id
         directory.mkdir(parents=True, exist_ok=False)
@@ -476,19 +509,14 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         background_tasks.add_task(_execute_eval_report, eval_id, payload)
         return EvalRunSummary(
             eval_run_id=eval_id,
-            **{
-                k: report[k]
-                for k in (
-                    "status",
-                    "selected_cases",
-                    "completed_cases",
-                    "passed_cases",
-                    "failed_cases",
-                    "judge",
-                    "mode",
-                    "repetitions",
-                )
-            },
+            status="queued",
+            selected_cases=300,
+            completed_cases=0,
+            passed_cases=0,
+            failed_cases=0,
+            judge=payload.judge,
+            mode=payload.mode,
+            repetitions=payload.repetitions,
         )
 
     @app.get("/v1/evals/{eval_run_id}")
@@ -502,7 +530,7 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         except (OSError, json.JSONDecodeError) as error:
             raise HTTPException(status_code=500, detail="evaluation unavailable") from error
         # Reports contain only redacted traces and aggregate metrics.
-        return payload
+        return dict(payload)
 
     @app.get("/v1/evals/{eval_run_id}/cases")
     def list_evaluation_cases(
@@ -696,6 +724,7 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         payload: MessageCreateRequest,
         actor_id: str = Depends(get_demo_actor),
         messages: MessageRepository = Depends(_message_repository),
+        _admission: None = Depends(require_admission),
     ) -> MessageSendResponse:
         run_id = uuid4()
         assistant_response: str | None = None

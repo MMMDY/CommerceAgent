@@ -19,9 +19,19 @@ _FORBIDDEN_KEYS = frozenset(
         "chain_of_thought",
         "reasoning",
         "hidden_reasoning",
+        "address",
+        "new_address",
+        "phone",
+        "mobile",
+        "email",
+        "card_number",
+        "payment_data",
     }
 )
 _PHONE = r"(?<!\d)(?:\+?86[- ]?)?1\d{10}(?!\d)"
+_SECRET_ASSIGNMENT = r"(?i)(api[_-]?key|authorization|token|password|secret)\s*[:=]\s*[^,\s]+"
+_EMAIL = r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"
+_CARD = r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)"
 _MAX_TEXT = 512
 
 
@@ -71,5 +81,8 @@ def _sanitize(value: Any) -> Any:
         return tuple(_sanitize(item) for item in value)
     if isinstance(value, str):
         value = sub(_PHONE, "[PHONE_REDACTED]", value)
+        value = sub(_SECRET_ASSIGNMENT, r"\1=[REDACTED]", value)
+        value = sub(_EMAIL, "[EMAIL_REDACTED]", value)
+        value = sub(_CARD, "[PAYMENT_REDACTED]", value)
         return value[:_MAX_TEXT]
     return value

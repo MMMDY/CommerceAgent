@@ -101,6 +101,34 @@ services:
         condition: service_healthy
     networks: [backend]
 
+  backup:
+    image: postgres:18
+    profiles: [maintenance]
+    entrypoint: ["/bin/bash", "/app/scripts/backup_db.sh"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./backups:/app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+
+  restore:
+    image: postgres:18
+    profiles: [maintenance]
+    entrypoint: ["/bin/bash", "/app/scripts/restore_db.sh"]
+    environment:
+      DATABASE_MIGRATION_URL: ${DATABASE_MIGRATION_URL:?DATABASE_MIGRATION_URL is required}
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./backups:/app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+
 networks:
   backend:
     internal: true

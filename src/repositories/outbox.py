@@ -40,24 +40,55 @@ class OutboxRepository:
                     "UPDATE runtime.runtime_outbox o SET status = 'publishing', locked_at = now(), "
                     "attempt_count = attempt_count + 1 FROM candidates c WHERE o.outbox_id = c.outbox_id "
                     "RETURNING o.outbox_id, o.run_id, o.event_id, o.topic, o.payload_redacted_json, o.attempt_count"
-                ), {"limit": limit, "lease_for": f"{int(lease_for.total_seconds())} seconds"},
+                ),
+                {"limit": limit, "lease_for": f"{int(lease_for.total_seconds())} seconds"},
             ).all()
         return [OutboxLease(*tuple(row)) for row in rows]
 
     def mark_published(self, *, outbox_id: UUID) -> bool:
         with self._engine.begin() as connection:
-            changed = connection.execute(text("UPDATE runtime.runtime_outbox SET status = 'published', "
-                "published_at = now(), locked_at = NULL WHERE outbox_id = :outbox_id AND status = 'publishing'"),
-                {"outbox_id": outbox_id})
+            changed = connection.execute(
+                text(
+                    "UPDATE runtime.runtime_outbox SET status = 'published', "
+                    "published_at = now(), locked_at = NULL WHERE outbox_id = :outbox_id AND status = 'publishing'"
+                ),
+                {"outbox_id": outbox_id},
+            )
         return changed.rowcount == 1
 
     def retry(self, *, outbox_id: UUID, error_code: str, delay: timedelta) -> bool:
         if delay.total_seconds() < 0:
             raise ValueError("retry delay must not be negative")
         with self._engine.begin() as connection:
-            changed = connection.execute(text("UPDATE runtime.runtime_outbox SET status = 'pending', locked_at = NULL, "
-                "last_error = :error_code, available_at = now() + CAST(:seconds AS interval) "
-                "WHERE outbox_id = :outbox_id AND status = 'publishing'"),
-                {"outbox_id": outbox_id, "error_code": error_code,
-                 "seconds": f"{int(delay.total_seconds())} seconds"})
+            changed = connection.execute(
+                text(
+                    "UPDATE runtime.runtime_outbox SET status = 'pending', locked_at = NULL, "
+                    "last_error = :error_code, available_at = now() + CAST(:seconds AS interval) "
+                    "WHERE outbox_id = :outbox_id AND status = 'publishing'"
+                ),
+                {
+                    "outbox_id": outbox_id,
+                    "error_code": error_code,
+                    "seconds": f"{int(delay.total_seconds())} seconds",
+                },
+            )
         return changed.rowcount == 1
+
+    def dead_letter(self, *, max_attempts: int = 5, limit: int = 100) -> int:
+        """Quarantine repeatedly failing events instead of retrying forever."""
+
+        if max_attempts < 1 or not 1 <= limit <= 1000:
+            raise ValueError("invalid dead-letter policy")
+        with self._engine.begin() as connection:
+            changed = connection.execute(
+                text(
+                    "UPDATE runtime.runtime_outbox SET status = 'dead_letter', "
+                    "dead_lettered_at = now(), locked_at = NULL, "
+                    "last_error = COALESCE(last_error, 'max_attempts') "
+                    "WHERE outbox_id IN (SELECT outbox_id FROM runtime.runtime_outbox "
+                    "WHERE status IN ('pending', 'publishing') AND attempt_count >= :max_attempts "
+                    "ORDER BY available_at LIMIT :limit)"
+                ),
+                {"max_attempts": max_attempts, "limit": limit},
+            )
+        return int(changed.rowcount or 0)

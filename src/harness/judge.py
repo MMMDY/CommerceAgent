@@ -15,7 +15,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -71,17 +71,21 @@ class JudgeConfig:
         if mode == "release" and not explicit:
             raise JudgeUnavailable("release judge configuration is unavailable")
         if explicit:
-            same_profile = bool(settings.model and settings.api_base and settings.api_key) and (
+            agent_key = settings.api_key
+            judge_key = settings.judge_api_key
+            same_profile = bool(settings.model and settings.api_base and agent_key) and (
                 settings.judge_model == settings.model
                 and settings.judge_api_base == settings.api_base
-                and settings.judge_api_key.get_secret_value() == settings.api_key.get_secret_value()
+                and judge_key is not None
+                and agent_key is not None
+                and judge_key.get_secret_value() == agent_key.get_secret_value()
             )
             if mode == "release" and same_profile:
                 raise JudgeUnavailable("release judge must be independent from agent")
             return cls(
                 settings.judge_model or "",
                 settings.judge_api_base or "",
-                settings.judge_api_key.get_secret_value(),
+                judge_key.get_secret_value() if judge_key is not None else "",
                 self_judged=same_profile,
             )
         # Debug-only fallback to candidate Agent model.  The report marks this
@@ -207,7 +211,10 @@ class RubricJudge:
         content = body["choices"][0]["message"]["content"]
         if not isinstance(content, str):
             raise ValueError("invalid judge content")
-        return json.loads(content.strip().removeprefix("```json").removesuffix("```").strip())
+        return cast(
+            Mapping[str, Any],
+            json.loads(content.strip().removeprefix("```json").removesuffix("```").strip()),
+        )
 
     def _normalize(
         self, output: JudgeOutput, case_id: str, rubric: Mapping[str, Any]
@@ -244,9 +251,15 @@ class RubricJudge:
             "case": {
                 "case_id": case.id,
                 "task_type": case.task_type,
-                "messages": [m.model_dump() for m in case.messages],
+                "messages": _sanitize([m.model_dump() for m in case.messages]),
             },
-            "hard_result": hard.model_dump(),
+            "trust_boundaries": {
+                "messages": "untrusted_user",
+                "retrieved_evidence": "untrusted_rag",
+                "tool_trace": "untrusted_tool_result",
+                "agent_response": "untrusted_tool_result",
+            },
+            "hard_result": _sanitize(hard.model_dump()),
             "retrieved_evidence": _sanitize(evidence),
             "tool_trace": _sanitize(trace.model_dump()),
             "agent_response": _sanitize(trace.response),
@@ -297,6 +310,21 @@ class RubricJudge:
 
 
 def _sanitize(value: Any, *, limit: int = 8000) -> Any:
+    sensitive_keys = {
+        "api_key",
+        "authorization",
+        "token",
+        "password",
+        "secret",
+        "confirmation_token",
+        "address",
+        "new_address",
+        "phone",
+        "mobile",
+        "email",
+        "card_number",
+        "payment_data",
+    }
     if value is None or isinstance(value, bool | int | float):
         return value
     if isinstance(value, str):
@@ -305,9 +333,14 @@ def _sanitize(value: Any, *, limit: int = 8000) -> Any:
             r"\1=[REDACTED]",
             value,
         )
+        text = re.sub(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[EMAIL_REDACTED]", text)
+        text = re.sub(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)", "[PAYMENT_REDACTED]", text)
         return text[:limit]
     if isinstance(value, Mapping):
-        return {str(k): _sanitize(v, limit=limit) for k, v in list(value.items())[:100]}
+        return {
+            str(k): "[REDACTED]" if str(k).lower() in sensitive_keys else _sanitize(v, limit=limit)
+            for k, v in list(value.items())[:100]
+        }
     if isinstance(value, list | tuple | set):
         return [_sanitize(v, limit=limit) for v in list(value)[:100]]
     return str(value)[:limit]

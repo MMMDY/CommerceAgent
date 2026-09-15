@@ -12,6 +12,7 @@ from typing import Any
 from src.harness.judge import JudgeResult
 from src.harness.run_driver import DrivenCase
 from src.harness.schema import EvalCase
+from src.telemetry.trace import _sanitize
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +70,7 @@ def build_report(
             if judge_pass is not None
             else (hard_pass if not judge_requested or case.task_type == "intent_route" else None)
         )
-        row = CaseReport(
+        case_row = CaseReport(
             case.id,
             case.task_type,
             hard_pass,
@@ -85,8 +86,8 @@ def build_report(
             critical_violations=judge.critical_violations if judge else (),
             judge_input_hash=judge.input_hash if judge else None,
             judge_model=judge.model if judge else None,
-            expected=case.expected.values,
-            actual={
+            expected=_sanitize(case.expected.values),
+            actual=_sanitize({
                 "route": driven.trace.route,
                 "intent": driven.trace.intent,
                 "next_action": driven.trace.next_action,
@@ -94,12 +95,12 @@ def build_report(
                 "tools_called": list(driven.trace.tools_called),
                 "evidence_ids": list(driven.trace.evidence_ids),
                 "status": driven.trace.status,
-            },
+            }),
             latency_ms=judge.latency_ms if judge else None,
             token_usage=judge.usage_tokens if judge else None,
         )
-        rows.append(asdict(row))
-    track = defaultdict(
+        rows.append(asdict(case_row))
+    track: dict[str, dict[str, int]] = defaultdict(
         lambda: {"selected": 0, "attempts": 0, "hard_pass": 0, "judge_pass": 0, "final_pass": 0}
     )
     by_track: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))

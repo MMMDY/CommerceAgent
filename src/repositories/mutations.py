@@ -105,7 +105,8 @@ class ConfirmationRepository:
                     "resource_ref, preview_hash, arguments_hash, policy_version, workflow_version, "
                     "status, expires_at, row_version FROM runtime.confirmation_tokens "
                     "WHERE run_id = :run_id AND tenant_id = :tenant_id AND actor_ref = :actor_ref "
-                    + predicate + " ORDER BY created_at DESC LIMIT 1"
+                    + predicate
+                    + " ORDER BY created_at DESC LIMIT 1"
                 ),
                 {
                     "run_id": run_id,
@@ -194,6 +195,24 @@ class ConfirmationRepository:
             )
         if changed.rowcount != 1:
             raise ConfirmationUnavailableError("confirmation token unavailable")
+
+    def expire_waiting(self, *, limit: int = 500) -> int:
+        """Move expired waiting tokens to a terminal state idempotently."""
+
+        if not 1 <= limit <= 5000:
+            raise ValueError("invalid expiration batch size")
+        with self._engine.begin() as connection:
+            changed = connection.execute(
+                text(
+                    "UPDATE runtime.confirmation_tokens SET status = 'expired', "
+                    "row_version = row_version + 1 "
+                    "WHERE token_id IN (SELECT token_id FROM runtime.confirmation_tokens "
+                    "WHERE status = 'waiting' AND expires_at <= now() "
+                    "ORDER BY expires_at LIMIT :limit)"
+                ),
+                {"limit": limit},
+            )
+        return int(changed.rowcount or 0)
 
     def consume_and_reserve(
         self,

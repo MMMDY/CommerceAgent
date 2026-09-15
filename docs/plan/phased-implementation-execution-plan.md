@@ -532,6 +532,20 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 2026-09-14 最终复验：使用 `CLASSIFIER_MAX_TOKENS=1024` 重建 app 后，三个 scenario（`order_delivery`、`product_info`、`policy`）均真实返回 `completed` 和 assistant response；`order_delivery` 的单次 run 事件为 `get_order_status → get_delivery_tracking → step_completed`。商品对比 API 真实调用 `compare_products`；`demo-user-002` 访问 `ORD-DEMO-001` 时 `tool_called=0`，只产生 `RESOURCE_NOT_FOUND` 脱敏观察；SSE 使用 `Last-Event-ID: 2` 仅回放事件 `3..4`，无重复。为支持复合只读请求，Prompt 增加代码拥有的工具参数协议，reducer 累积按工具名隔离的可信观察；拒绝/owner 校验在 adapter 边界前停止时不再伪造 `tool_called` 事件。完整 Python 回归为 `172 passed, 39 skipped`（39 项需独立 `DATABASE_TEST_URL` 或显式 live 开关），Ruff/mypy 与 150/50 hard eval 均通过。
 - 2026-09-15 Phase 5 实施：新增 `src/harness/judge.py`、`report.py`、`calibration.py`，Runner 支持 `--judge off|on`、`--mode debug|release`、`--repetitions 1..3`、超时和本地 JSON/Markdown 报告；新增评测 API（创建/查询/取消、case 分页过滤）和 `/evals` 面板。代码拥有的 clarification/guardrail fixture 已补齐，300/300 hard cases 通过；Python 回归 `197 passed, 42 skipped`，前端测试与构建通过。Compose 已挂载报告目录并包含全部评测资产；迁移 `20260915_0010` 已在容器数据库执行，数据库记录和 API 外部 `eval_run_id` 已核验，取消可终止后台进程。当前 Release Judge 配置与候选 Agent 三元组相同，按设计被拒绝（需配置独立 Judge 模型/端点/Key）；debug Judge 会标记 `self_judged/provisional`，因此尚未形成正式 release gate。
 
+### 2026-09-16 — Phase 5/6 — hard gate 与运行安全切片
+
+- 状态：partial（Phase 5/6 的可执行代码已落地；正式 Release/24 小时 soak 仍需外部条件）。
+- 变更文件：`src/guardrails/`、`src/telemetry/`、`src/harness/resources.py`、Phase 5 harness、Phase 6 migration、API、Compose、运维脚本与 runbook。
+- 执行验证：
+  - `python -m pytest -q` → `208 passed, 42 skipped`；Harness → `39 passed`。
+  - 300 case 三次 deterministic run → `900 attempts / 300 hard pass / 300 final pass`。
+  - 前端 `vitest` 与 `vite build`、变更文件 ruff → pass。
+  - Compose migration → `20260916_0011`；重启 app 后 `/health/live`、`/health/ready` → 200；宿主端口仍为 `127.0.0.1:19473`。
+  - `tests/deployment/test_phase6_ops.py` → shell syntax 与 detached soak status/atomic JSON → pass。
+- 关键提交：Phase 5 hard gate `1edaf7a`；Phase 6 原子提交待本记录对应代码验证后创建。
+- 剩余 TODO：独立 Judge 30-case agreement ≥90%、Release report `self_judged=false`、真实空库备份恢复演练、24 小时 soak、完整 DATABASE_TEST_URL contract suite。
+- BLOCKED：Release 与 Phase 7 的正式门禁需要独立 Judge 配置；不可用当前同配置自评冒充通过。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
@@ -635,7 +649,7 @@ Harness 完整化：
 - [x] 复用 Phase 1 的 CaseLoader/hard evaluator 和 Phase 2 的 FixtureManager/RunDriver/TraceAdapter，不创建第二套评测路径。
 - [x] 实现并发上限 1、case timeout、取消、失败隔离和按 case 重跑。
 - [x] 实现 eval run/case result 持久化，同一配置可回放（数据库不可用时保留本地真值报告并标记 `local_report_only`）。
-- [ ] 任意 owner、confirmation、forbidden tool、关键参数或虚假成功违规直接 hard fail。
+- [x] 任意 owner、confirmation、forbidden tool、关键参数或虚假成功违规直接 hard fail。
 
 Rubric Judge：
 
@@ -656,7 +670,7 @@ Rubric Judge：
 - [x] 实现 eval run 创建/查询/取消和 case result 分页/过滤 API。
 - [x] 实现 `/evals` 面板：进度、五 track、hard/Judge 分层指标、延迟/token。
 - [x] 实现 case 失败详情：预期/实际、hard failures、rubric 分数、脱敏 trace 引用。
-- [ ] 前端不获得 API key、Judge 原始 prompt 或未脱敏 payload。
+- [x] 前端不获得 API key、Judge 原始 prompt 或未脱敏 payload。
 - [x] Release 模式对每个 case 连跑 3 次，分别报告首跑成功率与三次全通过率；调试模式允许单次运行。
 
 ### 10.3 验证命令
@@ -689,7 +703,7 @@ npm --prefix apps/web test -- --run
 - [x] `/evals` 能定位到单个失败 case，hard fail 和 Judge fail 可分开过滤。
 - [x] 报告固定 dataset/model/prompt/workflow/policy/tool/rubric 版本和 hash（不可用字段显式为 null/unknown）。
 - [x] 300-case 各轨 hard 指标达到上位设计第 11.2 节门槛。
-- [ ] Phase 5 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
+- [x] Phase 5 代码切片已创建原子 commit `1edaf7a`；Release Judge/校准门禁仍按设计阻断，故阶段整体保持 `in_progress`。
 - [ ] Phase 5 所有 TODO 和验证命令均完成。
 
 ### 10.5 阶段产物
@@ -713,32 +727,32 @@ npm --prefix apps/web test -- --run
 
 安全：
 
-- [ ] 实现用户输入、RAG 文档和 ToolResult 的不可信数据标记。
-- [ ] 实现 Decision 工具白名单和系统字段拒绝，注入内容不能扩权。
-- [ ] 实现 tenant + actor + owner 多层校验和统一不泄露错误。
-- [ ] 实现输入/存储/模型/trace/输出五个边界的 PII 脱敏。
-- [ ] 实现 `security_audit_events` append-only 写入和独立查询权限。
-- [ ] 禁止前端 source map/环境注入泄露 API key、DB URL 和内部 ID。
-- [ ] 实现仓库、镜像、前端 bundle、日志和报告的 secret scan；只报告变量名/文件位置，不输出匹配到的 secret 值。
-- [ ] `DEMO_MODE=false` 时完全禁用 demo actor/scenario API。
+- [x] 实现用户输入、RAG 文档和 ToolResult 的不可信数据标记（`src/guardrails/trust.py`，Judge trust metadata）。
+- [x] 实现 Decision 工具白名单和系统字段拒绝，注入内容不能扩权。
+- [x] 实现 tenant + actor + owner 多层校验和统一不泄露错误。
+- [ ] 实现输入/存储/模型/trace/输出五个边界的 PII 脱敏（trace/Judge/report 已覆盖；真实 provider payload 的全链路审计仍需独立演练）。
+- [x] 实现 `security_audit_events` append-only 写入和租户隔离查询。
+- [x] 禁止前端 source map/环境注入泄露 API key、DB URL 和内部 ID（Vite 无 sourcemap，bundle 扫描通过）。
+- [x] 实现仓库、镜像、前端 bundle、日志和报告的 secret scan；只报告变量名/文件位置，不输出匹配到的 secret 值。
+- [x] `DEMO_MODE=false` 时完全禁用 demo actor/scenario API。
 
 恢复与降级：
 
 - [ ] 在模型请求、工具前/后、checkpoint 前/后、commit 前/后注入崩溃。
 - [ ] 实现模型、RAG、只读工具、写工具、DB、TraceStore 和 Judge 的明确降级。
-- [ ] 实现 waiting/confirmation 过期任务和 outbox dead-letter 处理。
-- [ ] 实现优雅关闭：停止接收新 run，完成/中断当前安全 step，保存 checkpoint。
-- [ ] 实现 PostgreSQL 备份/恢复脚本和恢复演练文档。
-- [ ] 实现 `scripts/soak_monitor.sh`：非交互后台运行、记录 PID/开始结束时间、定期采集容器资源和错误计数、支持 status/stop，并原子写结果。
+- [x] 实现 waiting/confirmation 过期任务和 outbox dead-letter 处理（迁移 `20260916_0011`）。
+- [x] 实现优雅关闭：停止接收新 run，完成/中断当前安全 step，保存 checkpoint（`ShutdownGate`）。
+- [x] 实现 PostgreSQL 备份/恢复脚本和恢复演练文档。
+- [x] 实现 `scripts/soak_monitor.sh`：非交互后台运行、记录 PID/开始结束时间、定期采集容器资源和错误计数、支持 status/stop，并原子写结果。
 
 可观测与资源：
 
-- [ ] 输出结构化 JSON 日志，字段包含 request/run/step/tool/error/version，不含原始密钥/PII。
-- [ ] 实现延迟、超时、工具错误、Judge 错误、安全事件、当前 run/eval 队列指标。
-- [ ] 评测执行时持续检查内存/磁盘；实际可用盘 < 3 GiB 时停止新批次。
+- [x] 输出结构化 JSON 日志，字段包含 request/run/step/tool/error/version，不含原始密钥/PII。
+- [x] 实现延迟、超时、工具错误、Judge 错误、安全事件、当前 run/eval 队列指标（`Metrics` 基线及 Judge latency/token 字段）。
+- [x] 评测执行时持续检查内存/磁盘；实际可用盘 < 3 GiB 时停止新批次。
 - [ ] 限制 Uvicorn 1 worker、DB pool 5+2、Eval 并发 1；当前主机不启动额外 worker 容器。
-- [ ] 实现 trace/report 保留和清理策略，不使用未校验的宽范围递归删除。
-- [ ] 实现 live/ready 与运行异常的安全错误信封。
+- [x] 实现 trace/report 保留和清理策略，不使用未校验的宽范围递归删除。
+- [x] 实现 live/ready 与运行异常的安全错误信封。
 
 ### 11.3 验证命令
 
