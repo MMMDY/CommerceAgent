@@ -45,8 +45,27 @@ if [[ "$action" == detach ]]; then
   duration="${duration:-24h}"
   [[ "$interval" =~ ^[1-9][0-9]*$ ]] || { echo "interval must be positive seconds" >&2; exit 2; }
   mkdir -p "$(dirname -- "$output")"
-  nohup "$0" --duration "$duration" --interval "$interval" --output "$output" --worker >/dev/null 2>&1 &
-  worker_pid=$!
+  script_path="$(readlink -f "$0")"
+  if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+    unit_suffix="$(printf '%s' "$output" | sha256sum | awk '{print substr($1,1,12)}')"
+    unit="commerce-agent-soak-${unit_suffix}"
+    systemd-run --unit="$unit" --collect --quiet --working-directory="$(pwd)" \
+      "$script_path" --duration "$duration" --interval "$interval" --output "$output" --worker
+    worker_pid=""
+    for _ in $(seq 1 20); do
+      worker_pid="$(systemctl show --property=MainPID --value "$unit" 2>/dev/null || true)"
+      [[ "$worker_pid" =~ ^[1-9][0-9]*$ ]] && break
+      sleep 0.1
+    done
+    [[ "$worker_pid" =~ ^[1-9][0-9]*$ ]] || {
+      echo "failed to obtain soak worker pid" >&2
+      exit 1
+    }
+  else
+    nohup "$script_path" --duration "$duration" --interval "$interval" --output "$output" --worker \
+      >/dev/null 2>&1 < /dev/null &
+    worker_pid=$!
+  fi
   printf '%s\n' "$worker_pid" > "$pid_file"
   printf '{"status":"running","pid":%s,"output":"%s"}\n' "$worker_pid" "$output"
   exit 0
