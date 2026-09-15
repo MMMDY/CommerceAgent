@@ -88,6 +88,7 @@ def test_classifier_uses_explicit_profile_at_temperature_point_one() -> None:
     payload = seen["payload"]
     assert isinstance(payload, dict)
     assert payload["temperature"] == 0.1
+    assert payload["thinking"] == {"type": "disabled"}
     assert "execution_mode" in str(payload["messages"])
     assert gateway.classifier_config_hash != gateway.config_hash
 
@@ -121,6 +122,8 @@ def test_classifier_and_agent_share_connection_but_use_separate_profiles() -> No
     assert requests[0].headers["Authorization"] == requests[1].headers["Authorization"]
     temperatures = {json.loads(request.content)["temperature"] for request in requests}
     assert temperatures == {0, 0.1}
+    assert json.loads(requests[0].content)["thinking"] == {"type": "disabled"}
+    assert "thinking" not in json.loads(requests[1].content)
 
 
 @pytest.mark.parametrize(

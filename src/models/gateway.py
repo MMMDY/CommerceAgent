@@ -157,6 +157,10 @@ class OpenAICompatibleGateway(ModelGateway):
                     if not repair
                     else max(self._classifier_max_tokens, 2048)
                 ),
+                # Intent routing is a short, schema-constrained decision.  The
+                # configured DeepSeek classifier must not spend tokens on a
+                # reasoning trace before returning its JSON classification.
+                "thinking": {"type": "disabled"},
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {
