@@ -1788,7 +1788,7 @@ CommerceAgent/
 | Phase 2：自研 Runtime 与最小 Harness | `completed` | 有界 `AgentLoop.run()`、AgentStepExecutor、StepPipeline、WorkflowExecutor、OrchestrationEngine、最小 hard runner | 多轮只读调用可终止/恢复；逐轮 checkpoint；写动作不能进入自由循环 |
 | Phase 3：只读业务与对话页 | `completed` | RAG、商品/订单工具、完整消息 API/SSE、Trace UI | 三类只读场景可展示，无越权和无证据编造 |
 | Phase 4：确定性事务 Workflow | `completed` | refund/cancel/address/return/exchange、确认卡、幂等提交、verify 回读与 handoff | 未确认、重放、跨账号和重复写入均为 0；unknown/mismatch 转人工 |
-| Phase 5：EvalHarness、Judge 与面板 | `not_started` | 300-case runner、Rubric Judge、报告持久化与评测 UI | hard fail 不可被 Judge 覆盖，forbidden tool 为 0 |
+| Phase 5：EvalHarness、Judge 与面板 | `in_progress` | 300-case runner、Rubric Judge、报告持久化与评测 UI | hard fail 不可被 Judge 覆盖，forbidden tool 为 0；Release 需独立 Judge |
 | Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、降级、备份恢复、数据保护和运维脚本 | P0 安全与恢复断言全部通过 |
 | Phase 7：全链路验收 | `not_started` | 候选版本、正式评测报告、运行手册和发布证据 | 所有阶段门禁完成并明确标记 internal beta |
 
