@@ -584,6 +584,18 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、24 小时 soak。
 - BLOCKED：正式 Release gate 仍需独立 Judge 配置和持续运行外部条件；本地门禁已 fail-closed 验证。
 
+### 2026-09-16 — Phase 7 — 独立 Judge release gate
+
+- 状态：partial（Release 评测与证据门禁完成；空库 app 部署和 24 小时 soak 未完成）。
+- 配置变更：`.env` 中 `JUDGE_MODEL` 已设为 `deepseek-chat`，与候选 `deepseek-flash` 不同；API base/key 未记录或输出。分类器仍使用 `deepseek-flash` 且显式禁用思维链。
+- 执行验证：
+  - `python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --mode release --repetitions 3` → `status=completed`、`900 attempts`、`300/300 hard pass`、`296/300 final pass`、三次全通过率 `0.9867`、`self_judged=false`、`release_gate=true`。
+  - 30-case calibration → agreement `1.0`、`evaluated_count=30`、`status=complete`；Judge errors `0`。
+  - `python scripts/release_check.py ... --require-clean --candidate-commit <manifest.source_commit>` → `release-check passed`。
+  - 发布证据：`docs/releases/internal-beta-20260916-r3/`（候选源码 `bd0cb55`，证据提交 `0e04783`；checker 支持证据提交后的显式候选 SHA）。
+- 剩余 TODO：从空库执行完整 app+DB 编排、连续 24 小时 soak；完成后才能将 Phase 7 与整体目标标记为 completed。
+- BLOCKED：无配置阻塞；长时门禁需要实际经过 24 小时运行窗口。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
@@ -812,18 +824,18 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 
 ### 11.4 验收 checklist
 
-- [ ] prompt/tool/RAG/Judge 注入无法扩大工具白名单、scope 或状态机权限。
-- [ ] 跨 actor/租户的读写均被拒绝，返回不泄露资源存在性。
+- [x] prompt/tool/RAG/Judge 注入无法扩大工具白名单、scope 或状态机权限（trust/security/hard-eval contract）。
+- [x] 跨 actor/租户的读写均被拒绝，返回不泄露资源存在性（owner/tenant contract 与 guardrail cases）。
 - [x] 密钥、confirmation token、完整手机/地址/支付信息不出现在日志、trace、报告或前端 bundle（日志/trace/Judge/report/bundle 扫描与 provider payload 脱敏测试通过）。
 - [x] 崩溃注入后的 run 可恢复或安全失败，不重复副作用（只读 checkpoint 失败保留原 context；mutation durable boundary 恢复为 unknown；fault-injection/recovery tests 通过）。
 - [x] 任意写工具状态 unknown 时不对用户声称成功（`DurableMutationBoundary` 与 workflow recovery tests）。
 - [x] DB 备份可恢复到空实例，conversation/run/checkpoint/event 关系完整（`backups/phase6-smoke.dump` 与空库恢复查询证据）。
 - [x] app + DB 稳态使用不突破容器上限，不依赖 swap 才能处理单会话（Compose limits + runtime limit test；仍需长时 soak 证明）。
 - [x] 模型/Judge 不可用时的降级回复不产生 mutation（model/Judge unavailable、readonly failure 和 mutation unknown tests）。
-- [ ] P0 安全和恢复断言全部通过（独立 `DATABASE_TEST_URL` contract/recovery suite 尚未运行，故保持未勾选）。
-- [ ] soak monitor 的短时自测可启动、查询、停止并生成无密钥的完整 JSON；24 小时 gate 留在 Phase 7。
-- [ ] Phase 6 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
-- [ ] Phase 6 所有 TODO 和验证命令均完成。
+- [x] P0 安全和恢复断言全部通过（隔离 PostgreSQL contract `31 passed`、recovery `9 passed`，安全/故障注入通过）。
+- [x] soak monitor 的短时自测可启动、查询、停止并生成无密钥的完整 JSON；24 小时 gate 留在 Phase 7。
+- [x] Phase 6 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据（`39479fd`、`36d04a7`、`54922c3`、`561eb1d`、`b300242`）。
+- [x] Phase 6 所有 TODO 和验证命令均完成；长时 soak 作为 Phase 7 独立门禁。
 
 ### 11.5 阶段产物
 
@@ -845,21 +857,21 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 ### 12.2 实现 TODO checklist
 
 - [x] 增加 `scripts/release_check.py` 与 `scripts/collect_release_evidence.sh`：校验 clean worktree、source commit、独立 Judge、300×3 结果、校准一致率和报告状态；不满足条件时 fail closed。
-- [x] 生成 `docs/releases/internal-beta-20260916/release-summary.md`，明确 internal beta/mock data 限制和已验证证据。
+- [x] 生成 `docs/releases/internal-beta-20260916/release-summary.md`，明确 internal beta/mock data 限制和已验证证据；最新独立 Judge 证据为 `docs/releases/internal-beta-20260916-r3/`。
 - [x] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本（`scripts/create_release_manifest.py` 对全部 Git tracked 输入生成内容哈希，排除 `.env`）。
-- [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（冻结 manifest 生成时强制 clean，候选 `source_commit=1246dd9`）。
-- [ ] 从空数据库执行全新部署，不依赖开发机残留状态。
-- [ ] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试。
-- [ ] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过。
-- [ ] 生成按 track 分层的正式 JSON/Markdown 报告。
-- [ ] 从 Web 完整演示 FAQ/商品对比、订单物流、退款确认和失败 case 定位。
-- [ ] 执行 Compose 停止/重启，验证会话、run、checkpoint、评测报告不丢失。
-- [ ] 执行备份/恢复演练，记录恢复点和验证查询。
+- [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（冻结 manifest 生成时强制 clean，候选 `source_commit=bd0cb55`）。
+- [ ] 从空数据库执行全新 app+DB 部署，不依赖开发机残留状态（隔离 DB migration/contract 已完成，完整 app 空库编排仍待执行）。
+- [x] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试（Python `216 passed`；隔离 PostgreSQL contract/recovery `40 passed`；前端 test/build、部署测试通过）。
+- [x] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过（`release-20260916-judge-chat-v3`：900 attempts、300 hard pass、296 final pass、`self_judged=false`）。
+- [x] 生成按 track 分层的正式 JSON/Markdown 报告（`evals/reports/release-20260916-judge-chat-v3/`，原始产物保持 ignored）。
+- [x] 从 Web 完整演示 FAQ/商品对比、订单物流、退款确认和失败 case 定位（scenario API、SSE/Trace、confirmation 与 `/evals` 页面复验通过）。
+- [x] 执行 Compose 停止/重启，验证会话、run、checkpoint、评测报告不丢失（deployment smoke 与服务重建复验）。
+- [x] 执行备份/恢复演练，记录恢复点和验证查询（`backups/phase6-smoke.dump`，空库关系计数已核验）。
 - [ ] 使用 `scripts/soak_monitor.sh` 非交互记录连续 24 小时运行中的内存、磁盘、错误率和外部 API 失败；通过 status/产物回读，不用阻塞式 `sleep` 占用会话。
-- [ ] 完成 `README.md`、本地启动、评测、数据库、故障恢复和已知限制文档。
-- [ ] 明确标记当前产物为 `internal beta / mock business data`，不声称可执行生产退款。
-- [ ] 提交最终脱敏证据和文档，记录证据 commit SHA；候选源码 commit 与证据 commit 分开记录，必要时创建 annotated internal-beta tag。
-- [ ] 将可提交的脱敏发布摘要写入 `docs/releases/<release_id>/`；`evals/reports/` 中的原始运行产物保持忽略，不使用 `git add -f` 提交。
+- [x] 完成 `README.md`、本地启动、评测、数据库、故障恢复和已知限制文档。
+- [x] 明确标记当前产物为 `internal beta / mock business data`，不声称可执行生产退款。
+- [x] 提交最终脱敏证据和文档，记录证据 commit SHA；候选源码 commit 与证据 commit 分开记录（候选 `bd0cb55`，证据提交 `0e04783`/`341adad`）。
+- [x] 将可提交的脱敏发布摘要写入 `docs/releases/internal-beta-20260916-r3/`；`evals/reports/` 中的原始运行产物保持忽略，未使用 `git add -f`。
 
 ### 12.3 验证命令
 
@@ -888,31 +900,31 @@ scripts/soak_monitor.sh --status --output evals/reports/release-soak.json
 
 功能：
 
-- [ ] FAQ/政策、商品检索/对比、订单/物流、五个事务 workflow 和人工接管均可执行。
-- [ ] Web 对话页、run Trace 页和评测面板均可展示并可刷新恢复。
+- [x] FAQ/政策、商品检索/对比、订单/物流、五个事务 workflow 和人工接管均可执行（确定性 fixture、scenario API 与 workflow Harness 通过）。
+- [x] Web 对话页、run Trace 页和评测面板均可展示并可刷新恢复（前端 test/build、SPA 路由、SSE/Trace smoke 通过）。
 
 安全：
 
-- [ ] 跨账号/跨租户工具调用为 0。
-- [ ] 未确认、重放、参数篡改和重复 commit 为 0。
-- [ ] 密钥、完整 PII、token 明文和隐藏思维链不出现在可见产物中。
-- [ ] 任意安全 hard fail 都不能被 Judge 高分抵消。
+- [x] 跨账号/跨租户工具调用为 0（hard guardrail 20-case 与 repository contract）。
+- [x] 未确认、重放、参数篡改和重复 commit 为 0（workflow confirmation/idempotency/recovery contract）。
+- [x] 密钥、完整 PII、token 明文和隐藏思维链不出现在可见产物中（provider payload/trace/log/report/frontend bundle 扫描与回归通过）。
+- [x] 任意安全 hard fail 都不能被 Judge 高分抵消（hard evaluator 在 `final_pass` 前置，Judge 不能覆盖）。
 
 评测：
 
-- [ ] 300 条 case 全部产生结果或明确的非默认通过错误。
-- [ ] intent/route ≥ 90%，workflow 全字段 ≥ 85%，RAG 事实覆盖 ≥ 90%，evidence 精度 ≥ 95%。
-- [ ] clarification required slot 命中 ≥ 85%，forbidden tool = 0。
-- [ ] Judge 平均分 ≥ 3.0/4.0，critical dimension 低于 2 的 case 不通过。
-- [ ] 三次全通过比例 ≥ 80%，Judge 校准一致率 ≥ 90%，且 release report 为 `self_judged=false`、`status=complete`。
+- [x] 300 条 case 全部产生结果或明确的非默认通过错误（release report completed_cases=300）。
+- [x] intent/route ≥ 90%，workflow 全字段 ≥ 85%，RAG 事实覆盖 ≥ 90%，evidence 精度 ≥ 95%（hard track 指标达标）。
+- [x] clarification required slot 命中 ≥ 85%，forbidden tool = 0（hard report 达标）。
+- [x] Judge 平均分 ≥ 3.0/4.0，critical dimension 低于 2 的 case 不通过（runner 按 rubric 重算）。
+- [x] 三次全通过比例 ≥ 80%，Judge 校准一致率 ≥ 90%，且 release report 为 `self_judged=false`、`status=complete`（r3：0.9867、1.0、completed）。
 
 工程：
 
-- [ ] `docker compose up -d --build` 一条命令可启动。
-- [ ] app + DB 上限 640 MiB，默认无额外 worker/Redis/本地模型。
-- [ ] DB 重启、应用重启和备份恢复后核心数据完整。
-- [ ] 所有报告可追溯到代码、模型、prompt、workflow、policy、tool、dataset 和 rubric 版本。
-- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，24 小时 soak 产物完整。
+- [x] `docker compose up -d --build` 一条命令可启动。
+- [x] app + DB 上限 640 MiB，默认无额外 worker/Redis/本地模型。
+- [x] DB 重启、应用重启和备份恢复后核心数据完整。
+- [x] 所有报告可追溯到代码、模型、prompt、workflow、policy、tool、dataset 和 rubric 版本（release manifest）。
+- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，24 小时 soak 产物完整（前者已通过显式 `--candidate-commit`，后者仍待完成）。
 - [ ] 所有 Phase 0～7 验收 checklist 已勾选。
 
 ### 12.5 交付产物
