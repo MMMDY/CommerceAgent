@@ -579,6 +579,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - `scripts/collect_release_evidence.sh` smoke → manifest `230` 个 tracked 文件、migration `20260916_0011`、`.env` 未进入清单。
 - 最新 deterministic Harness 复验（候选源码 `0740044d`）：300 case、3 repetitions → `900 attempts / 300 hard passed / all_repetitions_pass_rate=1.0`；Judge 关闭，仅作为 hard-eval 证据，不替代独立 Judge release gate。
 - Provider 边界复验（提交 `b300242`）：分类器与主 Agent 的 HTTP payload 均先经过统一 PII 脱敏；手机号、地址、邮箱、支付卡号均由回归测试确认不会进入 provider JSON。
+- Live provider smoke（显式 `RUN_LIVE_MODEL_TEST=1`，不输出凭据）：`tests/integration/test_intent_classifier_live.py` 与 `test_model_gateway_live.py` → `2 passed in 3.76s`；分类请求使用禁用思维链配置。
 - 关键证据：候选源码 commit `1246dd9`；冻结 manifest 提交 `e43ecc8`；摘要提交 `f6bb320`；provider 脱敏提交 `b300242`；工作区 clean。
 - 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、24 小时 soak。
 - BLOCKED：正式 Release gate 仍需独立 Judge 配置和持续运行外部条件；本地门禁已 fail-closed 验证。
