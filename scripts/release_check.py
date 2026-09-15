@@ -24,6 +24,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("report", type=Path)
     parser.add_argument("--require-clean", action="store_true")
+    parser.add_argument(
+        "--candidate-commit",
+        help=(
+            "expected candidate source commit; use the frozen manifest value "
+            "after an evidence commit"
+        ),
+    )
     args = parser.parse_args()
     try:
         report = json.loads(args.report.read_text(encoding="utf-8"))
@@ -42,7 +49,8 @@ def main() -> int:
     agreement = report.get("calibration", {}).get("agreement_rate")
     if agreement is None or agreement < 0.9:
         failures.append("calibration_below_threshold")
-    if report.get("source_commit") != current_commit():
+    expected_commit = args.candidate_commit or current_commit()
+    if report.get("source_commit") != expected_commit:
         failures.append("source_commit_mismatch")
     if args.require_clean:
         clean = subprocess.run(

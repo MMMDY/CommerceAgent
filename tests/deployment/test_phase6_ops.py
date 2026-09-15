@@ -85,3 +85,37 @@ def test_release_checker_fails_closed_without_independent_judge(tmp_path: Path) 
     )
     assert result.returncode == 1
     assert "judge_not_independent" in result.stderr
+
+
+def test_release_checker_accepts_explicit_candidate_commit(tmp_path: Path) -> None:
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(
+            {
+                "mode": "release",
+                "status": "completed",
+                "self_judged": False,
+                "release_gate": True,
+                "selected_cases": 300,
+                "attempts": 900,
+                "calibration": {"agreement_rate": 1.0},
+                "source_commit": "candidate-sha",
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/release_check.py",
+            str(report),
+            "--candidate-commit",
+            "candidate-sha",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "release-check passed"
