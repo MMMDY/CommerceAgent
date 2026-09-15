@@ -564,6 +564,23 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 剩余 TODO：真实 provider payload 的 PII 全链路审计、独立 Judge 校准与 Release gate、空库恢复/24 小时 soak、完整 PostgreSQL contract suite。
 - BLOCKED：无（本切片）；Phase 6/7 外部门禁阻塞仍按上一条记录执行。
 
+### 2026-09-16 — Phase 6/7 — 隔离 PostgreSQL 合同与版本冻结
+
+- 状态：completed（本地可执行门禁）；Release/Phase 7 外部 Judge 与长时 soak 仍未满足。
+- 变更文件：
+  - `scripts/create_release_manifest.py`：从 Git tracked 文件生成不含凭据的内容寻址 manifest。
+  - `scripts/collect_release_evidence.sh`：改为调用 manifest 生成器并将 release/report 元数据合并写入清单。
+  - `tests/deployment/test_release_manifest.py`、`tests/deployment/test_runtime_limits.py`、`tests/recovery/test_phase6_fault_injection.py`。
+  - `docs/releases/internal-beta-20260916/manifest.json`、`release-summary.md`。
+- 执行验证：
+  - `scripts/run_phase1_contract_tests.sh` → contract `31 passed`。
+  - `scripts/run_phase1_contract_tests.sh tests/recovery/test_postgres_checkpoint_recovery.py tests/recovery/test_postgres_event_replay.py tests/recovery/test_postgres_mutation_recovery.py` → `40 passed`（含 contract 31 + recovery 9）。
+  - 隔离 DB 加安全/本地恢复：`39 passed`；部署测试：`4 passed`。
+  - `scripts/collect_release_evidence.sh` smoke → manifest `230` 个 tracked 文件、migration `20260916_0011`、`.env` 未进入清单。
+- 关键证据：候选源码 commit `1246dd9`；冻结 manifest 提交 `e43ecc8`；摘要提交 `f6bb320`；工作区 clean。
+- 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、24 小时 soak、真实 provider payload PII 审计。
+- BLOCKED：正式 Release gate 仍需独立 Judge 配置和持续运行外部条件；本地门禁已 fail-closed 验证。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
@@ -827,7 +844,7 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 - [x] 增加 `scripts/release_check.py` 与 `scripts/collect_release_evidence.sh`：校验 clean worktree、source commit、独立 Judge、300×3 结果、校准一致率和报告状态；不满足条件时 fail closed。
 - [x] 生成 `docs/releases/internal-beta-20260916/release-summary.md`，明确 internal beta/mock data 限制和已验证证据。
 - [x] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本（`scripts/create_release_manifest.py` 对全部 Git tracked 输入生成内容哈希，排除 `.env`）。
-- [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（manifest 生成时强制 clean，`source_commit=d020cfd`）。
+- [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（冻结 manifest 生成时强制 clean，候选 `source_commit=1246dd9`）。
 - [ ] 从空数据库执行全新部署，不依赖开发机残留状态。
 - [ ] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试。
 - [ ] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过。
