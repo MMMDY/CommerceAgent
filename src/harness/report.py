@@ -152,6 +152,12 @@ def build_report(
         "judge": "on" if judge_enabled else "off",
         "self_judged": any(r["self_judged"] for r in rows),
         "provisional": any(r["self_judged"] for r in rows),
+        "release_gate": bool(
+            mode == "release"
+            and judge_enabled
+            and not any(r["self_judged"] for r in rows)
+            and not judge_incomplete
+        ),
         "status": "cancelled" if cancelled else ("incomplete" if judge_incomplete else "completed"),
         "selected_cases": len(grouped),
         "completed_cases": len(grouped),
