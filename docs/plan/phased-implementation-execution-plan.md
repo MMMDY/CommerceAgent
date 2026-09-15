@@ -2,10 +2,10 @@
 
 > 版本：v2.5
 >
-> 日期：2026-09-14
+> 日期：2026-09-16
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～3 已验收；Phase 4 首个事务切片已实现，完整验收进行中；Phase 5～7 未开始）
+> 当前整体状态：`in_progress`（Phase 0～4 已验收；Phase 5/6 代码与本地验证已完成但仍有独立 Judge、数据库恢复和 soak 外部门禁；Phase 7 发布验收未完成）
 
 ## 1. Codex 使用规则
 
