@@ -5,7 +5,7 @@
 > 日期：2026-09-16
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～4 已验收；Phase 5/6 代码与本地验证已完成但仍有独立 Judge、数据库恢复和 soak 外部门禁；Phase 7 发布验收未完成）
+> 当前整体状态：`in_progress`（Phase 0～6 已验收；Phase 7 仅剩连续 24 小时 soak 与最终候选证据收尾）
 
 ## 1. Codex 使用规则
 
@@ -99,7 +99,7 @@ Codex 执行每个阶段时必须：
 - [x] Phase 2 v2.2 已完成单步 `run_step()`、ModelGateway、工具/政策边界与最小 hard-eval Harness；这只是双执行器改造的输入基线。
 - [x] 完成 Phase 2 v2.5：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、复用主模型且温度为 0.1 的意图分类器、WorkflowExecutor、执行模式约束和多轮 Harness。
 - [x] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；三个只读场景已具备真实 API/UI 展示链路。
-- [ ] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。（Phase 4 已完成；Phase 5/6 代码已落地但 Release/外部演练门禁未完成。）
+- [x] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。（独立 Judge、数据库恢复与安全/资源门禁均已通过。）
 - [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。（已生成 partial/blocked 摘要，正式验收未完成。）
 
 ## 4. 阶段总览
@@ -111,8 +111,8 @@ Codex 执行每个阶段时必须：
 | Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `completed` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `completed` | 五类 prepare/confirm/commit/verify、低风险写入、接管闭环、确认卡与 workflow Harness | 五类事务 contract/recovery、60-case hard eval、幂等/并发/脱敏门禁通过 |
-| Phase 5：评测 Harness 完整化与面板 | `in_progress` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail；Release 需独立 Judge |
-| Phase 6：安全、恢复与运维硬化 | `in_progress` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
+| Phase 5：评测 Harness 完整化与面板 | `completed` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail；独立 Judge release gate 已通过 |
+| Phase 6：安全、恢复与运维硬化 | `completed` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
 | Phase 7：全链路验收 | `in_progress` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
 
 ```text
@@ -777,15 +777,15 @@ npm --prefix apps/web test -- --run
 - [x] 20 个 guardrail case 的 forbidden tool 调用次数为 0。
 - [x] Judge 不能将 hard fail 改为 pass。
 - [x] Judge 平均分门槛为 3.0/4.0，critical dimension < 2 的 case 不通过。
-- [ ] 30 条校准集上 Judge pass/fail 一致率 ≥ 90%，校准报告固定 Judge/prompt/rubric 版本。
+- [x] 30 条校准集上 Judge pass/fail 一致率 ≥ 90%，校准报告固定 Judge/prompt/rubric 版本（agreement `1.0`，30/30）。
 - [x] 同一 case 连跑 3 次全部成功的比例 ≥ 80%，报告同时保留首跑指标（确定性 Fixture：300/300，首跑与全通过率均 1.0）。
 - [x] Judge 不可用时仍产生完整 hard report，整体状态明确标记 incomplete。
-- [ ] Release report 的 `self_judged=false` 且 Judge 配置完整；开发回退报告不能被标为 release pass（当前 `.env` Judge 与 Agent 相同，release 按设计阻断）。
+- [x] Release report 的 `self_judged=false` 且 Judge 配置完整；开发回退报告不能被标为 release pass（`deepseek-chat` 独立于候选 Agent，`release_gate=true`）。
 - [x] `/evals` 能定位到单个失败 case，hard fail 和 Judge fail 可分开过滤。
 - [x] 报告固定 dataset/model/prompt/workflow/policy/tool/rubric 版本和 hash（不可用字段显式为 null/unknown）。
 - [x] 300-case 各轨 hard 指标达到上位设计第 11.2 节门槛。
-- [x] Phase 5 代码切片已创建原子 commit `1edaf7a`；Release Judge/校准门禁仍按设计阻断，故阶段整体保持 `in_progress`。
-- [ ] Phase 5 所有 TODO 和验证命令均完成。
+- [x] Phase 5 代码切片已创建原子 commit `1edaf7a`；独立 Judge/校准与 release gate 证据见 `evals/reports/release-20260916-judge-chat-v3/`。
+- [x] Phase 5 所有 TODO 和验证命令均完成（最近复验：Python `217 passed, 42 skipped`；前端 test/build 通过）。
 
 ### 10.5 阶段产物
 
