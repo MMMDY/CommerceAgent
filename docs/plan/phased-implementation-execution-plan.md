@@ -606,6 +606,14 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 剩余 TODO：24 小时 soak；其余 Phase 7 本地门禁已完成。
 - BLOCKED：无；24 小时门禁需等待真实运行窗口结束。
 
+### 2026-09-16 — Phase 7 — 24 小时 soak 启动
+
+- 状态：in_progress（后台采样已启动，尚未达到 24 小时窗口）。
+- 执行命令：`scripts/soak_monitor.sh --duration 24h --interval 60 --output evals/reports/release-soak.json --detach`。
+- 当前证据：返回 `status=running`，PID `124898`；`--status` 已读到首个采样，包含磁盘、内存和错误计数，产物原子写入且不含凭据。
+- 验收条件：待 `scripts/soak_monitor.sh --status` 返回 `status=completed` 且采样窗口达到 86,400 秒后，才能勾选 Phase 7 soak 及整体完成项。
+- BLOCKED：无；等待后台采样窗口自然结束。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
@@ -900,7 +908,7 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:19473/health/live
 curl -fsS http://127.0.0.1:19473/health/ready
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --repetitions 3 --mode release
-scripts/soak_monitor.sh --duration 24h --interval 60s --output evals/reports/release-soak.json --detach
+scripts/soak_monitor.sh --duration 24h --interval 60 --output evals/reports/release-soak.json --detach
 scripts/soak_monitor.sh --status --output evals/reports/release-soak.json
 ```
 
