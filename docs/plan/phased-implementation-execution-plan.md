@@ -48,7 +48,7 @@ Codex 执行每个阶段时必须：
 - AgentLoop、OrchestrationEngine、状态机、ToolRegistry、PolicyEngine 和 EvalHarness 全部由本项目实现。
 - 代码主目录只使用 `src/`，不创建旧的包目录名。
 - 模型只产生结构化 Decision，不直接执行工具、SQL、shell 或任意 HTTP。
-- 意图分类器必须通过同一个 ModelGateway 复用主 Agent 模型；允许并要求配置 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY`，但三者必须与主 Agent 对应值相同，分类温度固定为 `CLASSIFIER_TEMPERATURE=0.1`。
+- 意图分类器必须通过同一个 ModelGateway 复用主 Agent 模型；允许并要求配置 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY`，但三者必须与主 Agent 对应值相同，分类温度固定为 `CLASSIFIER_TEMPERATURE=0.1`。对于 `deepseek-flash` 分类请求显式发送 `thinking: {"type":"disabled"}`，不得返回或记录思维链。
 - 只读请求进入有界 `AgentLoop.run()` while 循环；每轮只调用一次 `StepPipeline.advance()`：AgentStepExecutor 只产生单轮结果，StepPipeline 完成原子 checkpoint，AgentLoop 才能基于新 context 决定是否继续。
 - `prepare/low_write/commit` 等写操作不得进入 AgentLoop，必须进入确定性 WorkflowExecutor。
 - 写操作必须经过 `authenticate → prepare → confirm → commit → verify`。

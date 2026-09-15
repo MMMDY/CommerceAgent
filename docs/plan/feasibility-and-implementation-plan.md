@@ -19,7 +19,7 @@
 5. **上线指标以最终业务状态和安全为主**。Intent Accuracy、Slot Accuracy 只能作为诊断指标，不能代表 Agent 真正完成了任务。
 6. **首版范围控制在**：商品搜索/详情/对比、订单查询、FAQ/政策问答、退款/退货申请、人工转接。支付、自动审批大额退款、跨账号操作暂不开放。
 7. **首版同步交付可展示 Web 页面**：一个页面完成对话、确认操作、引用展示和 run-level Trace 查看，另提供简化的 300-case 评测面板。
-8. **意图分类器复用主 Agent 模型，但使用独立配置名。** `.env` 显式提供 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY`，其值必须分别与 `MODEL/API_BASE/API_KEY` 相同；分类温度固定为 `CLASSIFIER_TEMPERATURE=0.1`。分类和 Agent 决策通过调用用途、Prompt、输出 Schema、采样参数和版本哈希隔离。
+8. **意图分类器复用主 Agent 模型，但使用独立配置名。** `.env` 显式提供 `CLASSIFIER_MODEL/CLASSIFIER_API_BASE/CLASSIFIER_API_KEY`，其值必须分别与 `MODEL/API_BASE/API_KEY` 相同；分类温度固定为 `CLASSIFIER_TEMPERATURE=0.1`。当分类模型为 `deepseek-flash` 时请求必须显式设置 `thinking: {"type":"disabled"}`，不启用思维链；分类和 Agent 决策通过调用用途、Prompt、输出 Schema、采样参数和版本哈希隔离。
 
 设计约束：
 
