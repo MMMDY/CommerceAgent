@@ -826,8 +826,8 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 
 - [x] 增加 `scripts/release_check.py` 与 `scripts/collect_release_evidence.sh`：校验 clean worktree、source commit、独立 Judge、300×3 结果、校准一致率和报告状态；不满足条件时 fail closed。
 - [x] 生成 `docs/releases/internal-beta-20260916/release-summary.md`，明确 internal beta/mock data 限制和已验证证据。
-- [ ] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本。
-- [ ] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名。
+- [x] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本（`scripts/create_release_manifest.py` 对全部 Git tracked 输入生成内容哈希，排除 `.env`）。
+- [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（manifest 生成时强制 clean，`source_commit=d020cfd`）。
 - [ ] 从空数据库执行全新部署，不依赖开发机残留状态。
 - [ ] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试。
 - [ ] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过。
@@ -853,6 +853,7 @@ python -m pytest
 npm --prefix apps/web test -- --run
 npm --prefix apps/web run build
 docker compose config --quiet
+python scripts/create_release_manifest.py --output docs/releases/<release_id>/manifest.json
 docker compose up -d --build
 curl -fsS http://127.0.0.1:19473/health/live
 curl -fsS http://127.0.0.1:19473/health/ready
