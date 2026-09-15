@@ -95,6 +95,8 @@ def build_report(
                 "evidence_ids": list(driven.trace.evidence_ids),
                 "status": driven.trace.status,
             },
+            latency_ms=judge.latency_ms if judge else None,
+            token_usage=judge.usage_tokens if judge else None,
         )
         rows.append(asdict(row))
     track = defaultdict(

@@ -66,6 +66,11 @@ def calibration_report(
         name: {"mean": round(sum(scores) / len(scores), 4), "count": len(scores)}
         for name, scores in dimensions.items()
     }
+    boundary_cases = [
+        result.case_id
+        for _, result in pairs
+        if result.weighted_score is not None and 2.0 <= result.weighted_score < 3.5
+    ]
     canonical = json.dumps(
         [label.model_dump() for label in labels],
         ensure_ascii=False,
@@ -77,6 +82,7 @@ def calibration_report(
         "evaluated_count": len(pairs),
         "agreement_rate": round(agreements / len(pairs), 4) if pairs else None,
         "conflicts": conflicts,
+        "boundary_cases": boundary_cases,
         "dimension_stats": dimension_stats,
         "judge_model": judge_model,
         "prompt_hash": prompt_hash,
