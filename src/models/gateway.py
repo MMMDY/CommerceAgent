@@ -12,6 +12,7 @@ from time import perf_counter
 import httpx
 
 from src.config import Settings
+from src.guardrails.trust import sanitize
 from src.protocols import Decision, IntentClassification, PromptView, RoutingPromptView
 
 
@@ -168,7 +169,14 @@ class OpenAICompatibleGateway(ModelGateway):
                         "content": instruction
                         + (" Output valid JSON only; do not include reasoning." if repair else ""),
                     },
-                    {"role": "user", "content": prompt.model_dump_json()},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            sanitize(prompt.model_dump(mode="json")),
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ),
+                    },
                 ],
             }
             try:
@@ -212,7 +220,14 @@ class OpenAICompatibleGateway(ModelGateway):
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": instruction},
-                {"role": "user", "content": prompt.model_dump_json()},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        sanitize(prompt.model_dump(mode="json")),
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                },
             ],
         }
         response = self._post(payload)

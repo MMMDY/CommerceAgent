@@ -126,6 +126,49 @@ def test_classifier_and_agent_share_connection_but_use_separate_profiles() -> No
     assert "thinking" not in json.loads(requests[1].content)
 
 
+def test_provider_payload_redacts_pii_at_classifier_and_agent_boundaries() -> None:
+    requests: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        requests.append(payload)
+        if payload["temperature"] == 0.1:
+            content = (
+                '{"intent":"order_status","risk_hint":"read_only",'
+                '"route_hint":"order_query","confidence":1,"required_slots":[]}'
+            )
+        else:
+            content = (
+                '{"type":"respond","intent":"order_status","route":"order_query",'
+                '"confidence":1,"response":"ok"}'
+            )
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    sensitive = "上海市浦东新区测试路 20 号，13800138000，a@example.com，卡 4111 1111 1111 1111"
+    routing = RoutingPromptView(
+        conversation=(Message(role="user", content=sensitive),),
+        allowed_intents=("order_status",),
+    )
+    decision = _decision_prompt().model_copy(
+        update={"conversation": (Message(role="user", content=sensitive),)}
+    )
+    gateway = OpenAICompatibleGateway(
+        _settings(), httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    gateway.classify(routing)
+    gateway.decide(decision)
+
+    assert len(requests) == 2
+    encoded = json.dumps(requests, ensure_ascii=False)
+    assert "13800138000" not in encoded
+    assert "a@example.com" not in encoded
+    assert "4111 1111 1111 1111" not in encoded
+    assert "[PHONE_REDACTED]" in encoded
+    assert "[EMAIL_REDACTED]" in encoded
+    assert "[PAYMENT_REDACTED]" in encoded
+    assert "[ADDRESS_REDACTED]" in encoded
+
+
 @pytest.mark.parametrize(
     "content",
     (
