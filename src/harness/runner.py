@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import signal
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
@@ -15,7 +16,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from src.config import get_settings
 from src.db import get_engine
-from src.harness.calibration import calibration_report, load_labels
+from src.harness.calibration import calibration_report, load_labels, validate_stratification
 from src.harness.deterministic_runtime import (
     DeterministicRuntimeFactory,
     RuntimeFixtureError,
@@ -178,6 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         report["runtime"] = "deterministic_fixture"
         report["runtime_fixture_hash"] = runtime_loader.fixture_hash()
         report["eval_run_id"] = eval_run_id
+        report["source_commit"] = _source_commit()
         report["prompt_hash"] = "sha256:commerce-agent-deterministic-runtime-prompt-v1"
         if judge_runner is not None:
             report["judge_prompt_hash"] = f"sha256:{judge_runner.prompt_hash}"
@@ -185,8 +187,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             calibration_path = args.dataset.parent / "calibration_labels.jsonl"
             if calibration_path.is_file():
                 try:
+                    labels = load_labels(calibration_path)
+                    validate_stratification(labels, dataset=args.dataset)
                     report["calibration"] = calibration_report(
-                        load_labels(calibration_path),
+                        labels,
                         judge_results.values(),
                         judge_model=judge_runner.config.model,
                         prompt_hash=f"sha256:{judge_runner.prompt_hash}",
@@ -236,6 +240,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _exit() -> NoReturn:
     raise SystemExit(main())
+
+
+def _source_commit() -> str | None:
+    """Return the exact source revision used by the runner when available."""
+
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = completed.stdout.strip()
+    return value or None
 
 
 if __name__ == "__main__":

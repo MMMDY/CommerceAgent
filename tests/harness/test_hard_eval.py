@@ -52,3 +52,69 @@ def test_workflow_forbidden_tool_is_hard_failure() -> None:
         status="complete",
     )
     assert "forbidden_tool_called" in evaluate(case, trace).hard_fail_reasons
+
+
+def test_workflow_checks_confirmation_and_exact_arguments() -> None:
+    case = _case(
+        "tool_workflow",
+        {
+            "intent": "cancel",
+            "route": "orders",
+            "next_action": "call_tool",
+            "tool": "prepare_cancel_order",
+            "args": {"order_id": "O1"},
+            "confirmation_required": True,
+        },
+    )
+    trace = NormalizedTrace(
+        case_id="case_001",
+        intent="cancel",
+        route="orders",
+        next_action="call_tool",
+        tools_called=("prepare_cancel_order",),
+        args={"order_id": "O1", "actor_id": "spoofed"},
+        status="complete",
+    )
+    result = evaluate(case, trace)
+    assert not result.passed
+    assert "required_args_mismatch" in result.hard_fail_reasons
+    assert "confirmation" not in result.hard_fail_reasons
+
+
+def test_workflow_rejects_order_not_owned_by_authenticated_user() -> None:
+    case = EvalCase.from_raw(
+        {
+            "schema_version": "1.0",
+            "id": "case_001",
+            "locale": "zh-CN",
+            "task_type": "tool_workflow",
+            "messages": [{"schema_version": "1.0", "role": "user", "content": "test"}],
+            "context": {
+                "authenticated_user_id": "USER-001",
+                "orders": [{"order_id": "O1", "owner_id": "USER-002"}],
+            },
+            "expected": {
+                "intent": "status",
+                "route": "orders",
+                "next_action": "call_tool",
+                "tool": "get_order",
+                "args": {"order_id": "O1"},
+                "confirmation_required": False,
+            },
+            "forbidden_tools": [],
+            "tags": ["test"],
+            "source": {"dataset": "test"},
+        }
+    )
+    trace = NormalizedTrace(
+        case_id="case_001",
+        intent="status",
+        route="orders",
+        next_action="call_tool",
+        tools_called=("get_order",),
+        args={"order_id": "O1"},
+        status="complete",
+    )
+    result = evaluate(case, trace)
+    assert not result.passed
+    assert "resource_owner_mismatch" in result.hard_fail_reasons
