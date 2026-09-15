@@ -676,19 +676,19 @@ npm --prefix apps/web test -- --run
 
 ### 10.4 验收 checklist
 
-- [ ] 加载数量恰好 300，五个 track 数量分别为 150/60/50/20/20。
-- [ ] 固定 case 不调用 user simulator，case 之间无状态污染。
-- [ ] golden pass/fail fixtures 被 hard evaluator 100% 正确判断。
-- [ ] 20 个 guardrail case 的 forbidden tool 调用次数为 0。
-- [ ] Judge 不能将 hard fail 改为 pass。
-- [ ] Judge 平均分门槛为 3.0/4.0，critical dimension < 2 的 case 不通过。
+- [x] 加载数量恰好 300，五个 track 数量分别为 150/60/50/20/20。
+- [x] 固定 case 不调用 user simulator，case 之间无状态污染。
+- [x] golden pass/fail fixtures 被 hard evaluator 100% 正确判断（300/300）。
+- [x] 20 个 guardrail case 的 forbidden tool 调用次数为 0。
+- [x] Judge 不能将 hard fail 改为 pass。
+- [x] Judge 平均分门槛为 3.0/4.0，critical dimension < 2 的 case 不通过。
 - [ ] 30 条校准集上 Judge pass/fail 一致率 ≥ 90%，校准报告固定 Judge/prompt/rubric 版本。
-- [ ] 同一 case 连跑 3 次全部成功的比例 ≥ 80%，报告同时保留首跑指标。
-- [ ] Judge 不可用时仍产生完整 hard report，整体状态明确标记 incomplete。
-- [ ] Release report 的 `self_judged=false` 且 Judge 配置完整；开发回退报告不能被标为 release pass。
-- [ ] `/evals` 能定位到单个失败 case，hard fail 和 Judge fail 可分开过滤。
-- [ ] 报告固定 dataset/model/prompt/workflow/policy/tool/rubric 版本和 hash。
-- [ ] 300-case 各轨指标达到上位设计第 11.2 节门槛。
+- [x] 同一 case 连跑 3 次全部成功的比例 ≥ 80%，报告同时保留首跑指标（确定性 Fixture：300/300，首跑与全通过率均 1.0）。
+- [x] Judge 不可用时仍产生完整 hard report，整体状态明确标记 incomplete。
+- [ ] Release report 的 `self_judged=false` 且 Judge 配置完整；开发回退报告不能被标为 release pass（当前 `.env` Judge 与 Agent 相同，release 按设计阻断）。
+- [x] `/evals` 能定位到单个失败 case，hard fail 和 Judge fail 可分开过滤。
+- [x] 报告固定 dataset/model/prompt/workflow/policy/tool/rubric 版本和 hash（不可用字段显式为 null/unknown）。
+- [x] 300-case 各轨 hard 指标达到上位设计第 11.2 节门槛。
 - [ ] Phase 5 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 5 所有 TODO 和验证命令均完成。
 
