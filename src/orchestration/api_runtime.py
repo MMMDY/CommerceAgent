@@ -122,6 +122,8 @@ class ApiPromptBuilder(PromptBuilder):
             "For respond, finish, ask_user, or handoff, set tool to null and args to {}. "
             "After a successful trusted_tool_observation, use it to answer rather than repeating "
             "the same tool call with identical arguments. "
+            "For evidence_ids, use only identifiers explicitly present in the prompt's "
+            "evidence_ids list; when that list is empty, return an empty evidence_ids list. "
             "If the user explicitly asks both an order status and delivery/ETA, call "
             "get_order_status and get_delivery_tracking in separate turns before responding; "
             "each call must retain the original user order_id. "

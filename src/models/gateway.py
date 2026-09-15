@@ -148,7 +148,15 @@ class OpenAICompatibleGateway(ModelGateway):
             payload = {
                 "model": self._classifier_model,
                 "temperature": self._classifier_temperature,
-                "max_tokens": self._classifier_max_tokens,
+                # Reasoning-capable providers can consume the whole initial
+                # budget before emitting the small JSON object.  The repair
+                # request gets the largest configured-safe budget so an empty
+                # first response does not become a false handoff.
+                "max_tokens": (
+                    self._classifier_max_tokens
+                    if not repair
+                    else max(self._classifier_max_tokens, 2048)
+                ),
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {
@@ -178,6 +186,7 @@ class OpenAICompatibleGateway(ModelGateway):
         started = perf_counter()
         allowed_types = json.dumps(prompt.allowed_decisions, ensure_ascii=False)
         allowed_tools = json.dumps(prompt.allowed_tools, ensure_ascii=False)
+        allowed_evidence_ids = json.dumps(prompt.evidence_ids, ensure_ascii=False)
         instruction = (
             "Return exactly one JSON object and no prose or markdown. "
             "Required fields: type, intent, route, confidence. "
@@ -185,6 +194,8 @@ class OpenAICompatibleGateway(ModelGateway):
             "Optional fields: missing_slots, tool, args, evidence_ids, response, handoff_reason. "
             f"type must be one of {allowed_types}; tool must be null or one of {allowed_tools}; "
             "confidence must be a number from 0 through 1; args must be one JSON object. "
+            f"evidence_ids must be a subset of exactly {allowed_evidence_ids}; never invent or "
+            "copy identifiers that are not listed there. "
             "Never include tenant_id, actor_id, owner_id, scopes, idempotency_key, "
             "confirmation_token, or policy_version in args."
         )

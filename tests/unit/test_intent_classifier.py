@@ -145,6 +145,27 @@ def test_classifier_rejects_invalid_candidate_without_provider_details(content: 
         gateway.classify(_prompt())
 
 
+def test_classifier_format_repair_expands_token_budget() -> None:
+    payloads: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        content = (
+            "not-json"
+            if len(payloads) == 1
+            else '{"intent":"order_status","risk_hint":"read_only",'
+            '"route_hint":"order_query","confidence":1,"required_slots":[]}'
+        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    gateway = OpenAICompatibleGateway(
+        _settings(), httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    gateway.classify(_prompt())
+    assert payloads[0]["max_tokens"] == 1024
+    assert payloads[1]["max_tokens"] == 2048
+
+
 def test_fake_classifier_is_fifo() -> None:
     expected = IntentClassification(
         intent="order_status",

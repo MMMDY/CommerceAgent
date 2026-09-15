@@ -278,17 +278,68 @@ class AgentStepExecutor:
             )
         try:
             self._validator.validate(decision=decision, boundary=boundary)
-        except DecisionValidationError:
-            _record_stage(stage_observer, "validate", "failed")
-            _record_stage(stage_observer, "execute", "skipped")
-            _record_stage(stage_observer, "observe", "completed")
-            return LoopResult(
-                status=StepStatus.FAIL,
-                response=None,
-                decision_type=decision.type,
-                decision=decision,
-                reason="decision_rejected",
-            )
+        except DecisionValidationError as error:
+            # Providers occasionally hallucinate citation IDs on a terminal
+            # answer even though the prompt contains no trusted evidence IDs.
+            # A single semantic retry is safe here: terminal decisions have
+            # no tool side effects.  The validator remains strict, so an
+            # invalid retry still fails closed.
+            if (
+                str(error) == "decision references untrusted evidence"
+                and decision.type
+                in {
+                    DecisionType.RESPOND,
+                    DecisionType.FINISH,
+                    DecisionType.ASK_USER,
+                    DecisionType.HANDOFF,
+                }
+            ):
+                try:
+                    retry_result = self._model.decide(prompt)
+                    if self._model_invocations is not None:
+                        try:
+                            self._model_invocations.record_success(
+                                context=context,
+                                prompt=prompt,
+                                result=retry_result,
+                                provider=getattr(self._model, "provider", "unknown"),
+                                model=getattr(self._model, "model_name", "unknown"),
+                                config_hash=self.model_config_hash,
+                            )
+                        except Exception:
+                            _record_post_request_failure(stage_observer)
+                            return LoopResult(
+                                status=StepStatus.FAIL,
+                                response=None,
+                                decision_type=None,
+                                reason="model_audit_failed",
+                            )
+                    retry_decision = retry_result.decision
+                    self._validator.validate(decision=retry_decision, boundary=boundary)
+                    decision = retry_decision
+                    model_result = retry_result
+                except (DecisionValidationError, ModelGatewayError):
+                    _record_stage(stage_observer, "validate", "failed")
+                    _record_stage(stage_observer, "execute", "skipped")
+                    _record_stage(stage_observer, "observe", "completed")
+                    return LoopResult(
+                        status=StepStatus.FAIL,
+                        response=None,
+                        decision_type=decision.type,
+                        decision=decision,
+                        reason="decision_rejected",
+                    )
+            else:
+                _record_stage(stage_observer, "validate", "failed")
+                _record_stage(stage_observer, "execute", "skipped")
+                _record_stage(stage_observer, "observe", "completed")
+                return LoopResult(
+                    status=StepStatus.FAIL,
+                    response=None,
+                    decision_type=decision.type,
+                    decision=decision,
+                    reason="decision_rejected",
+                )
         _record_stage(stage_observer, "validate", "completed")
         _record_stage(stage_observer, "execute", "skipped")
         _record_stage(stage_observer, "observe", "completed")

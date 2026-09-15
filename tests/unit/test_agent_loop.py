@@ -133,6 +133,46 @@ def test_loop_maps_fake_decision_to_complete() -> None:
     )
 
 
+def test_loop_retries_terminal_answer_with_untrusted_evidence_once() -> None:
+    model = DeterministicFakeModel(
+        (
+            Decision(
+                type=DecisionType.RESPOND,
+                intent="x",
+                route="r",
+                confidence=1,
+                response="ok",
+                evidence_ids=("knowledge:hallucinated",),
+            ),
+            Decision(type=DecisionType.RESPOND, intent="x", route="r", confidence=1, response="ok"),
+        )
+    )
+    loop = AgentLoop(
+        model=model,
+        validator=DecisionValidator(),
+        registry=ToolRegistry(()),
+        executor=ToolExecutor({}),
+    )
+    context = _context()
+    result = loop.run_step(
+        context=context,
+        prompt=_prompt(),
+        boundary=DecisionBoundary("r", frozenset({DecisionType.RESPOND}), frozenset(), frozenset()),
+        tool_context=ToolContext(
+            request_id=uuid4(),
+            run_id=context.run_id,
+            conversation_id=context.conversation_id,
+            tenant_id="t",
+            actor_id="a",
+            scopes=(),
+        ),
+        deadline_at=datetime.now(UTC) + timedelta(seconds=1),
+    )
+    assert result.status is StepStatus.COMPLETE
+    assert result.decision is not None and result.decision.evidence_ids == ()
+    assert len(model.prompts) == 2
+
+
 def test_loop_fails_closed_on_invalid_decision_and_token_budget() -> None:
     model = DeterministicFakeModel(
         (

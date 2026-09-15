@@ -57,6 +57,30 @@ export function App() {
       const savedId = window.localStorage.getItem("commerce-agent-conversation-id");
       const restored = conversations.find((item) => item.id === savedId) ?? conversations[0];
       if (restored) {
+        // Do not reopen a terminally failed demo run as the active workbench.
+        // It is safe to preserve the old conversation in the database while
+        // giving the user a clean session after a transient model/validation
+        // failure.  Active handoff/confirmation runs are kept and handled by
+        // the send-time 503 recovery path below.
+        try {
+          const restoredMessages = await api<Message[]>(`/v1/conversations/${restored.id}/messages`);
+          const latestRunId = [...restoredMessages].reverse().find((message) => message.run_id)?.run_id;
+          if (latestRunId) {
+            const latestRun = await api<Run>(`/v1/runs/${latestRunId}`);
+            if (latestRun.status === "failed") {
+              const fresh = await api<Conversation>("/v1/conversations", {
+                method: "POST",
+                body: JSON.stringify({ client_request_id: `web-failed-recovery-${crypto.randomUUID()}` }),
+              });
+              setError("上次演示任务失败，已自动新建会话。");
+              setConversation(fresh);
+              return;
+            }
+          }
+        } catch {
+          // The normal conversation restore below remains authoritative if the
+          // optional failed-run probe is unavailable.
+        }
         setConversation(restored);
         return;
       }
