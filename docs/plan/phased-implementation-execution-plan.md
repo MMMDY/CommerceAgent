@@ -99,8 +99,8 @@ Codex 执行每个阶段时必须：
 - [x] Phase 2 v2.2 已完成单步 `run_step()`、ModelGateway、工具/政策边界与最小 hard-eval Harness；这只是双执行器改造的输入基线。
 - [x] 完成 Phase 2 v2.5：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、复用主模型且温度为 0.1 的意图分类器、WorkflowExecutor、执行模式约束和多轮 Harness。
 - [x] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；三个只读场景已具备真实 API/UI 展示链路。
-- [ ] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。
-- [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。
+- [ ] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。（Phase 4 已完成；Phase 5/6 代码已落地但 Release/外部演练门禁未完成。）
+- [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。（已生成 partial/blocked 摘要，正式验收未完成。）
 
 ## 4. 阶段总览
 
@@ -112,8 +112,8 @@ Codex 执行每个阶段时必须：
 | Phase 3：只读业务与对话页 | `completed` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `completed` | 五类 prepare/confirm/commit/verify、低风险写入、接管闭环、确认卡与 workflow Harness | 五类事务 contract/recovery、60-case hard eval、幂等/并发/脱敏门禁通过 |
 | Phase 5：评测 Harness 完整化与面板 | `in_progress` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail；Release 需独立 Judge |
-| Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
-| Phase 7：全链路验收 | `not_started` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
+| Phase 6：安全、恢复与运维硬化 | `in_progress` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
+| Phase 7：全链路验收 | `in_progress` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
 
 ```text
 Phase 0 工程骨架
@@ -542,7 +542,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - 前端 `vitest` 与 `vite build`、变更文件 ruff → pass。
   - Compose migration → `20260916_0011`；重启 app 后 `/health/live`、`/health/ready` → 200；宿主端口仍为 `127.0.0.1:19473`。
   - `tests/deployment/test_phase6_ops.py` → shell syntax 与 detached soak status/atomic JSON → pass。
-- 关键提交：Phase 5 hard gate `1edaf7a`；Phase 6 原子提交待本记录对应代码验证后创建。
+- 关键提交：Phase 5 hard gate `1edaf7a`；Phase 6 原子提交 `39479fd`、`36d04a7`。
 - 剩余 TODO：独立 Judge 30-case agreement ≥90%、Release report `self_judged=false`、真实空库备份恢复演练、24 小时 soak、完整 DATABASE_TEST_URL contract suite。
 - BLOCKED：Release 与 Phase 7 的正式门禁需要独立 Judge 配置；不可用当前同配置自评冒充通过。
 
@@ -805,6 +805,8 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 
 ### 12.2 实现 TODO checklist
 
+- [x] 增加 `scripts/release_check.py` 与 `scripts/collect_release_evidence.sh`：校验 clean worktree、source commit、独立 Judge、300×3 结果、校准一致率和报告状态；不满足条件时 fail closed。
+- [x] 生成 `docs/releases/internal-beta-20260916/release-summary.md`，明确 internal beta/mock data 限制和已验证证据。
 - [ ] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本。
 - [ ] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名。
 - [ ] 从空数据库执行全新部署，不依赖开发机残留状态。
