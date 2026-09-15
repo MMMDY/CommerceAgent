@@ -7,9 +7,10 @@ is passed only to the hard evaluator after the Runtime has completed.
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from typing import TYPE_CHECKING, Protocol
 
 from src.agent.loop import AgentLoop
@@ -170,7 +171,16 @@ class RunDriver:
             error = None
         except FutureTimeout:
             future.cancel()
-            runtime_trace = RuntimeTrace(route=None, intent=None, next_action=None, args={}, tools_called=(), evidence_ids=(), response="", status="fail")
+            runtime_trace = RuntimeTrace(
+                route=None,
+                intent=None,
+                next_action=None,
+                args={},
+                tools_called=(),
+                evidence_ids=(),
+                response="",
+                status="fail",
+            )
             error = "runtime_timeout"
         except Exception:
             # A bad case must not abort a batch or reveal provider/raw payloads.

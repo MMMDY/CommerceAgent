@@ -25,81 +25,171 @@ class EvaluationRepository:
         self._engine = engine
 
     def create_run(
-        self, *, dataset_hash: str, rubric_version: str, config: dict[str, object],
-        dataset_version: str = "unknown", agent_model: str | None = None,
-        agent_model_config_hash: str | None = None, agent_prompt_hash: str | None = None,
-        judge_model: str | None = None, judge_prompt_hash: str | None = None,
-        runtime_versions: dict[str, object] | None = None, concurrency: int = 1,
+        self,
+        *,
+        dataset_hash: str,
+        rubric_version: str,
+        config: dict[str, object],
+        dataset_version: str = "unknown",
+        agent_model: str | None = None,
+        agent_model_config_hash: str | None = None,
+        agent_prompt_hash: str | None = None,
+        judge_model: str | None = None,
+        judge_prompt_hash: str | None = None,
+        runtime_versions: dict[str, object] | None = None,
+        concurrency: int = 1,
         case_timeout_seconds: int = 30,
     ) -> UUID:
         run_id = uuid4()
         with self._engine.begin() as connection:
-            connection.execute(text("INSERT INTO evaluation.eval_runs "
-                "(eval_run_id, dataset_hash, rubric_version, status, config_json, created_at, dataset_version, agent_model, agent_model_config_hash, agent_prompt_hash, judge_model, judge_prompt_hash, runtime_versions_json, concurrency, case_timeout_seconds) "
-                "VALUES (:run_id, :dataset_hash, :rubric_version, 'running', CAST(:config AS jsonb), now(), :dataset_version, :agent_model, :agent_model_config_hash, :agent_prompt_hash, :judge_model, :judge_prompt_hash, CAST(:runtime_versions AS jsonb), :concurrency, :case_timeout_seconds)"),
-                {"run_id": run_id, "dataset_hash": dataset_hash, "rubric_version": rubric_version,
-                 "config": json.dumps(config), "dataset_version": dataset_version,
-                 "agent_model": agent_model, "agent_model_config_hash": agent_model_config_hash,
-                 "agent_prompt_hash": agent_prompt_hash, "judge_model": judge_model,
-                 "judge_prompt_hash": judge_prompt_hash,
-                 "runtime_versions": json.dumps(runtime_versions or {}), "concurrency": concurrency,
-                 "case_timeout_seconds": case_timeout_seconds})
+            connection.execute(
+                text(
+                    "INSERT INTO evaluation.eval_runs "
+                    "(eval_run_id, dataset_hash, rubric_version, status, config_json, created_at, dataset_version, agent_model, agent_model_config_hash, agent_prompt_hash, judge_model, judge_prompt_hash, runtime_versions_json, concurrency, case_timeout_seconds) "
+                    "VALUES (:run_id, :dataset_hash, :rubric_version, 'running', CAST(:config AS jsonb), now(), :dataset_version, :agent_model, :agent_model_config_hash, :agent_prompt_hash, :judge_model, :judge_prompt_hash, CAST(:runtime_versions AS jsonb), :concurrency, :case_timeout_seconds)"
+                ),
+                {
+                    "run_id": run_id,
+                    "dataset_hash": dataset_hash,
+                    "rubric_version": rubric_version,
+                    "config": json.dumps(config),
+                    "dataset_version": dataset_version,
+                    "agent_model": agent_model,
+                    "agent_model_config_hash": agent_model_config_hash,
+                    "agent_prompt_hash": agent_prompt_hash,
+                    "judge_model": judge_model,
+                    "judge_prompt_hash": judge_prompt_hash,
+                    "runtime_versions": json.dumps(runtime_versions or {}),
+                    "concurrency": concurrency,
+                    "case_timeout_seconds": case_timeout_seconds,
+                },
+            )
         return run_id
 
-    def record_hard_result(self, *, eval_run_id: UUID, case_id: str, track: str, hard_pass: bool,
-                           result: dict[str, object], attempt_no: int = 1,
-                           final_pass: bool | None = None) -> None:
+    def record_hard_result(
+        self,
+        *,
+        eval_run_id: UUID,
+        case_id: str,
+        track: str,
+        hard_pass: bool,
+        result: dict[str, object],
+        attempt_no: int = 1,
+        final_pass: bool | None = None,
+    ) -> None:
         with self._engine.begin() as connection:
-            connection.execute(text("INSERT INTO evaluation.eval_case_results "
-                "(eval_run_id, case_id, track, hard_pass, result_json, created_at, attempt_no, final_pass) "
-                "VALUES (:run_id, :case_id, :track, :hard_pass, CAST(:result AS jsonb), now(), :attempt_no, :final_pass)"),
-                {"run_id": eval_run_id, "case_id": case_id, "track": track, "hard_pass": hard_pass,
-                 "result": json.dumps(result), "attempt_no": attempt_no, "final_pass": final_pass})
+            connection.execute(
+                text(
+                    "INSERT INTO evaluation.eval_case_results "
+                    "(eval_run_id, case_id, track, hard_pass, result_json, created_at, attempt_no, final_pass) "
+                    "VALUES (:run_id, :case_id, :track, :hard_pass, CAST(:result AS jsonb), now(), :attempt_no, :final_pass)"
+                ),
+                {
+                    "run_id": eval_run_id,
+                    "case_id": case_id,
+                    "track": track,
+                    "hard_pass": hard_pass,
+                    "result": json.dumps(result),
+                    "attempt_no": attempt_no,
+                    "final_pass": final_pass,
+                },
+            )
 
-    def record_judge_result(self, *, eval_run_id: UUID, case_id: str, judge_model: str,
-                            score: float | None, result: dict[str, object], self_judged: bool,
-                            judge_attempt_no: int = 1, rubric_id: str | None = None,
-                            rubric_version: str | None = None, input_hash: str | None = None,
-                            judge_pass: bool | None = None, error_code: str | None = None) -> None:
+    def record_judge_result(
+        self,
+        *,
+        eval_run_id: UUID,
+        case_id: str,
+        judge_model: str,
+        score: float | None,
+        result: dict[str, object],
+        self_judged: bool,
+        judge_attempt_no: int = 1,
+        rubric_id: str | None = None,
+        rubric_version: str | None = None,
+        input_hash: str | None = None,
+        judge_pass: bool | None = None,
+        error_code: str | None = None,
+    ) -> None:
         with self._engine.begin() as connection:
-            connection.execute(text("INSERT INTO evaluation.judge_results "
-                "(eval_run_id, case_id, judge_model, score, result_json, self_judged, created_at, judge_attempt_no, rubric_id, rubric_version, input_hash, judge_pass, error_code) "
-                "VALUES (:run_id, :case_id, :judge_model, :score, CAST(:result AS jsonb), :self_judged, now(), :judge_attempt_no, :rubric_id, :rubric_version, :input_hash, :judge_pass, :error_code)"),
-                {"run_id": eval_run_id, "case_id": case_id, "judge_model": judge_model, "score": score,
-                 "result": json.dumps(result), "self_judged": self_judged, "judge_attempt_no": judge_attempt_no,
-                 "rubric_id": rubric_id, "rubric_version": rubric_version, "input_hash": input_hash,
-                 "judge_pass": judge_pass, "error_code": error_code})
+            connection.execute(
+                text(
+                    "INSERT INTO evaluation.judge_results "
+                    "(eval_run_id, case_id, judge_model, score, result_json, self_judged, created_at, judge_attempt_no, rubric_id, rubric_version, input_hash, judge_pass, error_code) "
+                    "VALUES (:run_id, :case_id, :judge_model, :score, CAST(:result AS jsonb), :self_judged, now(), :judge_attempt_no, :rubric_id, :rubric_version, :input_hash, :judge_pass, :error_code)"
+                ),
+                {
+                    "run_id": eval_run_id,
+                    "case_id": case_id,
+                    "judge_model": judge_model,
+                    "score": score,
+                    "result": json.dumps(result),
+                    "self_judged": self_judged,
+                    "judge_attempt_no": judge_attempt_no,
+                    "rubric_id": rubric_id,
+                    "rubric_version": rubric_version,
+                    "input_hash": input_hash,
+                    "judge_pass": judge_pass,
+                    "error_code": error_code,
+                },
+            )
 
     def finish(self, *, eval_run_id: UUID, status: str) -> bool:
         with self._engine.begin() as connection:
-            result = connection.execute(text("UPDATE evaluation.eval_runs SET status = :status, finished_at = now() "
-                "WHERE eval_run_id = :run_id AND status = 'running'"), {"run_id": eval_run_id, "status": status})
+            result = connection.execute(
+                text(
+                    "UPDATE evaluation.eval_runs SET status = :status, finished_at = now() "
+                    "WHERE eval_run_id = :run_id AND status = 'running'"
+                ),
+                {"run_id": eval_run_id, "status": status},
+            )
         return result.rowcount == 1
 
     def get_run(self, *, eval_run_id: UUID) -> dict[str, object] | None:
         """Return a redacted run summary for the eval API."""
         with self._engine.begin() as connection:
-            row = connection.execute(text(
-                "SELECT eval_run_id, dataset_hash, rubric_version, status, config_json, created_at, finished_at "
-                "FROM evaluation.eval_runs WHERE eval_run_id = :run_id"
-            ), {"run_id": eval_run_id}).mappings().first()
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT eval_run_id, dataset_hash, rubric_version, status, config_json, created_at, finished_at "
+                        "FROM evaluation.eval_runs WHERE eval_run_id = :run_id"
+                    ),
+                    {"run_id": eval_run_id},
+                )
+                .mappings()
+                .first()
+            )
         return dict(row) if row else None
 
     def list_case_results(
-        self, *, eval_run_id: UUID, limit: int = 50, offset: int = 0,
-        track: str | None = None, failed_only: bool = False,
+        self,
+        *,
+        eval_run_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+        track: str | None = None,
+        failed_only: bool = False,
     ) -> list[dict[str, object]]:
-        limit = max(1, min(limit, 200)); offset = max(0, offset)
+        limit = max(1, min(limit, 200))
+        offset = max(0, offset)
         clauses = ["eval_run_id = :run_id"]
         params: dict[str, object] = {"run_id": eval_run_id, "limit": limit, "offset": offset}
         if track:
-            clauses.append("track = :track"); params["track"] = track
+            clauses.append("track = :track")
+            params["track"] = track
         if failed_only:
             clauses.append("hard_pass = false")
         where = " AND ".join(clauses)
         with self._engine.begin() as connection:
-            rows = connection.execute(text(
-                f"SELECT eval_run_id, case_id, track, hard_pass, result_json, created_at "
-                f"FROM evaluation.eval_case_results WHERE {where} ORDER BY case_id LIMIT :limit OFFSET :offset"
-            ), params).mappings().all()
+            rows = (
+                connection.execute(
+                    text(
+                        f"SELECT eval_run_id, case_id, track, hard_pass, result_json, created_at "
+                        f"FROM evaluation.eval_case_results WHERE {where} ORDER BY case_id LIMIT :limit OFFSET :offset"
+                    ),
+                    params,
+                )
+                .mappings()
+                .all()
+            )
         return [dict(row) for row in rows]

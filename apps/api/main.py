@@ -12,9 +12,8 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid4
-from typing import Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -99,17 +98,60 @@ def _execute_eval_report(eval_run_id: str, payload: EvalRunCreateRequest) -> Non
     exposed through the API.
     """
     directory = EVAL_REPORT_ROOT / eval_run_id
-    command = [sys.executable, "-m", "src.harness.runner", "--dataset", "evals/commerce_bench_zh/cases.jsonl", "--judge", payload.judge, "--mode", payload.mode, "--repetitions", str(payload.repetitions), "--output-dir", str(directory)]
+    command = [
+        sys.executable,
+        "-m",
+        "src.harness.runner",
+        "--dataset",
+        "evals/commerce_bench_zh/cases.jsonl",
+        "--judge",
+        payload.judge,
+        "--mode",
+        payload.mode,
+        "--repetitions",
+        str(payload.repetitions),
+        "--output-dir",
+        str(directory),
+    ]
     try:
-        completed = subprocess.run(command, cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=3600, check=False)
+        completed = subprocess.run(
+            command,
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            timeout=3600,
+            check=False,
+        )
         report_path = directory / "report.json"
-        report = json.loads(completed.stdout.splitlines()[-1]) if completed.stdout.strip() else {"status": "failed"}
+        report = (
+            json.loads(completed.stdout.splitlines()[-1])
+            if completed.stdout.strip()
+            else {"status": "failed"}
+        )
         report["eval_run_id"] = eval_run_id
         if completed.returncode != 0:
             report["status"] = "failed"
         report_path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
     except Exception:
-        (directory / "report.json").write_text(json.dumps({"schema_version": "1.0", "eval_run_id": eval_run_id, "status": "failed", "judge": payload.judge, "mode": payload.mode, "repetitions": payload.repetitions, "selected_cases": 300, "completed_cases": 0, "passed_cases": 0, "failed_cases": 300, "results": []}, ensure_ascii=False), encoding="utf-8")
+        (directory / "report.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "eval_run_id": eval_run_id,
+                    "status": "failed",
+                    "judge": payload.judge,
+                    "mode": payload.mode,
+                    "repetitions": payload.repetitions,
+                    "selected_cases": 300,
+                    "completed_cases": 0,
+                    "passed_cases": 0,
+                    "failed_cases": 300,
+                    "results": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
 
 
 class ConversationCreateRequest(BaseModel):
@@ -280,7 +322,9 @@ def _run_response(
         terminal_reason=snapshot.terminal_reason,
         preview=preview if snapshot.status == RunStatus.WAITING_CONFIRMATION.value else None,
         confirmation_expires_at=(
-            confirmation_expires_at if snapshot.status == RunStatus.WAITING_CONFIRMATION.value else None
+            confirmation_expires_at
+            if snapshot.status == RunStatus.WAITING_CONFIRMATION.value
+            else None
         ),
         token_refresh_required=snapshot.status == RunStatus.WAITING_CONFIRMATION.value,
     )
@@ -345,7 +389,8 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         actor_id: str = Depends(get_demo_actor),
     ) -> list[EvalRunSummary]:
         del actor_id
-        limit = max(1, min(limit, 100)); offset = max(0, offset)
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
         if not EVAL_REPORT_ROOT.is_dir():
             return []
         summaries: list[EvalRunSummary] = []
@@ -353,7 +398,17 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             try:
                 payload = json.loads(report_path.read_text(encoding="utf-8"))
                 eval_id = report_path.parent.name
-                summary = EvalRunSummary(eval_run_id=eval_id, status=str(payload.get("status", "unknown")), selected_cases=int(payload.get("selected_cases", 0)), completed_cases=int(payload.get("completed_cases", 0)), passed_cases=int(payload.get("passed_cases", 0)), failed_cases=int(payload.get("failed_cases", 0)), judge=str(payload.get("judge", "off")), mode=str(payload.get("mode", "debug")), repetitions=int(payload.get("repetitions", 1)))
+                summary = EvalRunSummary(
+                    eval_run_id=eval_id,
+                    status=str(payload.get("status", "unknown")),
+                    selected_cases=int(payload.get("selected_cases", 0)),
+                    completed_cases=int(payload.get("completed_cases", 0)),
+                    passed_cases=int(payload.get("passed_cases", 0)),
+                    failed_cases=int(payload.get("failed_cases", 0)),
+                    judge=str(payload.get("judge", "off")),
+                    mode=str(payload.get("mode", "debug")),
+                    repetitions=int(payload.get("repetitions", 1)),
+                )
             except (OSError, json.JSONDecodeError, TypeError, ValueError):
                 continue
             if status_filter and summary.status != status_filter:
@@ -362,17 +417,49 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         return summaries[offset : offset + limit]
 
     @app.post("/v1/evals", response_model=EvalRunSummary, status_code=status.HTTP_202_ACCEPTED)
-    def create_evaluation(payload: EvalRunCreateRequest, background_tasks: BackgroundTasks, actor_id: str = Depends(get_demo_actor)) -> EvalRunSummary:
+    def create_evaluation(
+        payload: EvalRunCreateRequest,
+        background_tasks: BackgroundTasks,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> EvalRunSummary:
         del actor_id
         if payload.mode == "release" and payload.judge != "on":
             raise HTTPException(status_code=400, detail="release mode requires judge")
         eval_id = str(uuid4())
         directory = EVAL_REPORT_ROOT / eval_id
         directory.mkdir(parents=True, exist_ok=False)
-        report = {"schema_version": "1.0", "status": "queued", "judge": payload.judge, "mode": payload.mode, "repetitions": payload.repetitions, "selected_cases": 300, "completed_cases": 0, "passed_cases": 0, "failed_cases": 0, "results": []}
-        (directory / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+        report = {
+            "schema_version": "1.0",
+            "status": "queued",
+            "judge": payload.judge,
+            "mode": payload.mode,
+            "repetitions": payload.repetitions,
+            "selected_cases": 300,
+            "completed_cases": 0,
+            "passed_cases": 0,
+            "failed_cases": 0,
+            "results": [],
+        }
+        (directory / "report.json").write_text(
+            json.dumps(report, ensure_ascii=False), encoding="utf-8"
+        )
         background_tasks.add_task(_execute_eval_report, eval_id, payload)
-        return EvalRunSummary(eval_run_id=eval_id, **{k: report[k] for k in ("status", "selected_cases", "completed_cases", "passed_cases", "failed_cases", "judge", "mode", "repetitions")})
+        return EvalRunSummary(
+            eval_run_id=eval_id,
+            **{
+                k: report[k]
+                for k in (
+                    "status",
+                    "selected_cases",
+                    "completed_cases",
+                    "passed_cases",
+                    "failed_cases",
+                    "judge",
+                    "mode",
+                    "repetitions",
+                )
+            },
+        )
 
     @app.get("/v1/evals/{eval_run_id}")
     def get_evaluation(eval_run_id: str, actor_id: str = Depends(get_demo_actor)) -> dict[str, Any]:
@@ -388,19 +475,34 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         return payload
 
     @app.get("/v1/evals/{eval_run_id}/cases")
-    def list_evaluation_cases(eval_run_id: str, limit: int = 50, offset: int = 0, track: str | None = None, failed_only: bool = False, actor_id: str = Depends(get_demo_actor)) -> dict[str, Any]:
+    def list_evaluation_cases(
+        eval_run_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        track: str | None = None,
+        failed_only: bool = False,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> dict[str, Any]:
         del actor_id
         report_path, _ = _eval_report_paths(eval_run_id)
         if not report_path.is_file():
             raise HTTPException(status_code=404, detail="evaluation not found")
         payload = json.loads(report_path.read_text(encoding="utf-8"))
         rows = payload.get("results", [])
-        rows = [row for row in rows if (not track or row.get("track") == track) and (not failed_only or row.get("final_pass") is not True)]
-        limit = max(1, min(limit, 200)); offset = max(0, offset)
+        rows = [
+            row
+            for row in rows
+            if (not track or row.get("track") == track)
+            and (not failed_only or row.get("final_pass") is not True)
+        ]
+        limit = max(1, min(limit, 200))
+        offset = max(0, offset)
         return {"total": len(rows), "items": rows[offset : offset + limit]}
 
     @app.post("/v1/evals/{eval_run_id}/cancel")
-    def cancel_evaluation(eval_run_id: str, actor_id: str = Depends(get_demo_actor)) -> dict[str, str]:
+    def cancel_evaluation(
+        eval_run_id: str, actor_id: str = Depends(get_demo_actor)
+    ) -> dict[str, str]:
         del actor_id
         report_path, _ = _eval_report_paths(eval_run_id)
         if not report_path.is_file():
@@ -725,14 +827,17 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                                     mutation_type=mutation_type,
                                     arguments=extract_arguments(mutation_type, payload.content),
                                     confirmations=ConfirmationRepository(get_engine()),
-                                    checkpoints=RepositoryCheckpointStore(RunRepository(get_engine())),
+                                    checkpoints=RepositoryCheckpointStore(
+                                        RunRepository(get_engine())
+                                    ),
                                 )
                                 run_status = prepared_context.status.value
                                 preview = prepared_preview.as_public()
                                 confirmation_token = token
-                                confirmation_expires_at = str(
-                                    prepared_context.state.get("mutation_expires_at", "")
-                                ) or None
+                                confirmation_expires_at = (
+                                    str(prepared_context.state.get("mutation_expires_at", ""))
+                                    or None
+                                )
                                 waiting_action = "confirmation_required"
                             elif routed.workflow_id in LOW_RISK_ROUTES:
                                 low_risk_context = execute_low_risk(
@@ -744,7 +849,9 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                                         intent=routed.intent,
                                     ),
                                     executions=MutationExecutionRepository(get_engine()),
-                                    checkpoints=RepositoryCheckpointStore(RunRepository(get_engine())),
+                                    checkpoints=RepositoryCheckpointStore(
+                                        RunRepository(get_engine())
+                                    ),
                                     handoffs=HandoffRepository(get_engine()),
                                     audit=AuditRepository(get_engine()),
                                 ).context
@@ -770,13 +877,19 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                                 raise MutationWorkflowError("UNKNOWN_MUTATION", "暂不支持该操作")
                         except (MutationWorkflowError, LowRiskWorkflowError) as error:
                             state = dict(routed_context.state)
-                            state.update({"mutation_error": error.code, "mutation_message": str(error)})
+                            state.update(
+                                {"mutation_error": error.code, "mutation_message": str(error)}
+                            )
                             target_status = (
                                 RunStatus.WAITING_USER
                                 if error.code == "MISSING_SLOTS"
                                 else RunStatus.WAITING_HUMAN
                             )
-                            next_step = "collect_slots" if target_status is RunStatus.WAITING_USER else "terminal"
+                            next_step = (
+                                "collect_slots"
+                                if target_status is RunStatus.WAITING_USER
+                                else "terminal"
+                            )
                             event_type = (
                                 EventType.WAITING_FOR_USER
                                 if target_status is RunStatus.WAITING_USER
@@ -788,7 +901,11 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                                     status=target_status,
                                     next_step=next_step,
                                     state=state,
-                                    events=(DomainEvent(event_type=event_type, payload={"reason": error.code}),),
+                                    events=(
+                                        DomainEvent(
+                                            event_type=event_type, payload={"reason": error.code}
+                                        ),
+                                    ),
                                 )
                             except Exception:
                                 pass
@@ -862,7 +979,12 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                     else "操作状态暂时无法确认，已转人工处理。"
                 )
         except MutationWorkflowError as error:
-            status_code = 409 if error.code in {"CONFIRMATION_UNAVAILABLE", "CONFIRMATION_CONFLICT", "PREVIEW_CHANGED"} else 400
+            status_code = (
+                409
+                if error.code
+                in {"CONFIRMATION_UNAVAILABLE", "CONFIRMATION_CONFLICT", "PREVIEW_CHANGED"}
+                else 400
+            )
             raise HTTPException(status_code=status_code, detail=error.code) from error
         try:
             messages.append_assistant(
@@ -928,19 +1050,13 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         if ticket.status != "open":
             raise HTTPException(status_code=409, detail="handoff_already_resolved")
         runs = RunRepository(get_engine())
-        snapshot = runs.load_run(
-            run_id=ticket.run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id
-        )
+        snapshot = runs.load_run(run_id=ticket.run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
         if snapshot is None:
             raise HTTPException(status_code=404, detail="run_not_found")
         context = _checkpoint_context(run_id=ticket.run_id, actor_id=actor_id)
         if context.status is not RunStatus.WAITING_HUMAN:
             raise HTTPException(status_code=409, detail="run_not_waiting_human")
-        target = (
-            RunStatus.COMPLETED
-            if payload.outcome == "verified_success"
-            else RunStatus.FAILED
-        )
+        target = RunStatus.COMPLETED if payload.outcome == "verified_success" else RunStatus.FAILED
         state = dict(context.state)
         state["handoff_resolution"] = payload.outcome
         state["handoff_resolution_note"] = payload.resolution_note
@@ -968,7 +1084,11 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             tenant_id=DEMO_TENANT_ID,
             actor_ref=actor_id,
             event_type="mutation_handoff_resolved",
-            payload={"ticket_id": str(ticket_id), "run_id": str(ticket.run_id), "outcome": payload.outcome},
+            payload={
+                "ticket_id": str(ticket_id),
+                "run_id": str(ticket.run_id),
+                "outcome": payload.outcome,
+            },
             payload_hash=hash_secret(f"{ticket_id}:{payload.outcome}:{payload.resolution_note}"),
         )
         return HandoffResponse(
@@ -1013,7 +1133,9 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             status=RunStatus.CANCELLED,
             next_step="terminal",
             state=state,
-            events=(DomainEvent(event_type=EventType.FAILED, payload={"reason": "cancelled_by_user"}),),
+            events=(
+                DomainEvent(event_type=EventType.FAILED, payload={"reason": "cancelled_by_user"}),
+            ),
         )
         updated = replace(
             snapshot,
@@ -1021,7 +1143,11 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             step_count=snapshot.step_count + 1,
             row_version=version,
         )
-        return _run_response(updated, run_id=run_id, conversation_id=snapshot.conversation_id or context.conversation_id)
+        return _run_response(
+            updated,
+            run_id=run_id,
+            conversation_id=snapshot.conversation_id or context.conversation_id,
+        )
 
     @app.get("/v1/runs/{run_id}", response_model=RunResponse)
     def get_run(
@@ -1090,9 +1216,7 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         # Expose only citations selected in the final validated response, not
         # every candidate returned by retrieval.
         raw_ids: list[object] = []
-        for event in runs.replay_events(
-            run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id
-        ):
+        for event in runs.replay_events(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id):
             if event.event.event_type is EventType.STEP_COMPLETED:
                 candidate = event.event.payload.get("evidence_ids")
                 if isinstance(candidate, list):

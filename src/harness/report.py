@@ -1,11 +1,12 @@
 """Deterministic aggregation and serialization of evaluation results."""
+
 from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from collections.abc import Iterable
 from typing import Any
 
 from src.harness.judge import JudgeResult
@@ -59,7 +60,11 @@ def build_report(
         judge = judges.get(case.id)
         hard_pass = bool(driven.hard_eval.passed)
         judge_pass = judge.judge_pass if judge else None
-        final = hard_pass and judge_pass if judge_pass is not None else (hard_pass if not judge_requested or case.task_type == "intent_route" else None)
+        final = (
+            hard_pass and judge_pass
+            if judge_pass is not None
+            else (hard_pass if not judge_requested or case.task_type == "intent_route" else None)
+        )
         row = CaseReport(
             case.id,
             case.task_type,
@@ -96,17 +101,28 @@ def build_report(
         item["judge_pass"] += int(row["judge_pass"] is True)
         item["final_pass"] += int(row["final_pass"] is True)
     judge_enabled = judge_requested
-    judge_incomplete = judge_enabled and any(r["judge_error"] or r["judge_pass"] is None for r in rows if r["track"] != "intent_route")
+    judge_incomplete = judge_enabled and any(
+        r["judge_error"] or r["judge_pass"] is None for r in rows if r["track"] != "intent_route"
+    )
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         grouped[row["case_id"]].append(row)
     first_pass_rate = (
-        sum(1 for values in grouped.values() if values and values[0]["final_pass"] is True) / len(grouped)
-        if grouped else 0.0
+        sum(1 for values in grouped.values() if values and values[0]["final_pass"] is True)
+        / len(grouped)
+        if grouped
+        else 0.0
     )
     all_pass_rate = (
-        sum(1 for values in grouped.values() if len(values) >= repetitions and all(v["final_pass"] is True for v in values[:repetitions])) / len(grouped)
-        if grouped else 0.0
+        sum(
+            1
+            for values in grouped.values()
+            if len(values) >= repetitions
+            and all(v["final_pass"] is True for v in values[:repetitions])
+        )
+        / len(grouped)
+        if grouped
+        else 0.0
     )
     return {
         "schema_version": "1.0",
@@ -138,9 +154,25 @@ def write_report(report: dict[str, Any], output_dir: Path | str) -> tuple[Path, 
     directory.mkdir(parents=True, exist_ok=True)
     json_path = directory / "report.json"
     md_path = directory / "report.md"
-    json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    lines = ["# CommerceAgent 评测报告", "", f"状态：`{report.get('status')}`", f"总 case：{report.get('selected_cases', 0)}", f"最终通过：{report.get('passed_cases', 0)}", "", "## Track 指标", "", "| Track | Cases | Hard 通过 | Judge 通过 | Final 通过 |", "|---|---:|---:|---:|---:|"]
+    json_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    lines = [
+        "# CommerceAgent 评测报告",
+        "",
+        f"状态：`{report.get('status')}`",
+        f"总 case：{report.get('selected_cases', 0)}",
+        f"最终通过：{report.get('passed_cases', 0)}",
+        "",
+        "## Track 指标",
+        "",
+        "| Track | Cases | Hard 通过 | Judge 通过 | Final 通过 |",
+        "|---|---:|---:|---:|---:|",
+    ]
     for name, metric in report.get("tracks", {}).items():
-        lines.append(f"| {name} | {metric['selected']} | {metric['hard_pass']} | {metric['judge_pass']} | {metric['final_pass']} |")
+        lines.append(
+            f"| {name} | {metric['selected']} | {metric['hard_pass']} | "
+            f"{metric['judge_pass']} | {metric['final_pass']} |"
+        )
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return json_path, md_path

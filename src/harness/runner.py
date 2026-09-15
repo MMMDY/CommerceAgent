@@ -13,18 +13,18 @@ from pathlib import Path
 from typing import NoReturn
 from uuid import NAMESPACE_URL, uuid5
 
+from src.config import get_settings
+from src.db import get_engine
+from src.harness.calibration import calibration_report, load_labels
 from src.harness.deterministic_runtime import (
     DeterministicRuntimeFactory,
     RuntimeFixtureError,
     RuntimeFixtureLoader,
 )
-from src.harness.loader import CaseLoader, DatasetContractError
-from src.harness.run_driver import RunDriver
 from src.harness.judge import JudgeConfig, JudgeUnavailable, RubricJudge
+from src.harness.loader import CaseLoader, DatasetContractError
 from src.harness.report import build_report, write_report
-from src.harness.calibration import calibration_report, load_labels
-from src.config import get_settings
-from src.db import get_engine
+from src.harness.run_driver import RunDriver
 from src.repositories.evaluations import EvaluationRepository
 
 
@@ -70,10 +70,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         driver = RunDriver(runtime=runtime)
         results = []
         judge_results = {}
-        eval_run_id = str(uuid5(
-            NAMESPACE_URL,
-            f"commerce-eval:{loader.dataset_hash()}:{args.track}:{args.case_id}:{args.judge}:{args.mode}:{args.repetitions}",
-        ))
+        eval_run_id = str(
+            uuid5(
+                NAMESPACE_URL,
+                f"commerce-eval:{loader.dataset_hash()}:{args.track}:{args.case_id}:{args.judge}:{args.mode}:{args.repetitions}",
+            )
+        )
         persistence = None
         try:
             settings = get_settings()
@@ -82,7 +84,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 persisted_id = persistence.create_run(
                     dataset_hash=loader.dataset_hash(),
                     rubric_version="1.0",
-                    config={"judge": args.judge, "mode": args.mode, "repetitions": args.repetitions, "concurrency": 1},
+                    config={
+                        "judge": args.judge,
+                        "mode": args.mode,
+                        "repetitions": args.repetitions,
+                        "concurrency": 1,
+                    },
                 )
                 eval_run_id = str(persisted_id)
         except Exception:
@@ -93,7 +100,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge_unavailable = False
         if args.judge == "on":
             try:
-                judge_runner = RubricJudge(JudgeConfig.from_settings(get_settings(), mode=args.mode))
+                judge_runner = RubricJudge(
+                    JudgeConfig.from_settings(get_settings(), mode=args.mode)
+                )
             except JudgeUnavailable:
                 judge_unavailable = True
         for case in cases:
@@ -102,24 +111,65 @@ def main(argv: Sequence[str] | None = None) -> int:
             for attempt_no in range(1, args.repetitions + 1):
                 if cancelled:
                     break
-                result = driver.run_case(case=case, timeout_seconds=args.timeout, cancelled=lambda: cancelled)
+                result = driver.run_case(
+                    case=case, timeout_seconds=args.timeout, cancelled=lambda: cancelled
+                )
                 results.append(result)
                 if persistence is not None:
                     try:
-                        persistence.record_hard_result(eval_run_id=persisted_id, case_id=case.id, track=case.task_type, hard_pass=result.hard_eval.passed, attempt_no=attempt_no, result={"hard_fail_reasons": list(result.hard_eval.hard_fail_reasons), "dimensions": result.hard_eval.dimensions})
+                        persistence.record_hard_result(
+                            eval_run_id=persisted_id,
+                            case_id=case.id,
+                            track=case.task_type,
+                            hard_pass=result.hard_eval.passed,
+                            attempt_no=attempt_no,
+                            result={
+                                "hard_fail_reasons": list(result.hard_eval.hard_fail_reasons),
+                                "dimensions": result.hard_eval.dimensions,
+                            },
+                        )
                     except Exception:
                         persistence = None
                 # Pure intent routing is deterministically judged by hard gates;
                 # rubric calls are reserved for the 150 non-intent cases.
                 if judge_runner is not None and case.task_type != "intent_route":
-                    judge_results[case.id] = judge_runner.evaluate(case=case, trace=result.trace, hard_result=result.hard_eval)
+                    judge_results[case.id] = judge_runner.evaluate(
+                        case=case, trace=result.trace, hard_result=result.hard_eval
+                    )
                     if persistence is not None:
                         try:
                             judged = judge_results[case.id]
-                            persistence.record_judge_result(eval_run_id=persisted_id, case_id=case.id, judge_model=judged.model or "unknown", score=judged.weighted_score, result={"dimension_scores": judged.dimension_scores, "critical_violations": list(judged.critical_violations), "input_hash": judged.input_hash}, self_judged=judged.self_judged, judge_attempt_no=attempt_no, rubric_id=judged.rubric_id, rubric_version=judge_runner.rubric_version, input_hash=judged.input_hash, judge_pass=judged.judge_pass, error_code=judged.error_code)
+                            persistence.record_judge_result(
+                                eval_run_id=persisted_id,
+                                case_id=case.id,
+                                judge_model=judged.model or "unknown",
+                                score=judged.weighted_score,
+                                result={
+                                    "dimension_scores": judged.dimension_scores,
+                                    "critical_violations": list(judged.critical_violations),
+                                    "input_hash": judged.input_hash,
+                                },
+                                self_judged=judged.self_judged,
+                                judge_attempt_no=attempt_no,
+                                rubric_id=judged.rubric_id,
+                                rubric_version=judge_runner.rubric_version,
+                                input_hash=judged.input_hash,
+                                judge_pass=judged.judge_pass,
+                                error_code=judged.error_code,
+                            )
                         except Exception:
                             persistence = None
-        report = build_report(cases, results, judges=judge_results, judge_enabled=args.judge == "on", dataset_hash=loader.dataset_hash(), runtime_hash=runtime_loader.fixture_hash(), mode=args.mode, repetitions=args.repetitions, cancelled=cancelled)
+        report = build_report(
+            cases,
+            results,
+            judges=judge_results,
+            judge_enabled=args.judge == "on",
+            dataset_hash=loader.dataset_hash(),
+            runtime_hash=runtime_loader.fixture_hash(),
+            mode=args.mode,
+            repetitions=args.repetitions,
+            cancelled=cancelled,
+        )
         report["runtime"] = "deterministic_fixture"
         report["runtime_fixture_hash"] = runtime_loader.fixture_hash()
         report["eval_run_id"] = eval_run_id
@@ -138,7 +188,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         rubric_version=judge_runner.rubric_version,
                     )
                 except (OSError, ValueError):
-                    report["calibration"] = {"status": "incomplete", "error": "calibration_unavailable"}
+                    report["calibration"] = {
+                        "status": "incomplete",
+                        "error": "calibration_unavailable",
+                    }
         if judge_unavailable:
             report["status"] = "incomplete"
             report["judge_error"] = "judge_configuration_unavailable"
@@ -156,12 +209,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_report(report, args.output_dir)
             if "calibration" in report:
                 import json as _json
+
                 Path(args.output_dir).mkdir(parents=True, exist_ok=True)
                 (Path(args.output_dir) / "calibration.json").write_text(
-                    _json.dumps(report["calibration"], ensure_ascii=False, indent=2, sort_keys=True),
+                    _json.dumps(
+                        report["calibration"], ensure_ascii=False, indent=2, sort_keys=True
+                    ),
                     encoding="utf-8",
                 )
         import json
+
         print(json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
         return 0
     except DatasetContractError as error:
