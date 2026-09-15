@@ -545,6 +545,7 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         if process is not None and process.poll() is None:
             process.terminate()
         payload["status"] = "cancelled"
+        payload["eval_run_id"] = eval_run_id
         report_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return {"eval_run_id": eval_run_id, "status": "cancelled"}
 
