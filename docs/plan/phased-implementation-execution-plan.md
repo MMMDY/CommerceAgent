@@ -576,7 +576,8 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - `scripts/run_phase1_contract_tests.sh` → contract `31 passed`。
   - `scripts/run_phase1_contract_tests.sh tests/recovery/test_postgres_checkpoint_recovery.py tests/recovery/test_postgres_event_replay.py tests/recovery/test_postgres_mutation_recovery.py` → `40 passed`（含 contract 31 + recovery 9）。
   - 隔离 DB 加安全/本地恢复：`39 passed`；部署测试：`4 passed`。
-  - `scripts/collect_release_evidence.sh` smoke → manifest `230` 个 tracked 文件、migration `20260916_0011`、`.env` 未进入清单。
+- `scripts/collect_release_evidence.sh` smoke → manifest `230` 个 tracked 文件、migration `20260916_0011`、`.env` 未进入清单。
+- 最新 deterministic Harness 复验（候选源码 `0740044d`）：300 case、3 repetitions → `900 attempts / 300 hard passed / all_repetitions_pass_rate=1.0`；Judge 关闭，仅作为 hard-eval 证据，不替代独立 Judge release gate。
 - 关键证据：候选源码 commit `1246dd9`；冻结 manifest 提交 `e43ecc8`；摘要提交 `f6bb320`；工作区 clean。
 - 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、24 小时 soak、真实 provider payload PII 审计。
 - BLOCKED：正式 Release gate 仍需独立 Judge 配置和持续运行外部条件；本地门禁已 fail-closed 验证。
