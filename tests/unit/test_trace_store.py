@@ -30,3 +30,16 @@ def test_trace_store_is_append_only_and_returns_a_copy() -> None:
     copied = store.records()
     copied[0].payload["type"] = "modified"
     assert store.records()[0].payload["type"] == "respond"
+
+
+def test_trace_store_redacts_address_email_and_payment_values() -> None:
+    record = TraceStore().append(
+        kind="tool_observed",
+        payload={
+            "address": "上海市浦东新区测试路 20 号",
+            "text": "邮件 a@example.com 卡 4111 1111 1111 1111",
+        },
+    )
+    assert record.payload["address"] == "[REDACTED]"
+    assert "a@example.com" not in record.payload["text"]
+    assert "4111" not in record.payload["text"]

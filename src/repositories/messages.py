@@ -12,6 +12,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from src.telemetry.trace import _sanitize
+
 
 class MessageConflictError(ValueError):
     """A client message id was reused with different content."""
@@ -44,6 +46,7 @@ class MessageRepository:
         if not client_message_id or len(client_message_id) > 128:
             raise ValueError("client_message_id is invalid")
         content_hash = f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
+        content_redacted = str(_sanitize(content))
         with self._engine.begin() as connection:
             existing = connection.execute(text(
                 "SELECT m.message_id, m.conversation_id, m.run_id, m.client_message_id, m.role, "
@@ -77,12 +80,12 @@ class MessageRepository:
                 "(:message_id, :conversation_id, :run_id, :client_message_id, 'user', :content, :content_hash, "
                 "'{}'::jsonb, :sequence_no, :created_at)"
             ), {"message_id": message_id, "conversation_id": conversation_id, "run_id": run_id,
-                "client_message_id": client_message_id, "content": content, "content_hash": content_hash,
+                "client_message_id": client_message_id, "content": content_redacted, "content_hash": content_hash,
                 "sequence_no": sequence, "created_at": now})
             connection.execute(text(
                 "UPDATE conversation.conversations SET updated_at = :updated_at WHERE id = :conversation_id"
             ), {"updated_at": now, "conversation_id": conversation_id})
-            return MessageRecord(message_id, conversation_id, run_id, client_message_id, "user", content,
+            return MessageRecord(message_id, conversation_id, run_id, client_message_id, "user", content_redacted,
                                  content_hash, int(sequence), now, True)
 
     def append_assistant(
@@ -91,6 +94,7 @@ class MessageRepository:
     ) -> MessageRecord:
         if not content.strip() or len(content) > 8000:
             raise ValueError("message content is invalid")
+        content_redacted = str(_sanitize(content))
         with self._engine.begin() as connection:
             conversation = connection.execute(text(
                 "SELECT id FROM conversation.conversations WHERE id = :conversation_id "
@@ -110,11 +114,11 @@ class MessageRepository:
                 "(:message_id, :conversation_id, :run_id, NULL, 'assistant', :content, :content_hash, '{}'::jsonb, "
                 ":sequence_no, :created_at)"
             ), {"message_id": message_id, "conversation_id": conversation_id, "run_id": run_id,
-                "content": content, "content_hash": content_hash, "sequence_no": sequence, "created_at": now})
+                "content": content_redacted, "content_hash": content_hash, "sequence_no": sequence, "created_at": now})
             connection.execute(text(
                 "UPDATE conversation.conversations SET updated_at = :updated_at WHERE id = :conversation_id"
             ), {"updated_at": now, "conversation_id": conversation_id})
-            return MessageRecord(message_id, conversation_id, run_id, None, "assistant", content,
+            return MessageRecord(message_id, conversation_id, run_id, None, "assistant", content_redacted,
                                  content_hash, int(sequence), now, True)
 
     def find_user_by_client_message_id(

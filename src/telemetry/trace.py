@@ -32,6 +32,12 @@ _PHONE = r"(?<!\d)(?:\+?86[- ]?)?1\d{10}(?!\d)"
 _SECRET_ASSIGNMENT = r"(?i)(api[_-]?key|authorization|token|password|secret)\s*[:=]\s*[^,\s]+"
 _EMAIL = r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"
 _CARD = r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)"
+_ADDRESS = (
+    r"(?<![\u4e00-\u9fa5])[\u4e00-\u9fa5]{2,}"
+    r"(?:省|市|区|县)[\u4e00-\u9fa5\d\s]{0,24}"
+    r"(?:路|街|巷|弄|号|栋)\s*\d*"
+    r"[\u4e00-\u9fa5\d\s-]{0,12}"
+)
 _MAX_TEXT = 512
 
 
@@ -84,5 +90,6 @@ def _sanitize(value: Any) -> Any:
         value = sub(_SECRET_ASSIGNMENT, r"\1=[REDACTED]", value)
         value = sub(_EMAIL, "[EMAIL_REDACTED]", value)
         value = sub(_CARD, "[PAYMENT_REDACTED]", value)
+        value = sub(_ADDRESS, "[ADDRESS_REDACTED]", value)
         return value[:_MAX_TEXT]
     return value
