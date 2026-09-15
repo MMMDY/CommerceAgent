@@ -83,7 +83,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if settings.database_url:
                 persistence = EvaluationRepository(get_engine())
                 persisted_id = persistence.create_run(
-                    eval_run_id=UUID(eval_run_id),
+                    eval_run_id=UUID(eval_run_id) if args.eval_run_id else None,
                     dataset_hash=loader.dataset_hash(),
                     rubric_version="1.0",
                     config={
