@@ -179,6 +179,21 @@ export function App() {
         setMessages([]); setEvents([]); setEvidence([]); setRun(null); setConfirmationToken(null);
         result = await postMessage(fresh.id, `${clientMessageId}-retry`);
       }
+      if (result.run_status === "failed") {
+        // A run can fail after the API has accepted the message (for example,
+        // a provider returned a terminal decision with invalid citations).
+        // Treat that durable failure like the 503 recovery case so a transient
+        // model error never leaves the demonstrator stuck on a failed Run.
+        const fresh = await api<Conversation>("/v1/conversations", {
+          method: "POST",
+          body: JSON.stringify({ client_request_id: `web-failed-recovery-${crypto.randomUUID()}` }),
+        });
+        targetConversation = fresh;
+        retriedWithFreshConversation = true;
+        setConversation(fresh);
+        setMessages([]); setEvents([]); setEvidence([]); setRun(null); setConfirmationToken(null);
+        result = await postMessage(fresh.id, `${clientMessageId}-failed-retry`);
+      }
       setInput("");
       const targetPath = `/v1/conversations/${targetConversation.id}`;
       const loaded = await api<Message[]>(`${targetPath}/messages`);
