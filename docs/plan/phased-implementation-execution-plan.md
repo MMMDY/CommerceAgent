@@ -596,6 +596,16 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 剩余 TODO：从空库执行完整 app+DB 编排、连续 24 小时 soak；完成后才能将 Phase 7 与整体目标标记为 completed。
 - BLOCKED：无配置阻塞；长时门禁需要实际经过 24 小时运行窗口。
 
+### 2026-09-16 — Phase 7 — 空库 app+DB 编排复验
+
+- 状态：completed（空库部署切片）。
+- 执行验证：
+  - 使用临时 `commerce_empty_<timestamp>` 数据库，从零执行 Alembic 至 `20260916_0011`；运行时查询确认 `conversation=0`、`agent_runs=0`。
+  - 使用最新 `commerce-agent:phase0` 镜像启动临时 app 容器（只读根文件系统、`/tmp` tmpfs、384 MiB 限制），容器 IP 的 `/health/live`、`/health/ready` 和 SPA 根页面均返回 200。
+  - 验证完成后停止并删除临时容器及数据库，未修改演示数据库和持久卷。
+- 剩余 TODO：24 小时 soak；其余 Phase 7 本地门禁已完成。
+- BLOCKED：无；24 小时门禁需等待真实运行窗口结束。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
@@ -860,7 +870,7 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 - [x] 生成 `docs/releases/internal-beta-20260916/release-summary.md`，明确 internal beta/mock data 限制和已验证证据；最新独立 Judge 证据为 `docs/releases/internal-beta-20260916-r3/`。
 - [x] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本（`scripts/create_release_manifest.py` 对全部 Git tracked 输入生成内容哈希，排除 `.env`）。
 - [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（冻结 manifest 生成时强制 clean，候选 `source_commit=bd0cb55`）。
-- [ ] 从空数据库执行全新 app+DB 部署，不依赖开发机残留状态（隔离 DB migration/contract 已完成，完整 app 空库编排仍待执行）。
+- [x] 从空数据库执行全新 app+DB 部署，不依赖开发机残留状态（临时 `commerce_empty_*` 数据库迁移至 `20260916_0011`，app 容器 `/health/live`、`/health/ready` 与 SPA 返回 200；验证后已清理）。
 - [x] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试（Python `216 passed`；隔离 PostgreSQL contract/recovery `40 passed`；前端 test/build、部署测试通过）。
 - [x] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过（`release-20260916-judge-chat-v3`：900 attempts、300 hard pass、296 final pass、`self_judged=false`）。
 - [x] 生成按 track 分层的正式 JSON/Markdown 报告（`evals/reports/release-20260916-judge-chat-v3/`，原始产物保持 ignored）。
@@ -924,7 +934,7 @@ scripts/soak_monitor.sh --status --output evals/reports/release-soak.json
 - [x] app + DB 上限 640 MiB，默认无额外 worker/Redis/本地模型。
 - [x] DB 重启、应用重启和备份恢复后核心数据完整。
 - [x] 所有报告可追溯到代码、模型、prompt、workflow、policy、tool、dataset 和 rubric 版本（release manifest）。
-- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，24 小时 soak 产物完整（前者已通过显式 `--candidate-commit`，后者仍待完成）。
+- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，24 小时 soak 产物完整（候选 SHA 已通过显式 `--candidate-commit`；24 小时 soak 仍待完成）。
 - [ ] 所有 Phase 0～7 验收 checklist 已勾选。
 
 ### 12.5 交付产物
