@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.harness.calibration import calibration_report, load_labels
+from src.harness.calibration import calibration_report, load_labels, validate_stratification
 from src.harness.judge import JudgeResult
 
 
@@ -9,6 +9,7 @@ def test_calibration_file_has_30_unique_provenance_labels() -> None:
     assert len(labels) == 30
     assert len({label.case_id for label in labels}) == 30
     assert all(label.source and label.reviewed_at and label.label_hash for label in labels)
+    validate_stratification(labels)
 
 
 def test_calibration_report_is_incomplete_when_a_label_is_unjudged() -> None:

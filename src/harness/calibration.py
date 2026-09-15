@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.harness.judge import JudgeResult
+from src.harness.loader import CaseLoader
 
 
 class CalibrationLabel(BaseModel):
@@ -35,6 +36,30 @@ def load_labels(path: Path | str) -> tuple[CalibrationLabel, ...]:
     if len({row.case_id for row in rows}) != len(rows):
         raise ValueError("calibration case identifiers must be unique")
     return rows
+
+
+def validate_stratification(
+    labels: Iterable[CalibrationLabel],
+    *,
+    dataset: Path | str = "evals/commerce_bench_zh/cases.jsonl",
+    expected_counts: dict[str, int] | None = None,
+) -> None:
+    """Ensure calibration labels cover each non-intent track by design."""
+    cases = {case.id: case.task_type for case in CaseLoader(Path(dataset)).load()}
+    counts: dict[str, int] = {}
+    for label in labels:
+        track = cases.get(label.case_id)
+        if track is None:
+            raise ValueError("calibration case is not in the dataset")
+        counts[track] = counts.get(track, 0) + 1
+    expected = expected_counts or {
+        "tool_workflow": 10,
+        "rag_grounding": 8,
+        "scripted_clarification": 6,
+        "guardrail_handoff": 6,
+    }
+    if counts != expected:
+        raise ValueError(f"unexpected calibration stratification: {counts}")
 
 
 def calibration_report(
