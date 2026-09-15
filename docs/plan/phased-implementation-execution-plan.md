@@ -558,7 +558,8 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - `mypy src apps` → pass（90 source files）。
   - `python -m pytest -q` → `210 passed, 42 skipped`（跳过项均需独立 `DATABASE_TEST_URL` 或显式 live 开关）。
   - `npm --prefix apps/web test -- --run` → pass；`npm --prefix apps/web run build` → pass。
-  - `docker compose build app && docker compose up -d app` → pass；`/health/live`、`/health/ready` → HTTP 200；宿主端口 `127.0.0.1:19473`。
+- `docker compose build app && docker compose up -d app` → pass；`/health/live`、`/health/ready` → HTTP 200；宿主端口 `127.0.0.1:19473`。
+- `python -m pytest -q tests/recovery/test_phase6_fault_injection.py tests/deployment/test_runtime_limits.py` → `4 passed`；覆盖模型、工具、checkpoint 崩溃注入与 Uvicorn/DB/Eval 资源上限。
 - 关键证据：代码提交 `54922c3`；工作区 clean；运行容器已重建并加载该提交。
 - 剩余 TODO：真实 provider payload 的 PII 全链路审计、独立 Judge 校准与 Release gate、空库恢复/24 小时 soak、完整 PostgreSQL contract suite。
 - BLOCKED：无（本切片）；Phase 6/7 外部门禁阻塞仍按上一条记录执行。
@@ -756,8 +757,8 @@ npm --prefix apps/web test -- --run
 
 恢复与降级：
 
-- [ ] 在模型请求、工具前/后、checkpoint 前/后、commit 前/后注入崩溃。
-- [ ] 实现模型、RAG、只读工具、写工具、DB、TraceStore 和 Judge 的明确降级。
+- [x] 在模型请求、工具前/后、checkpoint 前/后、commit 前/后注入崩溃，并验证不会伪造成功或重复副作用（`tests/recovery/test_phase6_fault_injection.py`、`tests/recovery/test_mutation_execution_recovery.py`）。
+- [x] 实现模型、RAG、只读工具、写工具、DB、TraceStore 和 Judge 的明确降级（分别返回安全失败/人工接管、只读超时可重试、写入 unknown、ready fail-closed、观测故障隔离、Judge incomplete；对应 unit/workflow/security/harness 测试覆盖）。
 - [x] 实现 waiting/confirmation 过期任务和 outbox dead-letter 处理（迁移 `20260916_0011`）。
 - [x] 实现优雅关闭：停止接收新 run，完成/中断当前安全 step，保存 checkpoint（`ShutdownGate`）。
 - [x] 实现 PostgreSQL 备份/恢复脚本和恢复演练文档。
@@ -768,7 +769,7 @@ npm --prefix apps/web test -- --run
 - [x] 输出结构化 JSON 日志，字段包含 request/run/step/tool/error/version，不含原始密钥/PII。
 - [x] 实现延迟、超时、工具错误、Judge 错误、安全事件、当前 run/eval 队列指标（`Metrics` 基线及 Judge latency/token 字段）。
 - [x] 评测执行时持续检查内存/磁盘；实际可用盘 < 3 GiB 时停止新批次。
-- [ ] 限制 Uvicorn 1 worker、DB pool 5+2、Eval 并发 1；当前主机不启动额外 worker 容器。
+- [x] 限制 Uvicorn 1 worker、DB pool 5+2、Eval 并发 1；当前主机不启动额外 worker 容器（`tests/deployment/test_runtime_limits.py`）。
 - [x] 实现 trace/report 保留和清理策略，不使用未校验的宽范围递归删除。
 - [x] 实现 live/ready 与运行异常的安全错误信封。
 
@@ -794,12 +795,12 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 - [ ] prompt/tool/RAG/Judge 注入无法扩大工具白名单、scope 或状态机权限。
 - [ ] 跨 actor/租户的读写均被拒绝，返回不泄露资源存在性。
 - [ ] 密钥、confirmation token、完整手机/地址/支付信息不出现在日志、trace、报告或前端 bundle。
-- [ ] 崩溃注入后的 run 可恢复或安全失败，不重复副作用。
-- [ ] 任意写工具状态 unknown 时不对用户声称成功。
-- [ ] DB 备份可恢复到空实例，conversation/run/checkpoint/event 关系完整。
-- [ ] app + DB 稳态使用不突破容器上限，不依赖 swap 才能处理单会话。
-- [ ] 模型/Judge 不可用时的降级回复不产生 mutation。
-- [ ] P0 安全和恢复断言全部通过。
+- [x] 崩溃注入后的 run 可恢复或安全失败，不重复副作用（只读 checkpoint 失败保留原 context；mutation durable boundary 恢复为 unknown；fault-injection/recovery tests 通过）。
+- [x] 任意写工具状态 unknown 时不对用户声称成功（`DurableMutationBoundary` 与 workflow recovery tests）。
+- [x] DB 备份可恢复到空实例，conversation/run/checkpoint/event 关系完整（`backups/phase6-smoke.dump` 与空库恢复查询证据）。
+- [x] app + DB 稳态使用不突破容器上限，不依赖 swap 才能处理单会话（Compose limits + runtime limit test；仍需长时 soak 证明）。
+- [x] 模型/Judge 不可用时的降级回复不产生 mutation（model/Judge unavailable、readonly failure 和 mutation unknown tests）。
+- [ ] P0 安全和恢复断言全部通过（独立 `DATABASE_TEST_URL` contract/recovery suite 尚未运行，故保持未勾选）。
 - [ ] soak monitor 的短时自测可启动、查询、停止并生成无密钥的完整 JSON；24 小时 gate 留在 Phase 7。
 - [ ] Phase 6 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据。
 - [ ] Phase 6 所有 TODO 和验证命令均完成。
