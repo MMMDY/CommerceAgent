@@ -37,7 +37,17 @@ Rubric SHA-256：\`$(sha256sum "$rubric" | awk '{print $1}')\`
 正式 Release gate 需额外通过 \`scripts/release_check.py\`：独立 Judge、30 条校准一致率至少 90%、300 case 三次运行完整、24 小时 soak 完成。
 EOF
 mv -- "$tmp_summary" "${output}/release-summary.md"
-tmp_manifest="${output}/manifest.json.tmp.$$"
-printf '{"release_id":"%s","source_commit":"%s","report":"%s"}\n' "$release_id" "$commit" "$report" > "$tmp_manifest"
-mv -- "$tmp_manifest" "${output}/manifest.json"
+manifest_output="${output}/manifest.json"
+python scripts/create_release_manifest.py --output "$manifest_output" >/dev/null
+python - "$manifest_output" "$release_id" "$report" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path, release_id, report = sys.argv[1:]
+manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+manifest["release_id"] = release_id
+manifest["report"] = report
+Path(path).write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
 printf 'release-evidence-created output=%s source_commit=%s\n' "$output" "$commit"
