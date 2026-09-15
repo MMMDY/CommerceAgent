@@ -12,4 +12,6 @@ Release 评测结果：`status=completed`、`release_gate=true`、`self_judged=f
 本摘要只记录可脱敏的版本指纹，不包含 API key、数据库 URL、Judge prompt 或原始 payload。
 正式 Release gate 需额外通过 `scripts/release_check.py`：独立 Judge、30 条校准一致率至少 90%、300 case 三次运行完整、24 小时 soak 完成。
 
-当前 `release_check.py --require-clean` 已通过；24 小时 soak 尚未运行，因此该产物仍标记为 internal beta，不代表生产可用。
+当前 `release_check.py --require-clean` 已通过；24 小时 soak 已启动但尚未完成，因此该产物仍标记为 internal beta，不代表生产可用。
+
+24 小时 soak 已于 2026-09-16 启动：`release-soak.json`，后台 PID 由同名 `.pid` 文件管理；需自然完成 86,400 秒采样后再更新最终门禁。
