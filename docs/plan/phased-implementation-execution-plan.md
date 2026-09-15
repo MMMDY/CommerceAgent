@@ -546,6 +546,23 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 剩余 TODO：独立 Judge 30-case agreement ≥90%、Release report `self_judged=false`、真实空库备份恢复演练、24 小时 soak、完整 DATABASE_TEST_URL contract suite。
 - BLOCKED：Release 与 Phase 7 的正式门禁需要独立 Judge 配置；不可用当前同配置自评冒充通过。
 
+### 2026-09-16 — Phase 6 — PII 脱敏补强与服务复验
+
+- 状态：completed（本切片）；Phase 6 总体验收仍受外部演练门禁约束。
+- 变更文件：
+  - `src/telemetry/trace.py`：新增地址、邮箱、支付卡号文本脱敏，并拆分地址正则以通过 Ruff 行长检查。
+  - `src/repositories/messages.py`：用户/助手消息落库前统一调用脱敏函数，返回记录与数据库内容保持一致。
+  - `tests/unit/test_trace_store.py`：增加地址、邮箱、支付信息脱敏断言。
+- 执行验证：
+  - `ruff check src apps tests` → pass。
+  - `mypy src apps` → pass（90 source files）。
+  - `python -m pytest -q` → `210 passed, 42 skipped`（跳过项均需独立 `DATABASE_TEST_URL` 或显式 live 开关）。
+  - `npm --prefix apps/web test -- --run` → pass；`npm --prefix apps/web run build` → pass。
+  - `docker compose build app && docker compose up -d app` → pass；`/health/live`、`/health/ready` → HTTP 200；宿主端口 `127.0.0.1:19473`。
+- 关键证据：代码提交 `54922c3`；工作区 clean；运行容器已重建并加载该提交。
+- 剩余 TODO：真实 provider payload 的 PII 全链路审计、独立 Judge 校准与 Release gate、空库恢复/24 小时 soak、完整 PostgreSQL contract suite。
+- BLOCKED：无（本切片）；Phase 6/7 外部门禁阻塞仍按上一条记录执行。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
@@ -730,7 +747,8 @@ npm --prefix apps/web test -- --run
 - [x] 实现用户输入、RAG 文档和 ToolResult 的不可信数据标记（`src/guardrails/trust.py`，Judge trust metadata）。
 - [x] 实现 Decision 工具白名单和系统字段拒绝，注入内容不能扩权。
 - [x] 实现 tenant + actor + owner 多层校验和统一不泄露错误。
-- [ ] 实现输入/存储/模型/trace/输出五个边界的 PII 脱敏（trace/Judge/report 已覆盖；真实 provider payload 的全链路审计仍需独立演练）。
+- [x] 实现输入/存储/模型/trace/输出五个边界的 PII 脱敏（`src/guardrails/`、消息仓储、ModelGateway PromptView、TraceStore、Judge/report 均执行字段/文本脱敏；provider payload 审计保留为独立演练门禁）。
+- [ ] 完成真实 provider payload 的全链路 PII 脱敏审计演练，并将脱敏扫描证据写入发布报告。
 - [x] 实现 `security_audit_events` append-only 写入和租户隔离查询。
 - [x] 禁止前端 source map/环境注入泄露 API key、DB URL 和内部 ID（Vite 无 sourcemap，bundle 扫描通过）。
 - [x] 实现仓库、镜像、前端 bundle、日志和报告的 secret scan；只报告变量名/文件位置，不输出匹配到的 secret 值。
