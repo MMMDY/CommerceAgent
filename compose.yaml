@@ -66,6 +66,8 @@ services:
     ports:
       - "127.0.0.1:19473:8000"
     read_only: true
+    volumes:
+      - ./evals/reports:/app/evals/reports
     tmpfs:
       - /tmp
     deploy:

@@ -110,6 +110,8 @@ def _execute_eval_report(eval_run_id: str, payload: EvalRunCreateRequest) -> Non
         payload.mode,
         "--repetitions",
         str(payload.repetitions),
+        "--eval-run-id",
+        eval_run_id,
         "--output-dir",
         str(directory),
     ]

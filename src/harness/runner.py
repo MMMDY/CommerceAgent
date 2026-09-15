@@ -11,7 +11,7 @@ import signal
 from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from src.config import get_settings
 from src.db import get_engine
@@ -37,6 +37,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--mode", choices=("debug", "release"), default="debug")
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--eval-run-id", type=str)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument(
         "--runtime-fixture",
@@ -70,7 +71,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         driver = RunDriver(runtime=runtime)
         results = []
         judge_results = {}
-        eval_run_id = str(
+        eval_run_id = args.eval_run_id or str(
             uuid5(
                 NAMESPACE_URL,
                 f"commerce-eval:{loader.dataset_hash()}:{args.track}:{args.case_id}:{args.judge}:{args.mode}:{args.repetitions}",
@@ -82,6 +83,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if settings.database_url:
                 persistence = EvaluationRepository(get_engine())
                 persisted_id = persistence.create_run(
+                    eval_run_id=UUID(eval_run_id),
                     dataset_hash=loader.dataset_hash(),
                     rubric_version="1.0",
                     config={
@@ -91,7 +93,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "concurrency": 1,
                     },
                 )
-                eval_run_id = str(persisted_id)
+                if args.eval_run_id:
+                    # API-created batches use their externally assigned UUID;
+                    # the repository currently allocates IDs for CLI runs.
+                    eval_run_id = str(persisted_id)
         except Exception:
             # Evaluation must still emit a complete local report when the
             # optional database is down; persistence status is explicit.
@@ -133,12 +138,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 # Pure intent routing is deterministically judged by hard gates;
                 # rubric calls are reserved for the 150 non-intent cases.
                 if judge_runner is not None and case.task_type != "intent_route":
-                    judge_results[case.id] = judge_runner.evaluate(
+                    judge_results[f"{case.id}#{attempt_no}"] = judge_runner.evaluate(
                         case=case, trace=result.trace, hard_result=result.hard_eval
                     )
                     if persistence is not None:
                         try:
-                            judged = judge_results[case.id]
+                            judged = judge_results[f"{case.id}#{attempt_no}"]
                             persistence.record_judge_result(
                                 eval_run_id=persisted_id,
                                 case_id=case.id,

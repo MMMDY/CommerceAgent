@@ -57,7 +57,11 @@ def build_report(
         case = case_by_id.get(driven.trace.case_id)
         if case is None:
             continue
-        judge = judges.get(case.id)
+        # Repeated release attempts may have an independent Judge result;
+        # callers can key those as ``case_id#attempt_no``.  Fall back to the
+        # case key for single-attempt/debug runs.
+        attempt_index = sum(1 for row in rows if row["case_id"] == case.id) + 1
+        judge = judges.get(f"{case.id}#{attempt_index}") or judges.get(case.id)
         hard_pass = bool(driven.hard_eval.passed)
         judge_pass = judge.judge_pass if judge else None
         final = (
@@ -93,13 +97,27 @@ def build_report(
             },
         )
         rows.append(asdict(row))
-    track = defaultdict(lambda: {"selected": 0, "hard_pass": 0, "judge_pass": 0, "final_pass": 0})
+    track = defaultdict(
+        lambda: {"selected": 0, "attempts": 0, "hard_pass": 0, "judge_pass": 0, "final_pass": 0}
+    )
+    by_track: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
     for row in rows:
-        item = track[row["track"]]
-        item["selected"] += 1
-        item["hard_pass"] += int(row["hard_pass"])
-        item["judge_pass"] += int(row["judge_pass"] is True)
-        item["final_pass"] += int(row["final_pass"] is True)
+        by_track[row["track"]][row["case_id"]].append(row)
+    for name, groups in by_track.items():
+        item = track[name]
+        item["selected"] = len(groups)
+        item["attempts"] = sum(len(values) for values in groups.values())
+        item["hard_pass"] = sum(int(values[0]["hard_pass"]) for values in groups.values() if values)
+        item["judge_pass"] = sum(
+            int(values[0]["judge_pass"] is True) for values in groups.values() if values
+        )
+        item["final_pass"] = sum(
+            int(
+                all(v["final_pass"] is True for v in values[:repetitions])
+                and len(values) >= repetitions
+            )
+            for values in groups.values()
+        )
     judge_enabled = judge_requested
     judge_incomplete = judge_enabled and any(
         r["judge_error"] or r["judge_pass"] is None for r in rows if r["track"] != "intent_route"
@@ -135,14 +153,29 @@ def build_report(
         "self_judged": any(r["self_judged"] for r in rows),
         "provisional": any(r["self_judged"] for r in rows),
         "status": "cancelled" if cancelled else ("incomplete" if judge_incomplete else "completed"),
-        "selected_cases": len(rows),
-        "completed_cases": len(rows),
-        "passed_cases": sum(1 for r in rows if r["final_pass"] is True),
-        "failed_cases": sum(1 for r in rows if r["final_pass"] is not True),
+        "selected_cases": len(grouped),
+        "completed_cases": len(grouped),
+        "attempts": len(rows),
+        "passed_cases": sum(
+            1
+            for values in grouped.values()
+            if len(values) >= repetitions
+            and all(r["final_pass"] is True for r in values[:repetitions])
+        ),
+        "failed_cases": sum(
+            1
+            for values in grouped.values()
+            if len(values) < repetitions
+            or not all(r["final_pass"] is True for r in values[:repetitions])
+        ),
         "first_pass_rate": round(first_pass_rate, 4),
         "all_repetitions_pass_rate": round(all_pass_rate, 4),
-        "hard_passed_cases": sum(1 for r in rows if r["hard_pass"]),
-        "judge_passed_cases": sum(1 for r in rows if r["judge_pass"] is True),
+        "hard_passed_cases": sum(
+            1 for values in grouped.values() if values and values[0]["hard_pass"]
+        ),
+        "judge_passed_cases": sum(
+            1 for values in grouped.values() if values and values[0]["judge_pass"] is True
+        ),
         "judge_models": sorted({r["judge_model"] for r in rows if r["judge_model"]}),
         "tracks": dict(track),
         "results": rows,

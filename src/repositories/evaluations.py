@@ -27,6 +27,7 @@ class EvaluationRepository:
     def create_run(
         self,
         *,
+        eval_run_id: UUID | None = None,
         dataset_hash: str,
         rubric_version: str,
         config: dict[str, object],
@@ -40,7 +41,7 @@ class EvaluationRepository:
         concurrency: int = 1,
         case_timeout_seconds: int = 30,
     ) -> UUID:
-        run_id = uuid4()
+        run_id = eval_run_id or uuid4()
         with self._engine.begin() as connection:
             connection.execute(
                 text(
