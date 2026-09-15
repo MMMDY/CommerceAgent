@@ -71,19 +71,18 @@ class JudgeConfig:
         if mode == "release" and not explicit:
             raise JudgeUnavailable("release judge configuration is unavailable")
         if explicit:
-            if mode == "release" and settings.model and settings.api_base and settings.api_key:
-                same_profile = (
-                    settings.judge_model == settings.model
-                    and settings.judge_api_base == settings.api_base
-                    and settings.judge_api_key.get_secret_value()
-                    == settings.api_key.get_secret_value()
-                )
-                if same_profile:
-                    raise JudgeUnavailable("release judge must be independent from agent")
+            same_profile = bool(settings.model and settings.api_base and settings.api_key) and (
+                settings.judge_model == settings.model
+                and settings.judge_api_base == settings.api_base
+                and settings.judge_api_key.get_secret_value() == settings.api_key.get_secret_value()
+            )
+            if mode == "release" and same_profile:
+                raise JudgeUnavailable("release judge must be independent from agent")
             return cls(
                 settings.judge_model or "",
                 settings.judge_api_base or "",
                 settings.judge_api_key.get_secret_value(),
+                self_judged=same_profile,
             )
         # Debug-only fallback to candidate Agent model.  The report marks this
         # explicitly so it can never be mistaken for a release gate.
