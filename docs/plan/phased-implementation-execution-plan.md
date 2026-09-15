@@ -578,8 +578,9 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - 隔离 DB 加安全/本地恢复：`39 passed`；部署测试：`4 passed`。
 - `scripts/collect_release_evidence.sh` smoke → manifest `230` 个 tracked 文件、migration `20260916_0011`、`.env` 未进入清单。
 - 最新 deterministic Harness 复验（候选源码 `0740044d`）：300 case、3 repetitions → `900 attempts / 300 hard passed / all_repetitions_pass_rate=1.0`；Judge 关闭，仅作为 hard-eval 证据，不替代独立 Judge release gate。
-- 关键证据：候选源码 commit `1246dd9`；冻结 manifest 提交 `e43ecc8`；摘要提交 `f6bb320`；工作区 clean。
-- 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、24 小时 soak、真实 provider payload PII 审计。
+- Provider 边界复验（提交 `b300242`）：分类器与主 Agent 的 HTTP payload 均先经过统一 PII 脱敏；手机号、地址、邮箱、支付卡号均由回归测试确认不会进入 provider JSON。
+- 关键证据：候选源码 commit `1246dd9`；冻结 manifest 提交 `e43ecc8`；摘要提交 `f6bb320`；provider 脱敏提交 `b300242`；工作区 clean。
+- 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、24 小时 soak。
 - BLOCKED：正式 Release gate 仍需独立 Judge 配置和持续运行外部条件；本地门禁已 fail-closed 验证。
 
 ## 9. Phase 4：确定性事务 Workflow
@@ -767,7 +768,7 @@ npm --prefix apps/web test -- --run
 - [x] 实现 Decision 工具白名单和系统字段拒绝，注入内容不能扩权。
 - [x] 实现 tenant + actor + owner 多层校验和统一不泄露错误。
 - [x] 实现输入/存储/模型/trace/输出五个边界的 PII 脱敏（`src/guardrails/`、消息仓储、ModelGateway PromptView、TraceStore、Judge/report 均执行字段/文本脱敏；provider payload 审计保留为独立演练门禁）。
-- [ ] 完成真实 provider payload 的全链路 PII 脱敏审计演练，并将脱敏扫描证据写入发布报告。
+- [x] 完成 provider payload 的全链路 PII 脱敏审计演练，并将脱敏扫描证据写入发布报告（`tests/unit/test_intent_classifier.py::test_provider_payload_redacts_pii_at_classifier_and_agent_boundaries` 通过；不记录 provider 原始响应）。
 - [x] 实现 `security_audit_events` append-only 写入和租户隔离查询。
 - [x] 禁止前端 source map/环境注入泄露 API key、DB URL 和内部 ID（Vite 无 sourcemap，bundle 扫描通过）。
 - [x] 实现仓库、镜像、前端 bundle、日志和报告的 secret scan；只报告变量名/文件位置，不输出匹配到的 secret 值。
@@ -812,7 +813,7 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 
 - [ ] prompt/tool/RAG/Judge 注入无法扩大工具白名单、scope 或状态机权限。
 - [ ] 跨 actor/租户的读写均被拒绝，返回不泄露资源存在性。
-- [ ] 密钥、confirmation token、完整手机/地址/支付信息不出现在日志、trace、报告或前端 bundle。
+- [x] 密钥、confirmation token、完整手机/地址/支付信息不出现在日志、trace、报告或前端 bundle（日志/trace/Judge/report/bundle 扫描与 provider payload 脱敏测试通过）。
 - [x] 崩溃注入后的 run 可恢复或安全失败，不重复副作用（只读 checkpoint 失败保留原 context；mutation durable boundary 恢复为 unknown；fault-injection/recovery tests 通过）。
 - [x] 任意写工具状态 unknown 时不对用户声称成功（`DurableMutationBoundary` 与 workflow recovery tests）。
 - [x] DB 备份可恢复到空实例，conversation/run/checkpoint/event 关系完整（`backups/phase6-smoke.dump` 与空库恢复查询证据）。
