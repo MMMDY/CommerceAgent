@@ -10,6 +10,8 @@ type Run = { run_id: string; status: string; current_step: string; step_count: n
 type EventItem = { id: number; type: string; step_id: string; payload: Record<string, unknown> };
 type Evidence = { evidence_id: string; source_uri: string; version: string; excerpt: string };
 type Scenario = { id: string; label: string; prompt: string };
+type EvalSummary = { eval_run_id: string; status: string; selected_cases: number; completed_cases: number; passed_cases: number; failed_cases: number; judge: string; mode: string; repetitions: number };
+type EvalCase = { case_id: string; track: string; hard_pass: boolean; judge_pass: boolean | null; final_pass: boolean | null; judge_score: number | null; hard_fail_reasons: string[]; judge_error: string | null };
 
 class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -44,6 +46,9 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sseConnected, setSseConnected] = useState(false);
+  const [evals, setEvals] = useState<EvalSummary[]>([]);
+  const [evalCases, setEvalCases] = useState<EvalCase[]>([]);
+  const [evalFilter, setEvalFilter] = useState<"all" | "failed">("all");
 
   const closeDrawer = () => setDrawer(null);
   const conversationPath = useMemo(
@@ -118,6 +123,17 @@ export function App() {
       if (savedRun.token_refresh_required) setConfirmationToken(null);
     }).catch((reason: Error) => setError(reason.message));
   }, [conversationPath]);
+
+  useEffect(() => {
+    if (route !== "evals") return;
+    void api<EvalSummary[]>("/v1/evals").then(async (items) => {
+      setEvals(items);
+      const latest = items[0];
+      if (!latest) return;
+      const response = await api<{ items: EvalCase[] }>(`/v1/evals/${latest.eval_run_id}/cases?failed_only=${evalFilter === "failed"}`);
+      setEvalCases(response.items);
+    }).catch((reason: Error) => setError(reason.message));
+  }, [route, evalFilter]);
 
   useEffect(() => {
     if (!conversationPath) return;
@@ -259,7 +275,7 @@ export function App() {
       </aside>
       <section className={styles.workspace} aria-live="polite">
         <p className={styles.eyebrow}>{route === "chat" ? "只读演示" : route}</p><h2>{route === "chat" ? "对话工作台" : route === "run" ? "执行详情" : "评测面板"}</h2>
-        {route !== "chat" ? <p>从左侧返回对话，或通过 API 查询已持久化的 run 与事件。</p> : <>
+        {route === "evals" ? <section className={styles.evalPanel} aria-label="评测结果"><div className={styles.statusBar}><span>批次：{evals.length}</span><button type="button" onClick={() => setEvalFilter("all")} disabled={evalFilter === "all"}>全部</button><button type="button" onClick={() => setEvalFilter("failed")} disabled={evalFilter === "failed"}>仅失败</button></div>{evals.length === 0 ? <p className={styles.empty}>暂无评测报告，可通过 POST /v1/evals 创建批次。</p> : evals.map((item) => <article className={styles.evalCard} key={item.eval_run_id}><h3>{item.eval_run_id}</h3><p>状态：{item.status} · Judge：{item.judge} · 模式：{item.mode}</p><p>进度：{item.completed_cases}/{item.selected_cases} · Hard 通过：{item.passed_cases} · 失败：{item.failed_cases}</p></article>)}{evalCases.length > 0 ? <><h3>失败 Case 详情</h3><div className={styles.evalCaseList}>{evalCases.map((item) => <article className={styles.evalCase} key={`${item.case_id}-${item.track}`}><strong>{item.case_id}</strong><span>{item.track}</span><p>Hard：{item.hard_pass ? "通过" : "失败"} · Judge：{item.judge_pass === null ? "未评分" : item.judge_pass ? "通过" : "失败"} · Final：{item.final_pass === null ? "未完成" : item.final_pass ? "通过" : "失败"}</p>{item.hard_fail_reasons.length > 0 ? <small>{item.hard_fail_reasons.join(", ")}</small> : null}{item.judge_error ? <small>Judge 错误：{item.judge_error}</small> : null}</article>)}</div></> : null}</section> : route !== "chat" ? <p>从左侧返回对话，或通过 API 查询已持久化的 run 与事件。</p> : <>
           <div className={styles.statusBar}><span>{conversation ? "会话已连接" : "正在连接…"}{sseConnected ? " · SSE 已连接" : ""}</span>{run ? <span>Run · {run.status}</span> : null}</div>
           <div className={styles.messageList} aria-label="消息流">{messages.length === 0 ? <p className={styles.empty}>选择一个预置场景或输入问题开始。</p> : messages.map((message) => <article className={message.role === "user" ? styles.userMessage : styles.assistantMessage} key={message.id}><span>{message.role === "user" ? "你" : "Agent"}</span><p>{message.content}</p></article>)}</div>
           {run?.status === "waiting_confirmation" && run.preview ? <section className={styles.confirmationCard} aria-label="操作确认"><p className={styles.eyebrow}>请确认操作</p><h3>{run.preview.summary}</h3><p>{run.preview.resource_ref} · {run.preview.channel}</p><p>金额：{run.preview.amount.value} {run.preview.amount.currency} · {run.preview.estimated_time}</p>{run.preview.impact.address ? <p>地址：{String(run.preview.impact.address)}</p> : null}{run.confirmation_expires_at ? <p>确认有效期至：{new Date(run.confirmation_expires_at).toLocaleString()}</p> : null}{confirmationToken ? <div className={styles.confirmationActions}><button type="button" onClick={() => void decideConfirmation("accept")} disabled={busy}>确认提交</button><button type="button" onClick={() => void decideConfirmation("reject")} disabled={busy}>拒绝</button></div> : <button type="button" onClick={() => void refreshConfirmation()} disabled={busy}>刷新确认</button>}</section> : null}

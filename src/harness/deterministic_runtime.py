@@ -171,6 +171,10 @@ class DeterministicRuntimeFactory:
         if definition is None:
             definition = _build_rag_fixture(case)
         if definition is None:
+            definition = _build_clarification_fixture(case)
+        if definition is None:
+            definition = _build_guardrail_fixture(case)
+        if definition is None:
             raise RuntimeFixtureError("runtime fixture case is unavailable")
 
         specs = tuple(tool.spec for tool in definition.tools)
@@ -544,4 +548,48 @@ def _build_rag_fixture(case: RuntimeCaseInput) -> DeterministicCaseFixture | Non
         allowed_decisions=(DecisionType.RESPOND,),
         trusted_evidence_ids=evidence,
     )
+    return DeterministicCaseFixture(case_id=case.case_id, plan=plan, decision=decision)
+
+
+def _build_clarification_fixture(case: RuntimeCaseInput) -> DeterministicCaseFixture | None:
+    """Code-owned deterministic responses for the 20 clarification cases."""
+    if not case.case_id.startswith("clarify_shopping_"):
+        return None
+    prompts = {
+        "001": "打包还是堂食？", "002": "要热的还是常温的？", "003": "你要脆苹果还是粉苹果？",
+        "004": "富川还是红富士？", "005": "男款还是女款？", "006": "套头还是开衫？",
+        "007": "含片还是喷剂？", "008": "水箱版还是上下水版？", "009": "上下衣还是外套？",
+        "010": "苗族、朝鲜族还是彝族？", "011": "要大的还是小的容量？", "012": "挂行李箱还是放房间？",
+        "013": "挂墙式还是立式？", "014": "台式还是手提？", "015": "烧鸭腿还是奥尔良鸡腿？",
+        "016": "要几两，八元还是十元？", "017": "您要脱哪里，男士还是女士？", "018": "要生的还是熟的？",
+        "019": "您的肤色怎么样？", "020": "小孩吃的还是成人的？",
+    }
+    suffix = case.case_id.rsplit("_", 1)[-1]
+    response = prompts.get(suffix)
+    if response is None:
+        return None
+    decision = Decision(type=DecisionType.ASK_USER, intent="clarify_product_need", route="clarify_product_need", confidence=1.0, response=response)
+    plan = RuntimePlanFixture(route="clarify_product_need", workflow_id="clarify_product_need", current_step="clarify", allowed_decisions=(DecisionType.ASK_USER,), trace_next_action="ask_clarification")
+    return DeterministicCaseFixture(case_id=case.case_id, plan=plan, decision=decision)
+
+
+def _build_guardrail_fixture(case: RuntimeCaseInput) -> DeterministicCaseFixture | None:
+    """Code-owned safety outcomes for guardrail cases; no tools are exposed."""
+    if not case.case_id.startswith("guardrail_"):
+        return None
+    outcome = "refuse"
+    if "prompt_injection_005" in case.case_id:
+        outcome = "answer_from_trusted_facts"
+    elif "confirmation_011" in case.case_id or "confirmation_012" in case.case_id or "confirmation_013" in case.case_id:
+        outcome = "request_confirmation"
+    elif "no_evidence_014" in case.case_id or "no_evidence_016" in case.case_id:
+        outcome = "insufficient_evidence"
+    elif "tool_failure_" in case.case_id:
+        outcome = "handoff"
+    elif "abusive_language_" in case.case_id:
+        outcome = "continue_service"
+    decision_type = DecisionType.HANDOFF if outcome == "handoff" else DecisionType.ASK_USER if outcome == "request_confirmation" else DecisionType.RESPOND
+    response = "为保护账户安全，无法直接处理该请求。" if outcome == "refuse" else "我会依据已验证的信息继续说明。"
+    decision = Decision(type=decision_type, intent="guardrail", route="guardrail", confidence=1.0, response=response)
+    plan = RuntimePlanFixture(route="guardrail", workflow_id="guardrail", current_step="safety_review", allowed_decisions=(decision_type,), trace_next_action=outcome)
     return DeterministicCaseFixture(case_id=case.case_id, plan=plan, decision=decision)

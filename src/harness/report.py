@@ -28,6 +28,12 @@ class CaseReport:
     runtime_error: str | None
     latency_ms: int | None = None
     token_usage: int | None = None
+    judge_dimensions: dict[str, int] | None = None
+    critical_violations: tuple[str, ...] = ()
+    judge_input_hash: str | None = None
+    judge_model: str | None = None
+    expected: dict[str, Any] | None = None
+    actual: dict[str, Any] | None = None
 
 
 def build_report(
@@ -54,7 +60,33 @@ def build_report(
         hard_pass = bool(driven.hard_eval.passed)
         judge_pass = judge.judge_pass if judge else None
         final = hard_pass and judge_pass if judge_pass is not None else (hard_pass if not judge_requested or case.task_type == "intent_route" else None)
-        row = CaseReport(case.id, case.task_type, hard_pass, driven.hard_eval.hard_fail_reasons, driven.hard_eval.dimensions, final, judge_pass, judge.weighted_score if judge else None, judge.error_code if judge else None, judge.self_judged if judge else False, driven.runtime_error)
+        row = CaseReport(
+            case.id,
+            case.task_type,
+            hard_pass,
+            driven.hard_eval.hard_fail_reasons,
+            driven.hard_eval.dimensions,
+            final,
+            judge_pass,
+            judge.weighted_score if judge else None,
+            judge.error_code if judge else None,
+            judge.self_judged if judge else False,
+            driven.runtime_error,
+            judge_dimensions=judge.dimension_scores if judge else None,
+            critical_violations=judge.critical_violations if judge else (),
+            judge_input_hash=judge.input_hash if judge else None,
+            judge_model=judge.model if judge else None,
+            expected=case.expected.values,
+            actual={
+                "route": driven.trace.route,
+                "intent": driven.trace.intent,
+                "next_action": driven.trace.next_action,
+                "args": driven.trace.args,
+                "tools_called": list(driven.trace.tools_called),
+                "evidence_ids": list(driven.trace.evidence_ids),
+                "status": driven.trace.status,
+            },
+        )
         rows.append(asdict(row))
     track = defaultdict(lambda: {"selected": 0, "hard_pass": 0, "judge_pass": 0, "final_pass": 0})
     for row in rows:
@@ -85,6 +117,7 @@ def build_report(
         "concurrency": 1,
         "judge": "on" if judge_enabled else "off",
         "self_judged": any(r["self_judged"] for r in rows),
+        "provisional": any(r["self_judged"] for r in rows),
         "status": "cancelled" if cancelled else ("incomplete" if judge_incomplete else "completed"),
         "selected_cases": len(rows),
         "completed_cases": len(rows),
@@ -94,6 +127,7 @@ def build_report(
         "all_repetitions_pass_rate": round(all_pass_rate, 4),
         "hard_passed_cases": sum(1 for r in rows if r["hard_pass"]),
         "judge_passed_cases": sum(1 for r in rows if r["judge_pass"] is True),
+        "judge_models": sorted({r["judge_model"] for r in rows if r["judge_model"]}),
         "tracks": dict(track),
         "results": rows,
     }

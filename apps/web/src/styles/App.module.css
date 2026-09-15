@@ -104,6 +104,13 @@
   color: #60718c;
 }
 
+.evalPanel { display: grid; gap: 1rem; max-width: 960px; }
+.evalCard, .evalCase { border: 1px solid var(--line, #d8dee9); border-radius: 12px; padding: 1rem; background: rgba(255,255,255,.72); }
+.evalCard h3 { margin: 0 0 .4rem; font-size: .95rem; word-break: break-all; }
+.evalCaseList { display: grid; gap: .65rem; }
+.evalCase { display: grid; gap: .25rem; grid-template-columns: 1fr auto; }
+.evalCase p, .evalCase small { grid-column: 1 / -1; margin: 0; }
+
 .error {
   color: #b42318;
 }

@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from typing import TYPE_CHECKING, Protocol
 
 from src.agent.loop import AgentLoop
@@ -156,14 +157,21 @@ class RunDriver:
             locale=case.locale,
             messages=case.messages,
         )
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="eval-case")
+        future = executor.submit(
+            self._runtime.execute_case,
+            case=runtime_input,
+            fixture=fixture,
+            timeout_seconds=timeout_seconds,
+            cancelled=cancelled,
+        )
         try:
-            runtime_trace = self._runtime.execute_case(
-                case=runtime_input,
-                fixture=fixture,
-                timeout_seconds=timeout_seconds,
-                cancelled=cancelled,
-            )
+            runtime_trace = future.result(timeout=timeout_seconds)
             error = None
+        except FutureTimeout:
+            future.cancel()
+            runtime_trace = RuntimeTrace(route=None, intent=None, next_action=None, args={}, tools_called=(), evidence_ids=(), response="", status="fail")
+            error = "runtime_timeout"
         except Exception:
             # A bad case must not abort a batch or reveal provider/raw payloads.
             runtime_trace = RuntimeTrace(
@@ -177,6 +185,8 @@ class RunDriver:
                 status="fail",
             )
             error = "runtime_execution_failed"
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
         trace = self._traces.normalize(case_id=case.id, trace=runtime_trace)
         return DrivenCase(trace=trace, hard_eval=evaluate(case, trace), runtime_error=error)
 

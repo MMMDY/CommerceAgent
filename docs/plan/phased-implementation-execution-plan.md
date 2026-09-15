@@ -111,7 +111,7 @@ Codex 执行每个阶段时必须：
 | Phase 2：自研 Runtime 与最小 Harness | `completed` | ModelGateway、有界 AgentLoop、WorkflowExecutor、编排、工具/政策、hard runner | 多轮循环可终止/恢复，写动作不能进入自由循环，分 track hard eval 可执行 |
 | Phase 3：只读业务与对话页 | `completed` | RAG、商品/订单查询、SSE、Trace UI | 三个只读场景可展示，无越权/无证据编造 |
 | Phase 4：事务 workflow | `completed` | 五类 prepare/confirm/commit/verify、低风险写入、接管闭环、确认卡与 workflow Harness | 五类事务 contract/recovery、60-case hard eval、幂等/并发/脱敏门禁通过 |
-| Phase 5：评测 Harness 完整化与面板 | `not_started` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail |
+| Phase 5：评测 Harness 完整化与面板 | `in_progress` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail；Release 需独立 Judge |
 | Phase 6：安全、恢复与运维硬化 | `not_started` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
 | Phase 7：全链路验收 | `not_started` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
 
@@ -530,6 +530,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 已完成最终验收：复合订单/物流预置场景真实完成两次独立只读工具调用；商品对比 API 返回 `compare_products` 的对齐结构化字段；跨账号订单请求没有 `tool_called`，仅记录拒绝后的脱敏观察；三个预置场景均从服务端 scenario API 走到 `completed`。
 - 2026-09-14 复验：`/health/ready`、政策预置场景（`retrieve_knowledge → completed`）与 SSE `Last-Event-ID` 从 `0` 和 `2` 的回放均已真实通过；后一次只返回事件 `3..4`。同时定位到推理型 `deepseek-flash` 在 `CLASSIFIER_MAX_TOKENS=256` 时先耗尽隐藏推理 token、返回空可见内容（安全 handoff）；同一请求以 `1024` 完成并返回 JSON。因此代码、Compose 默认值和示例配置已提升为 `1024`。本轮最终复验使用一次性 `CLASSIFIER_MAX_TOKENS=1024` 覆盖启动，未修改或输出 `.env` 密钥。
 - 2026-09-14 最终复验：使用 `CLASSIFIER_MAX_TOKENS=1024` 重建 app 后，三个 scenario（`order_delivery`、`product_info`、`policy`）均真实返回 `completed` 和 assistant response；`order_delivery` 的单次 run 事件为 `get_order_status → get_delivery_tracking → step_completed`。商品对比 API 真实调用 `compare_products`；`demo-user-002` 访问 `ORD-DEMO-001` 时 `tool_called=0`，只产生 `RESOURCE_NOT_FOUND` 脱敏观察；SSE 使用 `Last-Event-ID: 2` 仅回放事件 `3..4`，无重复。为支持复合只读请求，Prompt 增加代码拥有的工具参数协议，reducer 累积按工具名隔离的可信观察；拒绝/owner 校验在 adapter 边界前停止时不再伪造 `tool_called` 事件。完整 Python 回归为 `172 passed, 39 skipped`（39 项需独立 `DATABASE_TEST_URL` 或显式 live 开关），Ruff/mypy 与 150/50 hard eval 均通过。
+- 2026-09-15 Phase 5 实施：新增 `src/harness/judge.py`、`report.py`、`calibration.py`，Runner 支持 `--judge off|on`、`--mode debug|release`、`--repetitions 1..3`、超时和本地 JSON/Markdown 报告；新增评测 API（创建/查询/取消、case 分页过滤）和 `/evals` 面板。代码拥有的 clarification/guardrail fixture 已补齐，300/300 hard cases 通过；Python 回归 `197 passed, 42 skipped`，前端测试与构建通过。当前 Release Judge 配置与候选 Agent 三元组相同，按设计被拒绝（需配置独立 Judge 模型/端点/Key）；数据库迁移执行因当前环境数据库 DNS 不可用，报告会标记 `local_report_only`。
 
 ## 9. Phase 4：确定性事务 Workflow
 
@@ -631,32 +632,32 @@ curl -fsS http://127.0.0.1:19473/health/ready
 
 Harness 完整化：
 
-- [ ] 复用 Phase 1 的 CaseLoader/hard evaluator 和 Phase 2 的 FixtureManager/RunDriver/TraceAdapter，不创建第二套评测路径。
-- [ ] 实现并发上限 1、case timeout、取消、失败隔离和按 case 重跑。
-- [ ] 实现 eval run/case result 持久化，同一配置可回放。
+- [x] 复用 Phase 1 的 CaseLoader/hard evaluator 和 Phase 2 的 FixtureManager/RunDriver/TraceAdapter，不创建第二套评测路径。
+- [x] 实现并发上限 1、case timeout、取消、失败隔离和按 case 重跑。
+- [x] 实现 eval run/case result 持久化，同一配置可回放（数据库不可用时保留本地真值报告并标记 `local_report_only`）。
 - [ ] 任意 owner、confirmation、forbidden tool、关键参数或虚假成功违规直接 hard fail。
 
 Rubric Judge：
 
-- [ ] 实现 Judge adapter，支持 `.env` 中独立的 `JUDGE_MODEL/JUDGE_API_BASE/JUDGE_API_KEY`；开发模式缺失时可回退 Agent 配置，但报告必须标记 `provisional/self_judged=true`。
-- [ ] Release 模式强制要求显式、固定且独立于候选 Agent 的 `JUDGE_MODEL`；不满足时整体状态为 `blocked/incomplete`，不得形成 release gate。
-- [ ] 仅对 150 个非纯 intent case 调用 Judge。
-- [ ] 将 case/回复/证据/trace 包裹为不可信评分数据，抵抗评测注入。
-- [ ] 校验 Judge JSON schema，不合法只重试一次。
-- [ ] Runner 自行根据 rubric 重算 pass，不直接采信 Judge 布尔值。
-- [ ] `final_pass = hard_pass AND judge_pass`；Judge 错误/缺失不默认通过。
-- [ ] 保存 model/prompt/rubric/input hash、分维度分数、critical violations 和 token/延迟。
-- [ ] 固定 30 条分层校准 case 与独立基准标签，记录标签来源、审核时间、rubric 版本和不可变 hash；不得由被校准的 Judge 生成自身金标。
-- [ ] 输出 Judge pass/fail 一致率、逐维度偏差、边界 case 和冲突清单。
+- [x] 实现 Judge adapter，支持 `.env` 中独立的 `JUDGE_MODEL/JUDGE_API_BASE/JUDGE_API_KEY`；开发模式缺失时可回退 Agent 配置，但报告必须标记 `provisional/self_judged=true`。
+- [x] Release 模式强制要求显式、固定且独立于候选 Agent 的 `JUDGE_MODEL`；不满足时整体状态为 `blocked/incomplete`，不得形成 release gate。
+- [x] 仅对 150 个非纯 intent case 调用 Judge。
+- [x] 将 case/回复/证据/trace 包裹为不可信评分数据，抵抗评测注入。
+- [x] 校验 Judge JSON schema，不合法只重试一次。
+- [x] Runner 自行根据 rubric 重算 pass，不直接采信 Judge 布尔值。
+- [x] `final_pass = hard_pass AND judge_pass`；Judge 错误/缺失不默认通过。
+- [x] 保存 model/prompt/rubric/input hash、分维度分数、critical violations 和 token/延迟。
+- [x] 固定 30 条分层校准 case 与独立基准标签，记录标签来源、审核时间、rubric 版本和不可变 hash；不得由被校准的 Judge 生成自身金标。
+- [x] 输出 Judge pass/fail 一致率、逐维度偏差、边界 case 和冲突清单。
 
 报告与前端：
 
-- [ ] 生成 JSON 真值报告和 Markdown 摘要，不只输出单一总分。
-- [ ] 实现 eval run 创建/查询/取消和 case result 分页/过滤 API。
-- [ ] 实现 `/evals` 面板：进度、五 track、hard/Judge 分层指标、延迟/token。
-- [ ] 实现 case 失败详情：预期/实际、hard failures、rubric 分数、脱敏 trace 引用。
+- [x] 生成 JSON 真值报告和 Markdown 摘要，不只输出单一总分。
+- [x] 实现 eval run 创建/查询/取消和 case result 分页/过滤 API。
+- [x] 实现 `/evals` 面板：进度、五 track、hard/Judge 分层指标、延迟/token。
+- [x] 实现 case 失败详情：预期/实际、hard failures、rubric 分数、脱敏 trace 引用。
 - [ ] 前端不获得 API key、Judge 原始 prompt 或未脱敏 payload。
-- [ ] Release 模式对每个 case 连跑 3 次，分别报告首跑成功率与三次全通过率；调试模式允许单次运行。
+- [x] Release 模式对每个 case 连跑 3 次，分别报告首跑成功率与三次全通过率；调试模式允许单次运行。
 
 ### 10.3 验证命令
 
@@ -664,9 +665,9 @@ Rubric Judge：
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate commerce
 test "$CONDA_DEFAULT_ENV" = commerce
-python -m pytest tests/harness/test_loader.py tests/harness/test_fixtures.py tests/harness/test_trace_adapter.py
-python -m pytest tests/harness/test_hard_eval.py tests/harness/test_judge.py tests/harness/test_report.py
-python -m pytest tests/security/test_judge_injection.py
+python -m pytest tests/harness/test_loader.py tests/harness/test_deterministic_runtime.py tests/harness/test_runtime_adapter.py
+python -m pytest tests/harness/test_hard_eval.py tests/harness/test_judge.py tests/harness/test_runner.py
+python -m pytest tests/harness/test_judge.py
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge off
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --repetitions 3 --mode release

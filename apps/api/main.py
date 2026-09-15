@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -12,8 +14,9 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 from uuid import UUID, uuid4
+from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -57,6 +60,56 @@ from src.repositories.runs import RunRepository, RunSnapshot
 from src.workflows.mutations import extract_arguments, hash_secret
 
 DEMO_TENANT_ID = "demo-tenant"
+EVAL_REPORT_ROOT = Path(__file__).resolve().parents[2] / "evals" / "reports"
+
+
+class EvalRunCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    judge: Literal["off", "on"] = "off"
+    mode: Literal["debug", "release"] = "debug"
+    repetitions: int = Field(default=1, ge=1, le=3)
+
+
+class EvalRunSummary(BaseModel):
+    eval_run_id: str
+    status: str
+    selected_cases: int = 0
+    completed_cases: int = 0
+    passed_cases: int = 0
+    failed_cases: int = 0
+    judge: str = "off"
+    mode: str = "debug"
+    repetitions: int = 1
+
+
+def _eval_report_paths(eval_run_id: str) -> tuple[Path, Path]:
+    # IDs are generated UUIDs; reject path traversal before touching disk.
+    try:
+        UUID(eval_run_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail="evaluation not found") from error
+    directory = EVAL_REPORT_ROOT / eval_run_id
+    return directory / "report.json", directory / "report.md"
+
+
+def _execute_eval_report(eval_run_id: str, payload: EvalRunCreateRequest) -> None:
+    """Run the single-concurrency harness in a background task.
+
+    stdout is consumed by the task and only the sanitized report files are
+    exposed through the API.
+    """
+    directory = EVAL_REPORT_ROOT / eval_run_id
+    command = [sys.executable, "-m", "src.harness.runner", "--dataset", "evals/commerce_bench_zh/cases.jsonl", "--judge", payload.judge, "--mode", payload.mode, "--repetitions", str(payload.repetitions), "--output-dir", str(directory)]
+    try:
+        completed = subprocess.run(command, cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=3600, check=False)
+        report_path = directory / "report.json"
+        report = json.loads(completed.stdout.splitlines()[-1]) if completed.stdout.strip() else {"status": "failed"}
+        report["eval_run_id"] = eval_run_id
+        if completed.returncode != 0:
+            report["status"] = "failed"
+        report_path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        (directory / "report.json").write_text(json.dumps({"schema_version": "1.0", "eval_run_id": eval_run_id, "status": "failed", "judge": payload.judge, "mode": payload.mode, "repetitions": payload.repetitions, "selected_cases": 300, "completed_cases": 0, "passed_cases": 0, "failed_cases": 300, "results": []}, ensure_ascii=False), encoding="utf-8")
 
 
 class ConversationCreateRequest(BaseModel):
@@ -283,6 +336,81 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             {"status": "not_ready", "reason": reason},
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+
+    @app.get("/v1/evals", response_model=list[EvalRunSummary])
+    def list_evaluations(
+        limit: int = 20,
+        offset: int = 0,
+        status_filter: str | None = None,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> list[EvalRunSummary]:
+        del actor_id
+        limit = max(1, min(limit, 100)); offset = max(0, offset)
+        if not EVAL_REPORT_ROOT.is_dir():
+            return []
+        summaries: list[EvalRunSummary] = []
+        for report_path in sorted(EVAL_REPORT_ROOT.glob("*/report.json"), reverse=True):
+            try:
+                payload = json.loads(report_path.read_text(encoding="utf-8"))
+                eval_id = report_path.parent.name
+                summary = EvalRunSummary(eval_run_id=eval_id, status=str(payload.get("status", "unknown")), selected_cases=int(payload.get("selected_cases", 0)), completed_cases=int(payload.get("completed_cases", 0)), passed_cases=int(payload.get("passed_cases", 0)), failed_cases=int(payload.get("failed_cases", 0)), judge=str(payload.get("judge", "off")), mode=str(payload.get("mode", "debug")), repetitions=int(payload.get("repetitions", 1)))
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                continue
+            if status_filter and summary.status != status_filter:
+                continue
+            summaries.append(summary)
+        return summaries[offset : offset + limit]
+
+    @app.post("/v1/evals", response_model=EvalRunSummary, status_code=status.HTTP_202_ACCEPTED)
+    def create_evaluation(payload: EvalRunCreateRequest, background_tasks: BackgroundTasks, actor_id: str = Depends(get_demo_actor)) -> EvalRunSummary:
+        del actor_id
+        if payload.mode == "release" and payload.judge != "on":
+            raise HTTPException(status_code=400, detail="release mode requires judge")
+        eval_id = str(uuid4())
+        directory = EVAL_REPORT_ROOT / eval_id
+        directory.mkdir(parents=True, exist_ok=False)
+        report = {"schema_version": "1.0", "status": "queued", "judge": payload.judge, "mode": payload.mode, "repetitions": payload.repetitions, "selected_cases": 300, "completed_cases": 0, "passed_cases": 0, "failed_cases": 0, "results": []}
+        (directory / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+        background_tasks.add_task(_execute_eval_report, eval_id, payload)
+        return EvalRunSummary(eval_run_id=eval_id, **{k: report[k] for k in ("status", "selected_cases", "completed_cases", "passed_cases", "failed_cases", "judge", "mode", "repetitions")})
+
+    @app.get("/v1/evals/{eval_run_id}")
+    def get_evaluation(eval_run_id: str, actor_id: str = Depends(get_demo_actor)) -> dict[str, Any]:
+        del actor_id
+        report_path, _ = _eval_report_paths(eval_run_id)
+        if not report_path.is_file():
+            raise HTTPException(status_code=404, detail="evaluation not found")
+        try:
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise HTTPException(status_code=500, detail="evaluation unavailable") from error
+        # Reports contain only redacted traces and aggregate metrics.
+        return payload
+
+    @app.get("/v1/evals/{eval_run_id}/cases")
+    def list_evaluation_cases(eval_run_id: str, limit: int = 50, offset: int = 0, track: str | None = None, failed_only: bool = False, actor_id: str = Depends(get_demo_actor)) -> dict[str, Any]:
+        del actor_id
+        report_path, _ = _eval_report_paths(eval_run_id)
+        if not report_path.is_file():
+            raise HTTPException(status_code=404, detail="evaluation not found")
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+        rows = payload.get("results", [])
+        rows = [row for row in rows if (not track or row.get("track") == track) and (not failed_only or row.get("final_pass") is not True)]
+        limit = max(1, min(limit, 200)); offset = max(0, offset)
+        return {"total": len(rows), "items": rows[offset : offset + limit]}
+
+    @app.post("/v1/evals/{eval_run_id}/cancel")
+    def cancel_evaluation(eval_run_id: str, actor_id: str = Depends(get_demo_actor)) -> dict[str, str]:
+        del actor_id
+        report_path, _ = _eval_report_paths(eval_run_id)
+        if not report_path.is_file():
+            raise HTTPException(status_code=404, detail="evaluation not found")
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+        if payload.get("status") in {"completed", "failed", "cancelled"}:
+            return {"eval_run_id": eval_run_id, "status": str(payload.get("status"))}
+        payload["status"] = "cancelled"
+        report_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return {"eval_run_id": eval_run_id, "status": "cancelled"}
 
     @app.post(
         "/v1/conversations",
