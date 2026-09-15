@@ -7,8 +7,6 @@ strictly validated fixture that drives the project's real AgentLoop boundary.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import signal
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,14 +19,20 @@ from src.harness.deterministic_runtime import (
 )
 from src.harness.loader import CaseLoader, DatasetContractError
 from src.harness.run_driver import RunDriver
+from src.harness.judge import JudgeConfig, JudgeUnavailable, RubricJudge
+from src.harness.report import build_report, write_report
+from src.config import get_settings
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the CommerceAgent static hard evaluator")
+    parser = argparse.ArgumentParser(description="Run the CommerceAgent evaluation harness")
     parser.add_argument("--dataset", required=True, type=Path)
     parser.add_argument("--track")
     parser.add_argument("--case-id")
-    parser.add_argument("--judge", choices=("off",), default="off")
+    parser.add_argument("--judge", choices=("off", "on"), default="off")
+    parser.add_argument("--repetitions", type=int, default=1)
+    parser.add_argument("--mode", choices=("debug", "release"), default="debug")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument(
         "--runtime-fixture",
@@ -42,6 +46,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.timeout <= 0:
         raise SystemExit("--timeout must be positive")
+    if args.repetitions <= 0 or args.repetitions > 3:
+        raise SystemExit("--repetitions must be between 1 and 3")
+    if args.mode == "release" and args.judge != "on":
+        raise SystemExit("release mode requires --judge on")
     cancelled = False
 
     def on_interrupt(_signum: int, _frame: object) -> None:
@@ -57,39 +65,37 @@ def main(argv: Sequence[str] | None = None) -> int:
         runtime = DeterministicRuntimeFactory(runtime_loader.load())
         driver = RunDriver(runtime=runtime)
         results = []
+        judge_results = {}
+        judge_runner = None
+        judge_unavailable = False
+        if args.judge == "on":
+            try:
+                judge_runner = RubricJudge(JudgeConfig.from_settings(get_settings(), mode=args.mode))
+            except JudgeUnavailable:
+                judge_unavailable = True
         for case in cases:
             if cancelled:
                 break
-            result = driver.run_case(
-                case=case, timeout_seconds=args.timeout, cancelled=lambda: cancelled
-            )
-            results.append(
-                {
-                    "case_id": case.id,
-                    "track": case.task_type,
-                    "hard_pass": result.hard_eval.passed,
-                    "hard_fail_reasons": result.hard_eval.hard_fail_reasons,
-                    "dimensions": result.hard_eval.dimensions,
-                    "runtime_error": result.runtime_error,
-                }
-            )
-        report = {
-            "schema_version": "1.0",
-            "dataset_hash": loader.dataset_hash(),
-            "judge": "off",
-            "runtime": "deterministic_fixture",
-            "runtime_hash": runtime_loader.fixture_hash(),
-            "runtime_fixture_hash": runtime_loader.fixture_hash(),
-            "prompt_hash": hashlib.sha256(
-                b"commerce-agent:deterministic-runtime-prompt-v1"
-            ).hexdigest(),
-            "cancelled": cancelled,
-            "selected_cases": len(cases),
-            "completed_cases": len(results),
-            "passed_cases": sum(1 for item in results if item["hard_pass"] is True),
-            "failed_cases": sum(1 for item in results if item["hard_pass"] is not True),
-            "results": results,
-        }
+            for _ in range(args.repetitions):
+                if cancelled:
+                    break
+                result = driver.run_case(case=case, timeout_seconds=args.timeout, cancelled=lambda: cancelled)
+                results.append(result)
+                # Pure intent routing is deterministically judged by hard gates;
+                # rubric calls are reserved for the 150 non-intent cases.
+                if judge_runner is not None and case.task_type != "intent_route":
+                    judge_results[case.id] = judge_runner.evaluate(case=case, trace=result.trace, hard_result=result.hard_eval)
+        report = build_report(cases, results, judges=judge_results, judge_enabled=args.judge == "on", dataset_hash=loader.dataset_hash(), runtime_hash=runtime_loader.fixture_hash(), mode=args.mode, repetitions=args.repetitions, cancelled=cancelled)
+        report["runtime"] = "deterministic_fixture"
+        report["runtime_fixture_hash"] = runtime_loader.fixture_hash()
+        report["prompt_hash"] = "sha256:commerce-agent-deterministic-runtime-prompt-v1"
+        if judge_unavailable:
+            report["status"] = "incomplete"
+            report["judge_error"] = "judge_configuration_unavailable"
+            report["self_judged"] = False
+        if args.output_dir:
+            write_report(report, args.output_dir)
+        import json
         print(json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
         return 0
     except DatasetContractError as error:
