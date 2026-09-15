@@ -12,6 +12,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
+from threading import Lock
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -60,6 +61,8 @@ from src.workflows.mutations import extract_arguments, hash_secret
 
 DEMO_TENANT_ID = "demo-tenant"
 EVAL_REPORT_ROOT = Path(__file__).resolve().parents[2] / "evals" / "reports"
+_EVAL_PROCESSES: dict[str, subprocess.Popen[str]] = {}
+_EVAL_PROCESS_LOCK = Lock()
 
 
 class EvalRunCreateRequest(BaseModel):
@@ -115,25 +118,47 @@ def _execute_eval_report(eval_run_id: str, payload: EvalRunCreateRequest) -> Non
         "--output-dir",
         str(directory),
     ]
+    process: subprocess.Popen[str] | None = None
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=Path(__file__).resolve().parents[2],
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=3600,
-            check=False,
         )
+        with _EVAL_PROCESS_LOCK:
+            _EVAL_PROCESSES[eval_run_id] = process
+        stdout, stderr = process.communicate(timeout=3600)
         report_path = directory / "report.json"
-        report = (
-            json.loads(completed.stdout.splitlines()[-1])
-            if completed.stdout.strip()
-            else {"status": "failed"}
-        )
+        report = json.loads(stdout.splitlines()[-1]) if stdout.strip() else {"status": "failed"}
         report["eval_run_id"] = eval_run_id
-        if completed.returncode != 0:
+        try:
+            existing = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+        if existing.get("status") == "cancelled":
+            return
+        if process.returncode != 0:
             report["status"] = "failed"
         report_path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+    except subprocess.TimeoutExpired:
+        if process is not None:
+            process.kill()
+            process.communicate()
+        (directory / "report.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "eval_run_id": eval_run_id,
+                    "status": "failed",
+                    "error": "evaluation_timeout",
+                    "results": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
     except Exception:
         (directory / "report.json").write_text(
             json.dumps(
@@ -154,6 +179,9 @@ def _execute_eval_report(eval_run_id: str, payload: EvalRunCreateRequest) -> Non
             ),
             encoding="utf-8",
         )
+    finally:
+        with _EVAL_PROCESS_LOCK:
+            _EVAL_PROCESSES.pop(eval_run_id, None)
 
 
 class ConversationCreateRequest(BaseModel):
@@ -512,6 +540,10 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         payload = json.loads(report_path.read_text(encoding="utf-8"))
         if payload.get("status") in {"completed", "failed", "cancelled"}:
             return {"eval_run_id": eval_run_id, "status": str(payload.get("status"))}
+        with _EVAL_PROCESS_LOCK:
+            process = _EVAL_PROCESSES.get(eval_run_id)
+        if process is not None and process.poll() is None:
+            process.terminate()
         payload["status"] = "cancelled"
         report_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return {"eval_run_id": eval_run_id, "status": "cancelled"}
