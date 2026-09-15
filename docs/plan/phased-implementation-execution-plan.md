@@ -560,7 +560,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - `npm --prefix apps/web test -- --run` → pass；`npm --prefix apps/web run build` → pass。
 - `docker compose build app && docker compose up -d app` → pass；`/health/live`、`/health/ready` → HTTP 200；宿主端口 `127.0.0.1:19473`。
 - `python -m pytest -q tests/recovery/test_phase6_fault_injection.py tests/deployment/test_runtime_limits.py` → `4 passed`；覆盖模型、工具、checkpoint 崩溃注入与 Uvicorn/DB/Eval 资源上限。
-- 关键证据：代码提交 `54922c3`；工作区 clean；运行容器已重建并加载该提交。
+- 关键证据：脱敏补强提交 `54922c3`；故障/资源门禁提交 `561eb1d`；工作区 clean。运行容器已重建并加载脱敏补强代码，资源/故障测试在候选源码上通过。
 - 剩余 TODO：真实 provider payload 的 PII 全链路审计、独立 Judge 校准与 Release gate、空库恢复/24 小时 soak、完整 PostgreSQL contract suite。
 - BLOCKED：无（本切片）；Phase 6/7 外部门禁阻塞仍按上一条记录执行。
 
