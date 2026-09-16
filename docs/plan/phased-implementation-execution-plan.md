@@ -1,11 +1,11 @@
 # 电商客服 Agent 分阶段实施与验收清单
 
-> 版本：v2.5
+> 版本：v2.6
 >
 > 日期：2026-09-16
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～6 已验收；Phase 7 仅剩连续 24 小时 soak 与最终候选证据收尾）
+> 当前整体状态：`in_progress`（Phase 0～6 已验收；Phase 7 仅剩 bounded soak 与最终候选证据收尾）
 
 ## 1. Codex 使用规则
 
@@ -30,7 +30,14 @@
 - TODO 的完成证据至少包含“变更文件 + 验证命令 + 结果/产物路径”；只创建空文件不算完成。
 - 若用户在当前执行回合明确要求不运行测试，只更新文档或代码，不勾选依赖运行验证的项目；验证命令保留给后续执行。
 
-### 1.3 阶段推进协议
+### 1.3 Soak 门禁策略（当前有效）
+
+- Release gate 不设置连续 24 小时运行测试；历史记录中的 24 小时方案已废止，不得重新启动。
+- 当前验收使用 bounded soak：默认运行 10 分钟、每 30 秒采样，必须由 `scripts/verify_soak_report.py` 校验报告。
+- 最低证据要求：`status=completed`、有效采样不少于 10 个、elapsed 单调递增且至少达到 600 秒、每个样本都有 `memory_bytes`/`disk_free_bytes`/`error_count`，并且错误数为 0。
+- 长期稳定性改为可选的多个独立 bounded soak 窗口；它们用于发现趋势，不作为单次连续运行门禁，也不阻塞本地验证会话。
+
+### 1.4 阶段推进协议
 
 Codex 执行每个阶段时必须：
 
@@ -534,7 +541,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 
 ### 2026-09-16 — Phase 5/6 — hard gate 与运行安全切片
 
-- 状态：partial（Phase 5/6 的可执行代码已落地；正式 Release/24 小时 soak 仍需外部条件）。
+- 状态：partial（Phase 5/6 的可执行代码已落地；正式 Release/bounded soak 仍需外部条件）。
 - 变更文件：`src/guardrails/`、`src/telemetry/`、`src/harness/resources.py`、Phase 5 harness、Phase 6 migration、API、Compose、运维脚本与 runbook。
 - 执行验证：
   - `python -m pytest -q` → `208 passed, 42 skipped`；Harness → `39 passed`。
@@ -543,7 +550,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - Compose migration → `20260916_0011`；重启 app 后 `/health/live`、`/health/ready` → 200；宿主端口仍为 `127.0.0.1:19473`。
   - `tests/deployment/test_phase6_ops.py` → shell syntax 与 detached soak status/atomic JSON → pass。
 - 关键提交：Phase 5 hard gate `1edaf7a`；Phase 6 原子提交 `39479fd`、`36d04a7`。
-- 剩余 TODO：独立 Judge 30-case agreement ≥90%、Release report `self_judged=false`、真实空库备份恢复演练、24 小时 soak、完整 DATABASE_TEST_URL contract suite。
+- 剩余 TODO：独立 Judge 30-case agreement ≥90%、Release report `self_judged=false`、真实空库备份恢复演练、bounded soak、完整 DATABASE_TEST_URL contract suite。
 - BLOCKED：Release 与 Phase 7 的正式门禁需要独立 Judge 配置；不可用当前同配置自评冒充通过。
 
 ### 2026-09-16 — Phase 6 — PII 脱敏补强与服务复验
@@ -561,7 +568,7 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - `docker compose build app && docker compose up -d app` → pass；`/health/live`、`/health/ready` → HTTP 200；宿主端口 `127.0.0.1:19473`。
 - `python -m pytest -q tests/recovery/test_phase6_fault_injection.py tests/deployment/test_runtime_limits.py` → `4 passed`；覆盖模型、工具、checkpoint 崩溃注入与 Uvicorn/DB/Eval 资源上限。
 - 关键证据：脱敏补强提交 `54922c3`；故障/资源门禁提交 `561eb1d`；工作区 clean。运行容器已重建并加载脱敏补强代码，资源/故障测试在候选源码上通过。
-- 剩余 TODO：真实 provider payload 的 PII 全链路审计、独立 Judge 校准与 Release gate、空库恢复/24 小时 soak、完整 PostgreSQL contract suite。
+- 剩余 TODO：真实 provider payload 的 PII 全链路审计、独立 Judge 校准与 Release gate、空库恢复/bounded soak、完整 PostgreSQL contract suite。
 - BLOCKED：无（本切片）；Phase 6/7 外部门禁阻塞仍按上一条记录执行。
 
 ### 2026-09-16 — Phase 6/7 — 隔离 PostgreSQL 合同与版本冻结
@@ -581,20 +588,20 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - Provider 边界复验（提交 `b300242`）：分类器与主 Agent 的 HTTP payload 均先经过统一 PII 脱敏；手机号、地址、邮箱、支付卡号均由回归测试确认不会进入 provider JSON。
 - Live provider smoke（显式 `RUN_LIVE_MODEL_TEST=1`，不输出凭据）：`tests/integration/test_intent_classifier_live.py` 与 `test_model_gateway_live.py` → `2 passed in 3.76s`；分类请求使用禁用思维链配置。
 - 关键证据：候选源码 commit `1246dd9`；冻结 manifest 提交 `e43ecc8`；摘要提交 `f6bb320`；provider 脱敏提交 `b300242`；工作区 clean。
-- 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、24 小时 soak。
+- 剩余 TODO：独立 Judge 30-case agreement ≥90%、`self_judged=false` 的三次 release run、完整空库 app 部署复验、bounded soak。
 - BLOCKED：正式 Release gate 仍需独立 Judge 配置和持续运行外部条件；本地门禁已 fail-closed 验证。
 
-### 2026-09-16 — Phase 7 — 独立 Judge release gate
+### 2026-09-16 — Phase 7 — 独立 Judge release gate（历史记录）
 
-- 状态：partial（Release 评测与证据门禁完成；空库 app 部署和 24 小时 soak 未完成）。
+- 状态：partial（Release 评测与证据门禁完成；空库 app 部署和旧版 soak 方案未完成）。
 - 配置变更：`.env` 中 `JUDGE_MODEL` 已设为 `deepseek-chat`，与候选 `deepseek-flash` 不同；API base/key 未记录或输出。分类器仍使用 `deepseek-flash` 且显式禁用思维链。
 - 执行验证：
   - `python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --mode release --repetitions 3` → `status=completed`、`900 attempts`、`300/300 hard pass`、`296/300 final pass`、三次全通过率 `0.9867`、`self_judged=false`、`release_gate=true`。
   - 30-case calibration → agreement `1.0`、`evaluated_count=30`、`status=complete`；Judge errors `0`。
   - `python scripts/release_check.py ... --require-clean --candidate-commit <manifest.source_commit>` → `release-check passed`。
   - 发布证据：`docs/releases/internal-beta-20260916-r3/`（候选源码 `bd0cb55`，证据提交 `0e04783`；checker 支持证据提交后的显式候选 SHA）。
-- 剩余 TODO：从空库执行完整 app+DB 编排、连续 24 小时 soak；完成后才能将 Phase 7 与整体目标标记为 completed。
-- BLOCKED：无配置阻塞；长时门禁需要实际经过 24 小时运行窗口。
+- 剩余 TODO（当时）：从空库执行完整 app+DB 编排、旧版长时 soak；该方案随后由 bounded soak 替代。
+- BLOCKED（当时）：无配置阻塞；旧版长时门禁需要实际经过 24 小时运行窗口。
 
 ### 2026-09-16 — Phase 7 — 空库 app+DB 编排复验
 
@@ -603,33 +610,33 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - 使用临时 `commerce_empty_<timestamp>` 数据库，从零执行 Alembic 至 `20260916_0011`；运行时查询确认 `conversation=0`、`agent_runs=0`。
   - 使用最新 `commerce-agent:phase0` 镜像启动临时 app 容器（只读根文件系统、`/tmp` tmpfs、384 MiB 限制），容器 IP 的 `/health/live`、`/health/ready` 和 SPA 根页面均返回 200。
   - 验证完成后停止并删除临时容器及数据库，未修改演示数据库和持久卷。
-- 剩余 TODO：24 小时 soak；其余 Phase 7 本地门禁已完成。
-- BLOCKED：无；24 小时门禁需等待真实运行窗口结束。
+- 剩余 TODO（当时）：旧版长时 soak；该方案随后由 bounded soak 替代。
+- BLOCKED（当时）：无；旧版长时门禁需等待真实运行窗口结束。
 
-### 2026-09-16 — Phase 7 — 24 小时 soak 启动
+### 2026-09-16 — Phase 7 — 24 小时 soak 启动（历史记录，已废止）
 
-- 状态：in_progress（后台采样已启动，尚未达到 24 小时窗口）。
+- 状态：cancelled（用户要求不设置连续 24 小时测试；后台任务已停止）。
 - 执行命令：`scripts/soak_monitor.sh --duration 24h --interval 60 --output evals/reports/release-soak.json --detach`。
 - 当前证据：返回 `status=running`，PID `124898`；`--status` 已读到首个采样，包含磁盘、内存和错误计数，产物原子写入且不含凭据。
-- 验收条件：待 `scripts/soak_monitor.sh --status` 返回 `status=completed` 且采样窗口达到 86,400 秒后，才能勾选 Phase 7 soak 及整体完成项。
-- BLOCKED：无；等待后台采样窗口自然结束。
+- 验收条件：本历史方案不再验收；当前有效条件见 1.3 和 Phase 7 bounded soak 命令。
+- 取消原因：连续 24 小时运行会让验证不可控地占用执行窗口，且不能替代可重复的短时证据。
 
-### 2026-09-16 — Phase 5/6/7 — 发布候选持续门禁复验
+### 2026-09-16 — Phase 5/6/7 — 发布候选持续门禁复验（历史记录，旧 soak 已停止）
 
-- 状态：in_progress（24 小时 soak 仍在运行，未提前宣称完成）。
+- 状态：superseded（旧版 24 小时 soak 已停止，未将其宣称为完成）。
 - 执行验证：
   - `python -m pytest -q` → `217 passed, 42 skipped`；跳过项均明确要求独立 `DATABASE_TEST_URL` 或 live 开关。
   - `python -m ruff check src apps tests` → pass；`python -m mypy src apps` → pass（90 source files）。
   - `npm --prefix apps/web test -- --run`、`npm --prefix apps/web run build` → pass。
   - `python scripts/release_check.py evals/reports/release-20260916-judge-chat-v3/report.json --require-clean --candidate-commit bd0cb5533f2f0f78a37123af780e104724948a0d` → `release-check passed`。
-  - `scripts/soak_monitor.sh --status --output evals/reports/release-soak.json` → `status=running`；systemd transient unit 的 MainPID `138088` 跨会话存活，当前错误计数 `0`。
+  - `scripts/soak_monitor.sh --status --output evals/reports/release-soak.json` → 旧报告曾为 `status=running`；随后已停止，不作为当前门禁证据。
 - 关键证据：`evals/reports/release-soak.json` 持续原子更新；监控脚本修复提交 `c8ce07c`。
-- 剩余 TODO：等待 soak 采样窗口达到 `86,400` 秒；完成后更新 Phase 7 checklist、发布摘要和最终候选证据。
-- BLOCKED：无；后台采样正在按计划运行。
+- 剩余 TODO（已替代）：运行并校验 10 分钟 bounded soak，完成后更新 Phase 7 checklist、发布摘要和最终候选证据。
+- BLOCKED：无；旧后台采样已停止。
 
-### 2026-09-16 — Phase 7 — soak 资源采集完整性修复
+### 2026-09-16 — Phase 7 — soak 资源采集完整性修复（历史记录，旧窗口已废止）
 
-- 状态：in_progress（修复后已重新启动 24 小时窗口）。
+- 状态：superseded（修复曾用于旧窗口；该窗口已按用户决策停止）。
 - 变更文件：
   - `scripts/soak_monitor.sh`
   - `tests/deployment/test_phase6_ops.py`
@@ -637,11 +644,20 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
   - `bash -n scripts/soak_monitor.sh` → pass
   - `python -m pytest -q tests/deployment/test_phase6_ops.py tests/recovery/test_phase6_fault_injection.py tests/security tests/harness/test_judge.py tests/harness/test_runner.py` → `22 passed`
   - 新窗口首个样本 → `memory_bytes=111002255`、`error_count=0`，JSON 原子写入正常。
-- 关键证据：
+- 关键证据（旧窗口，仅保留审计用途）：
   - `evals/reports/release-soak.json`（新窗口 `2026-09-16T04:35:27Z` 开始）
   - Docker stats 回退同时采集 app 与 db 内存，宿主缺少 cgroup memory 文件时不再写入 `null`。
-- 剩余 TODO：等待新的连续 `86,400` 秒窗口完成后，更新 Phase 7 checklist、发布摘要和最终候选证据。
-- BLOCKED：无；后台采样正在按计划运行。
+- 剩余 TODO：旧窗口不再等待；改为运行 bounded soak 后更新 Phase 7 checklist、发布摘要和最终候选证据。
+- BLOCKED：无；旧后台采样已停止。
+
+### 2026-09-16 — Phase 7 — bounded soak 验收
+
+- 状态：completed（当前有效的 bounded soak 门禁已通过；不设置连续 24 小时测试）。
+- 执行命令：`scripts/soak_monitor.sh --duration 10m --interval 30 --output evals/reports/release-soak-bounded.json --detach`，随后通过 `--status` 回读。
+- 验证命令：`python scripts/verify_soak_report.py evals/reports/release-soak-bounded.json --min-duration 10m --min-samples 10 --max-errors 0`。
+- 结果：`status=completed`、20 个样本、elapsed `613` 秒；每个样本均有 `memory_bytes`、`disk_free_bytes`、`error_count`，错误数为 `0`，elapsed 单调递增。
+- 相关验证：全量 Python `219 passed, 42 skipped`；Phase 6/部署/安全/恢复/Harness 子集 `24 passed`；Ruff、mypy、前端 test/build 均通过。
+- 证据：`evals/reports/release-soak-bounded.json`（原始运行产物保持 ignored）；旧 `release-soak.json` 仅保留为已停止的历史审计记录。
 
 ## 9. Phase 4：确定性事务 Workflow
 
@@ -877,12 +893,12 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 - [x] 崩溃注入后的 run 可恢复或安全失败，不重复副作用（只读 checkpoint 失败保留原 context；mutation durable boundary 恢复为 unknown；fault-injection/recovery tests 通过）。
 - [x] 任意写工具状态 unknown 时不对用户声称成功（`DurableMutationBoundary` 与 workflow recovery tests）。
 - [x] DB 备份可恢复到空实例，conversation/run/checkpoint/event 关系完整（`backups/phase6-smoke.dump` 与空库恢复查询证据）。
-- [x] app + DB 稳态使用不突破容器上限，不依赖 swap 才能处理单会话（Compose limits + runtime limit test；仍需长时 soak 证明）。
+- [x] app + DB 稳态使用不突破容器上限，不依赖 swap 才能处理单会话（Compose limits + runtime limit test；bounded soak 已补充资源趋势证据）。
 - [x] 模型/Judge 不可用时的降级回复不产生 mutation（model/Judge unavailable、readonly failure 和 mutation unknown tests）。
 - [x] P0 安全和恢复断言全部通过（隔离 PostgreSQL contract `31 passed`、recovery `9 passed`，安全/故障注入通过）。
-- [x] soak monitor 的短时自测可启动、查询、停止并生成无密钥的完整 JSON；24 小时 gate 留在 Phase 7。
+- [x] soak monitor 的短时自测可启动、查询、停止并生成无密钥的完整 JSON；bounded soak gate 留在 Phase 7。
 - [x] Phase 6 完成后创建原子 commit，并记录 commit SHA 和 clean worktree 证据（`39479fd`、`36d04a7`、`54922c3`、`561eb1d`、`b300242`）。
-- [x] Phase 6 所有 TODO 和验证命令均完成；长时 soak 作为 Phase 7 独立门禁。
+- [x] Phase 6 所有 TODO 和验证命令均完成；bounded soak 作为 Phase 7 独立门禁。
 
 ### 11.5 阶段产物
 
@@ -914,7 +930,7 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 - [x] 从 Web 完整演示 FAQ/商品对比、订单物流、退款确认和失败 case 定位（scenario API、SSE/Trace、confirmation 与 `/evals` 页面复验通过）。
 - [x] 执行 Compose 停止/重启，验证会话、run、checkpoint、评测报告不丢失（deployment smoke 与服务重建复验）。
 - [x] 执行备份/恢复演练，记录恢复点和验证查询（`backups/phase6-smoke.dump`，空库关系计数已核验）。
-- [ ] 使用 `scripts/soak_monitor.sh` 非交互记录连续 24 小时运行中的内存、磁盘、错误率和外部 API 失败；通过 status/产物回读，不用阻塞式 `sleep` 占用会话。
+- [x] 使用 `scripts/soak_monitor.sh` 非交互记录 10 分钟 bounded soak 的内存、磁盘和错误率；通过 status/产物回读，并使用 `scripts/verify_soak_report.py` 校验完成状态、采样完整性、单调 elapsed 和零错误（20 samples / 613 seconds / 0 errors）。
 - [x] 完成 `README.md`、本地启动、评测、数据库、故障恢复和已知限制文档。
 - [x] 明确标记当前产物为 `internal beta / mock business data`，不声称可执行生产退款。
 - [x] 提交最终脱敏证据和文档，记录证据 commit SHA；候选源码 commit 与证据 commit 分开记录（候选 `bd0cb55`，证据提交 `0e04783`/`341adad`）。
@@ -937,11 +953,12 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:19473/health/live
 curl -fsS http://127.0.0.1:19473/health/ready
 python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --judge on --repetitions 3 --mode release
-scripts/soak_monitor.sh --duration 24h --interval 60 --output evals/reports/release-soak.json --detach
-scripts/soak_monitor.sh --status --output evals/reports/release-soak.json
+scripts/soak_monitor.sh --duration 10m --interval 30 --output evals/reports/release-soak-bounded.json --detach
+scripts/soak_monitor.sh --status --output evals/reports/release-soak-bounded.json
+python scripts/verify_soak_report.py evals/reports/release-soak-bounded.json --min-duration 10m --min-samples 10 --max-errors 0
 ```
 
-24 小时 soak 启动命令应立即返回；只有后续 `--status` 显示 `completed`、采样窗口达到 24 小时且产物校验通过后，才能勾选对应验收项。
+bounded soak 启动命令应立即返回；只有后续 `--status` 显示 `completed` 且报告校验通过后，才能勾选对应验收项。需要更强稳定性证据时，运行多个相互独立的 10 分钟窗口，并分别保存报告。
 
 ### 12.4 最终验收 checklist
 
@@ -971,7 +988,7 @@ scripts/soak_monitor.sh --status --output evals/reports/release-soak.json
 - [x] app + DB 上限 640 MiB，默认无额外 worker/Redis/本地模型。
 - [x] DB 重启、应用重启和备份恢复后核心数据完整。
 - [x] 所有报告可追溯到代码、模型、prompt、workflow、policy、tool、dataset 和 rubric 版本（release manifest）。
-- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，24 小时 soak 产物完整（候选 SHA 已通过显式 `--candidate-commit`；24 小时 soak 仍待完成）。
+- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，bounded soak 产物完整（bounded soak 已通过；本次方案改动尚待重新冻结候选 SHA）。
 - [ ] 所有 Phase 0～7 验收 checklist 已勾选。
 
 ### 12.5 交付产物

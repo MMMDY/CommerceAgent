@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 --duration 10m --interval 30 --output path --detach|--status|--stop" >&2
+  echo "usage: $0 --duration 10m --interval 30 --output path --detach|--status|--stop (bounded soak)" >&2
 }
 
 duration=""; interval=30; output=""; action=""
@@ -42,7 +42,7 @@ if [[ "$action" == stop ]]; then
   exit 0
 fi
 if [[ "$action" == detach ]]; then
-  duration="${duration:-24h}"
+  duration="${duration:-10m}"
   [[ "$interval" =~ ^[1-9][0-9]*$ ]] || { echo "interval must be positive seconds" >&2; exit 2; }
   mkdir -p "$(dirname -- "$output")"
   script_path="$(readlink -f "$0")"
@@ -71,15 +71,15 @@ if [[ "$action" == detach ]]; then
   exit 0
 fi
 [[ "$action" == worker ]] || { usage; exit 2; }
-seconds="$(parse_seconds "${duration:-24h}")" || { echo "duration must use Ns/Nm/Nh" >&2; exit 2; }
+seconds="$(parse_seconds "${duration:-10m}")" || { echo "duration must use Ns/Nm/Nh" >&2; exit 2; }
 [[ "$interval" =~ ^[1-9][0-9]*$ ]] || { echo "interval must be positive seconds" >&2; exit 2; }
 mkdir -p "$(dirname -- "$output")"
 umask 077
 started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; start_epoch="$(date +%s)"; samples=""; state=running
 write_state() {
   local now="$1"; local tmp="${output}.tmp.$$"
-  printf '{"schema_version":"1.0","status":"%s","started_at":"%s","updated_at":"%s","samples":[%s]}\n' \
-    "$state" "$started" "$now" "${samples#,}" > "$tmp"
+  printf '{"schema_version":"1.0","status":"%s","started_at":"%s","updated_at":"%s","duration_seconds":%s,"interval_seconds":%s,"samples":[%s]}\n' \
+    "$state" "$started" "$now" "$seconds" "$interval" "${samples#,}" > "$tmp"
   mv -- "$tmp" "$output"
 }
 on_stop() { state=stopped; write_state "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; exit 0; }

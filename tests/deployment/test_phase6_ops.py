@@ -121,3 +121,66 @@ def test_release_checker_accepts_explicit_candidate_commit(tmp_path: Path) -> No
     )
     assert result.returncode == 0
     assert result.stdout.strip() == "release-check passed"
+
+
+def test_bounded_soak_report_validator_accepts_completed_report(tmp_path: Path) -> None:
+    report = tmp_path / "soak.json"
+    report.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "status": "completed",
+                "samples": [
+                    {
+                        "at": "2026-09-16T00:00:00Z",
+                        "elapsed_seconds": elapsed,
+                        "memory_bytes": 100,
+                        "disk_free_bytes": 200,
+                        "error_count": 0,
+                    }
+                    for elapsed in range(0, 601, 30)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/verify_soak_report.py",
+            str(report),
+            "--min-duration",
+            "10m",
+            "--min-samples",
+            "10",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "soak-check passed" in result.stdout
+
+
+def test_bounded_soak_report_validator_rejects_running_report(tmp_path: Path) -> None:
+    report = tmp_path / "soak.json"
+    report.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "status": "running",
+                "samples": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "scripts/verify_soak_report.py", str(report)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "status_not_completed" in result.stderr
