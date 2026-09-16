@@ -40,7 +40,9 @@ def test_soak_monitor_detach_status_and_stop(tmp_path: Path) -> None:
     assert json.loads(started.stdout)["status"] == "running"
     # The worker is intentionally detached; status must be readable without
     # holding the test process open.
-    for _ in range(20):
+    # The Docker-stats memory fallback may take a few seconds on a cold
+    # daemon, while the detached worker still must remain non-blocking.
+    for _ in range(60):
         status = subprocess.run(
             ["scripts/soak_monitor.sh", "--status", "--output", str(output)],
             cwd=ROOT,

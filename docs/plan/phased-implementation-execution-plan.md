@@ -627,6 +627,22 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 剩余 TODO：等待 soak 采样窗口达到 `86,400` 秒；完成后更新 Phase 7 checklist、发布摘要和最终候选证据。
 - BLOCKED：无；后台采样正在按计划运行。
 
+### 2026-09-16 — Phase 7 — soak 资源采集完整性修复
+
+- 状态：in_progress（修复后已重新启动 24 小时窗口）。
+- 变更文件：
+  - `scripts/soak_monitor.sh`
+  - `tests/deployment/test_phase6_ops.py`
+- 执行验证：
+  - `bash -n scripts/soak_monitor.sh` → pass
+  - `python -m pytest -q tests/deployment/test_phase6_ops.py tests/recovery/test_phase6_fault_injection.py tests/security tests/harness/test_judge.py tests/harness/test_runner.py` → `22 passed`
+  - 新窗口首个样本 → `memory_bytes=111002255`、`error_count=0`，JSON 原子写入正常。
+- 关键证据：
+  - `evals/reports/release-soak.json`（新窗口 `2026-09-16T04:35:27Z` 开始）
+  - Docker stats 回退同时采集 app 与 db 内存，宿主缺少 cgroup memory 文件时不再写入 `null`。
+- 剩余 TODO：等待新的连续 `86,400` 秒窗口完成后，更新 Phase 7 checklist、发布摘要和最终候选证据。
+- BLOCKED：无；后台采样正在按计划运行。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖

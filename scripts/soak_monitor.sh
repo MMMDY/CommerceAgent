@@ -84,10 +84,35 @@ write_state() {
 }
 on_stop() { state=stopped; write_state "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; exit 0; }
 trap on_stop TERM INT
+container_memory_bytes() {
+  local container_ids
+  container_ids="$(docker compose ps -q app db 2>/dev/null || true)"
+  [[ -n "$container_ids" ]] || return 1
+  printf '%s\n' "$container_ids" |
+    xargs docker stats --no-stream --format '{{.MemUsage}}' 2>/dev/null |
+    awk '
+      function to_bytes(value, number, unit) {
+        number = value
+        sub(/[A-Za-z]+$/, "", number)
+        unit = value
+        sub(/^[0-9.]+/, "", unit)
+        if (unit == "B" || unit == "") return number
+        if (unit == "kB" || unit == "KiB") return number * 1024
+        if (unit == "MB" || unit == "MiB") return number * 1024 * 1024
+        if (unit == "GB" || unit == "GiB") return number * 1024 * 1024 * 1024
+        return 0
+      }
+      { total += to_bytes($1) }
+      END { if (total > 0) printf "%.0f\n", total; else exit 1 }
+    '
+}
 while true; do
   now_epoch="$(date +%s)"; elapsed=$((now_epoch - start_epoch))
   memory="null"
   [[ -r /sys/fs/cgroup/memory.current ]] && memory="$(sed -n '1p' /sys/fs/cgroup/memory.current)"
+  if [[ "$memory" == "null" ]] && command -v docker >/dev/null 2>&1; then
+    memory="$(container_memory_bytes || echo null)"
+  fi
   disk="$(df -Pk "$(dirname -- "$output")" | awk 'NR==2 {print $4 * 1024}')"
   errors=0
   if command -v docker >/dev/null 2>&1; then
