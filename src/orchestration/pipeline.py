@@ -178,6 +178,7 @@ class StepPipeline:
         cancelled: bool | Callable[[], bool] = False,
         token_budget_remaining: int | None = None,
         observer: Callable[[PipelineStageRecord], None] | None = None,
+        action_observer: Callable[[str, dict[str, object]], None] | None = None,
     ) -> StepPipelineResult:
         journal = PipelineJournal(observer)
         # Evidence introduced by a prior, successfully checkpointed retrieval
@@ -215,6 +216,7 @@ class StepPipeline:
                 cancelled=cancelled,
                 token_budget_remaining=token_budget_remaining,
                 stage_observer=journal,
+                action_observer=action_observer,
             )
         except Exception:
             journal.skip_remaining()

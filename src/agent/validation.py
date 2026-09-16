@@ -22,6 +22,19 @@ SYSTEM_ARGUMENT_FIELDS = frozenset(
 class DecisionValidationError(ValueError):
     """The model proposed an action outside the current trusted boundary."""
 
+    @property
+    def error_code(self) -> str:
+        message = str(self)
+        if "evidence" in message:
+            return "UNTRUSTED_EVIDENCE"
+        if "route" in message:
+            return "ROUTE_MISMATCH"
+        if "tool" in message:
+            return "TOOL_NOT_ALLOWED"
+        if "argument" in message:
+            return "INVALID_TOOL_ARGUMENT"
+        return "DECISION_REJECTED"
+
 
 @dataclass(frozen=True, slots=True)
 class DecisionBoundary:

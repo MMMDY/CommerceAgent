@@ -42,8 +42,15 @@ MUTATION_REQUIRED_SLOTS: dict[str, tuple[str, ...]] = {
     "exchange_product": ("order_id", "item_id", "replacement_sku"),
 }
 
-_ORDER_PATTERN = re.compile(r"\bORD-[A-Z0-9-]{3,40}\b", re.IGNORECASE)
-_SKU_PATTERN = re.compile(r"\b[A-Z]{2,8}[0-9][A-Z0-9/-]{2,24}\b", re.IGNORECASE)
+# ``\b`` does not create a boundary between an ASCII identifier and a
+# neighbouring Chinese character because both sides are Unicode word chars.
+# Use ASCII lookarounds so inputs such as ``这个ORD-DEMO-002退款`` still parse.
+_ORDER_PATTERN = re.compile(
+    r"(?<![A-Z0-9])ORD-[A-Z0-9-]{3,40}(?![A-Z0-9])", re.IGNORECASE
+)
+_SKU_PATTERN = re.compile(
+    r"(?<![A-Z0-9])[A-Z]{2,8}[0-9][A-Z0-9/-]{2,24}(?![A-Z0-9])", re.IGNORECASE
+)
 _REASON_NORMALIZATION = {
     "不想要": "changed_mind",
     "不需要": "changed_mind",
@@ -54,6 +61,7 @@ _REASON_NORMALIZATION = {
     "不合适": "not_suitable",
     "其他": "other",
 }
+_REASON_HINTS = tuple(_REASON_NORMALIZATION) + ("原因", "因为", "由于")
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,10 +238,11 @@ def extract_arguments(mutation_type: str, text: str) -> dict[str, object]:
     skus = _SKU_PATTERN.findall(text)
     if mutation_type == "exchange_product" and skus:
         arguments["replacement_sku"] = skus[-1]
-    if mutation_type in {"request_refund", "return_product", "exchange_product"} and order:
+    if mutation_type in {"request_refund", "return_product", "exchange_product"}:
         arguments["item_id"] = skus[0] if skus else ""
     if mutation_type in {"cancel_order", "request_refund", "return_product"}:
-        arguments["reason"] = text
+        if any(hint in text for hint in _REASON_HINTS):
+            arguments["reason"] = text
     if mutation_type == "change_order":
         marker = max(text.find("地址"), text.find("改为"))
         if marker >= 0:

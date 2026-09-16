@@ -8,11 +8,13 @@ import json
 import subprocess
 import sys
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from threading import Lock
+from time import monotonic, sleep
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -23,44 +25,41 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from apps.api.bootstrap import ReadinessDependencies
-from src.agent.intent_classifier import IntentClassifier
 from src.config import Settings, get_settings
 from src.db import get_engine
 from src.harness.resources import InsufficientDiskError, ensure_disk_budget
 from src.memory.session import build_session_memory
-from src.models.gateway import ModelGatewayError, OpenAICompatibleGateway
-from src.orchestration.api_runtime import execute_readonly_run
-from src.orchestration.low_risk_workflow import (
-    LOW_RISK_ROUTES,
-    LowRiskWorkflowError,
-    execute_low_risk,
-    extract_low_risk_arguments,
-)
+from src.orchestration.demo_run_executor import execute_message_run
 from src.orchestration.mutation_workflow import (
     MutationWorkflowError,
     confirm_mutation,
-    mutation_type_for_route,
-    prepare_mutation,
     reject_mutation,
 )
 from src.orchestration.persistence import RepositoryCheckpointStore
-from src.orchestration.route_catalog import DEFAULT_INTENT_ROUTE_RULES
-from src.orchestration.router import IntentRouter, RouteDecision, RouteOutcome
 from src.orchestration.run_creation import RunCreationSpec
-from src.protocols import DomainEvent, EventType, Message, RoutingPromptView, RunContext, RunStatus
+from src.orchestration.state_machine import (
+    STATUS_DESCRIPTIONS,
+    STATUS_LABELS,
+    allowed_actions,
+    state_machine_definition,
+)
+from src.orchestration.terminal_response import publish_terminal_response
+from src.protocols import DomainEvent, EventType, RunContext, RunStatus
 from src.repositories.audit import AuditRepository
 from src.repositories.conversations import Conversation, ConversationRepository
 from src.repositories.handoffs import HandoffRepository
 from src.repositories.knowledge import KnowledgeRepository
 from src.repositories.memory import MemoryRepository, MemoryValidationError
 from src.repositories.messages import MessageConflictError, MessageRecord, MessageRepository
-from src.repositories.model_invocations import ModelInvocationRepository
 from src.repositories.mutations import ConfirmationRepository, MutationExecutionRepository
-from src.repositories.run_lifecycle import RunLifecycleRepository, RunRoutingRepository
+from src.repositories.run_lifecycle import (
+    ActiveRunConflictError,
+    RunLifecycleRepository,
+)
 from src.repositories.runs import RunRepository, RunSnapshot
 from src.telemetry.lifecycle import ShutdownGate
 from src.telemetry.metrics import Metrics
-from src.workflows.mutations import extract_arguments, hash_secret
+from src.workflows.mutations import hash_secret
 
 DEMO_TENANT_ID = "demo-tenant"
 EVAL_REPORT_ROOT = Path(__file__).resolve().parents[2] / "evals" / "reports"
@@ -248,6 +247,12 @@ class MessageSendResponse(BaseModel):
     token_refresh_required: bool = False
 
 
+class RetryRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    client_message_id: str = Field(min_length=8, max_length=128)
+
+
 class ConfirmationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -289,6 +294,18 @@ class HandoffResponse(BaseModel):
     resolution: str | None = None
 
 
+class HumanReviewResponse(BaseModel):
+    ticket_id: UUID
+    run_id: UUID
+    status: str
+    reason_code: str
+    operation: str | None = None
+    details: dict[str, object]
+    created_at: str
+    resolved_at: str | None = None
+    resolution: str | None = None
+
+
 class PreferenceCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -326,6 +343,18 @@ class RunResponse(BaseModel):
     preview: dict[str, object] | None = None
     confirmation_expires_at: str | None = None
     token_refresh_required: bool = False
+    allowed_actions: tuple[str, ...] = ()
+    status_label: str = ""
+    status_description: str = ""
+    retryable: bool = False
+
+
+class ActiveRunResponse(BaseModel):
+    run: RunResponse | None = None
+
+
+class StateMachineResponse(BaseModel):
+    states: list[dict[str, object]]
 
 
 def _message_repository() -> MessageRepository:
@@ -360,6 +389,14 @@ def _run_response(
             else None
         ),
         token_refresh_required=snapshot.status == RunStatus.WAITING_CONFIRMATION.value,
+        allowed_actions=allowed_actions(RunStatus(snapshot.status)),
+        status_label=STATUS_LABELS[RunStatus(snapshot.status)],
+        status_description=(
+            f"{STATUS_DESCRIPTIONS[RunStatus(snapshot.status)]}，原因：{snapshot.terminal_reason}"
+            if snapshot.status == RunStatus.FAILED.value and snapshot.terminal_reason
+            else STATUS_DESCRIPTIONS[RunStatus(snapshot.status)]
+        ),
+        retryable="retry" in allowed_actions(RunStatus(snapshot.status)),
     )
 
 
@@ -375,6 +412,35 @@ def _checkpoint_context(*, run_id: UUID, actor_id: str) -> RunContext:
     if context.actor_id != actor_id or context.tenant_id != DEMO_TENANT_ID:
         raise HTTPException(status_code=404, detail="run_not_found")
     return context
+
+
+def _repair_missing_terminal_responses(*, tenant_id: str, limit: int = 100) -> None:
+    """Backfill user-visible replies for terminal Runs from before this fix."""
+    runs = RunRepository(get_engine())
+    messages = MessageRepository(get_engine())
+    for snapshot in runs.terminal_runs_without_response(tenant_id=tenant_id, limit=limit):
+        if snapshot.conversation_id is None:
+            continue
+        checkpoint = runs.load_latest_checkpoint(run_id=snapshot.run_id, tenant_id=tenant_id)
+        state = checkpoint.get("state", {}) if isinstance(checkpoint, dict) else {}
+        context_data = dict(checkpoint) if isinstance(checkpoint, dict) else {}
+        context_data.update(
+            {
+                "run_id": snapshot.run_id,
+                "conversation_id": snapshot.conversation_id,
+                "tenant_id": tenant_id,
+                "actor_id": runs.actor_for_run(run_id=snapshot.run_id, tenant_id=tenant_id),
+                "status": snapshot.status,
+                "state": state if isinstance(state, dict) else {},
+            }
+        )
+        try:
+            context = RunContext.model_validate(context_data)
+            publish_terminal_response(context=context, messages=messages, runs=runs)
+        except Exception:
+            # A malformed legacy checkpoint remains visible for manual repair;
+            # one bad record must not prevent other Runs from being repaired.
+            continue
 
 
 def get_demo_actor(
@@ -412,6 +478,9 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
     app = FastAPI(title="CommerceAgent", version="0.1.0")
     app.state.shutdown_gate = ShutdownGate()
     app.state.metrics = Metrics()
+    app.state.run_executor = ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="commerce-agent-run"
+    )
     readiness_dependencies = readiness or ReadinessDependencies.default()
 
     @app.on_event("shutdown")
@@ -419,6 +488,63 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         gate: ShutdownGate = app.state.shutdown_gate
         gate.stop_accepting()
         gate.wait_for_idle(timeout=5.0)
+        app.state.run_executor.shutdown(wait=True, cancel_futures=False)
+
+    @app.on_event("startup")
+    def recover_active_runs() -> None:
+        """Reattach non-terminal demo runs after a single-process restart."""
+
+        try:
+            engine = get_engine()
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE runtime.agent_runs SET status = 'expired', current_step = 'terminal', "
+                        "terminal_reason = 'DEADLINE_EXCEEDED_DURING_RESTART', updated_at = now(), "
+                        "row_version = row_version + 1 WHERE tenant_id = :tenant_id "
+                        "AND status IN ('created', 'routing', 'running_readonly', 'running_workflow') "
+                        "AND deadline_at <= now()"
+                    ),
+                    {"tenant_id": DEMO_TENANT_ID},
+                )
+            with engine.connect() as connection:
+                rows = connection.execute(
+                    text(
+                        "SELECT run_id, conversation_id, actor_ref, status, deadline_at "
+                        "FROM runtime.agent_runs WHERE tenant_id = :tenant_id "
+                        "AND status IN ('created', 'routing', 'running_readonly', 'running_workflow') "
+                        "AND deadline_at > now()"
+                    ),
+                    {"tenant_id": DEMO_TENANT_ID},
+                ).all()
+            settings = get_settings()
+            messages = MessageRepository(engine)
+            _repair_missing_terminal_responses(tenant_id=DEMO_TENANT_ID)
+            for row in rows:
+                conversation_id, actor_id = row[1], row[2]
+                history = messages.list_for_actor(
+                    conversation_id=conversation_id,
+                    tenant_id=DEMO_TENANT_ID,
+                    actor_id=actor_id,
+                    limit=500,
+                )
+                content = next(
+                    (item.content_redacted for item in reversed(history) if item.role == "user"),
+                    "继续处理当前任务",
+                )
+                app.state.run_executor.submit(
+                    execute_message_run,
+                    conversation_id=conversation_id,
+                    content=content,
+                    actor_id=actor_id,
+                    run_id=row[0],
+                    tenant_id=DEMO_TENANT_ID,
+                    settings=settings,
+                )
+        except Exception:
+            # Startup must remain available for new conversations even when a
+            # stale recovery record is malformed; the Run remains queryable.
+            return
 
     @app.get("/health/live")
     def live() -> dict[str, str]:
@@ -722,15 +848,12 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
     def send_message(
         conversation_id: UUID,
         payload: MessageCreateRequest,
+        request: Request,
         actor_id: str = Depends(get_demo_actor),
         messages: MessageRepository = Depends(_message_repository),
         _admission: None = Depends(require_admission),
     ) -> MessageSendResponse:
         run_id = uuid4()
-        assistant_response: str | None = None
-        confirmation_token: str | None = None
-        preview: dict[str, object] | None = None
-        confirmation_expires_at: str | None = None
         token_refresh_required = False
         # Resolve client-message idempotency before reserving a new Run.  This
         # is important because a conversation may still have an unfinished
@@ -750,6 +873,39 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             ):
                 raise HTTPException(status_code=404, detail="conversation_not_found")
             settings = get_settings()
+            active = RunLifecycleRepository(get_engine()).active_for_conversation(
+                conversation_id=conversation_id,
+                tenant_id=DEMO_TENANT_ID,
+                actor_id=actor_id,
+            )
+            if active is not None and active.status == RunStatus.WAITING_USER.value:
+                try:
+                    message = messages.append_user(
+                        conversation_id=conversation_id,
+                        tenant_id=DEMO_TENANT_ID,
+                        actor_id=actor_id,
+                        content=payload.content,
+                        client_message_id=payload.client_message_id,
+                        run_id=active.run_id,
+                    )
+                except MessageConflictError as error:
+                    raise HTTPException(
+                        status_code=409, detail="client_message_id_conflict"
+                    ) from error
+                request.app.state.run_executor.submit(
+                    execute_message_run,
+                    conversation_id=conversation_id,
+                    content=payload.content,
+                    actor_id=actor_id,
+                    run_id=active.run_id,
+                    tenant_id=DEMO_TENANT_ID,
+                    settings=settings,
+                )
+                return MessageSendResponse(
+                    message_id=message.message_id,
+                    run_id=active.run_id,
+                    run_status=RunStatus.RUNNING_WORKFLOW.value,
+                )
             fingerprint = "|".join(
                 (settings.model or "unconfigured", settings.api_base or "unconfigured")
             )
@@ -770,6 +926,19 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             )
             try:
                 RunLifecycleRepository(get_engine()).create_run(context=context, spec=spec)
+            except ActiveRunConflictError as error:
+                snapshot = error.snapshot
+                if snapshot is None:
+                    raise HTTPException(status_code=409, detail="ACTIVE_RUN_EXISTS") from error
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "ACTIVE_RUN_EXISTS",
+                        "run_id": str(snapshot.run_id),
+                        "status": snapshot.status,
+                        "message": "当前会话已有未结束任务，请继续查看该任务。",
+                    },
+                ) from error
             except Exception as error:
                 raise HTTPException(status_code=503, detail="run_creation_unavailable") from error
             try:
@@ -805,198 +974,120 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             run_status = (
                 existing_run.status if existing_run is not None else RunStatus.CREATED.value
             )
-            waiting_action = (
-                "human_handoff" if run_status == RunStatus.WAITING_HUMAN.value else None
-            )
             if run_status == RunStatus.WAITING_CONFIRMATION.value:
                 token_refresh_required = True
+            return MessageSendResponse(
+                message_id=message.message_id,
+                run_id=run_id,
+                run_status=run_status,
+                token_refresh_required=token_refresh_required,
+            )
         else:
-            try:
-                routing_prompt = RoutingPromptView(
-                    conversation=(Message(role="user", content=payload.content),),
-                    allowed_intents=tuple(rule.intent for rule in DEFAULT_INTENT_ROUTE_RULES),
-                )
-                candidate = IntentClassifier(
-                    gateway=OpenAICompatibleGateway(settings),
-                    invocations=ModelInvocationRepository(get_engine()),
-                ).classify(context=context, prompt=routing_prompt)
-                routed = IntentRouter(DEFAULT_INTENT_ROUTE_RULES).decide(candidate)
-                routed_context = context.model_copy(update={"status": RunStatus.ROUTING})
-                RunRoutingRepository(get_engine()).select_route(
-                    context=routed_context, decision=routed
-                )
-                if routed.outcome.value == "handoff":
-                    run_status, waiting_action = RunStatus.WAITING_HUMAN.value, "human_handoff"
-                else:
-                    assert routed.execution_mode is not None
-                    assert routed.workflow_id is not None
-                    assert routed.workflow_version is not None
-                    routed_context = context.model_copy(
-                        update={
-                            "status": (
-                                RunStatus.RUNNING_READONLY
-                                if routed.execution_mode.value == "readonly_loop"
-                                else RunStatus.RUNNING_WORKFLOW
-                            ),
-                            "execution_mode": routed.execution_mode,
-                            "workflow_id": routed.workflow_id,
-                            "workflow_version": routed.workflow_version,
-                            "state": {"intent": routed.intent or "", "route": routed.workflow_id},
-                        }
-                    )
-                    run_status = (
-                        RunStatus.RUNNING_READONLY.value
-                        if routed.execution_mode.value == "readonly_loop"
-                        else RunStatus.RUNNING_WORKFLOW.value
-                    )
-                    waiting_action = None
-                    if routed.execution_mode.value == "readonly_loop":
-                        try:
-                            result = execute_readonly_run(
-                                settings=settings,
-                                context=routed_context,
-                                route=routed.workflow_id,
-                                messages=messages,
-                                run_repository=RunRepository(get_engine()),
-                            )
-                            run_status = result.context.status.value
-                            response = next(
-                                (step.response for step in reversed(result.steps) if step.response),
-                                None,
-                            )
-                            if response:
-                                assistant_response = response
-                                messages.append_assistant(
-                                    conversation_id=conversation_id,
-                                    tenant_id=DEMO_TENANT_ID,
-                                    actor_id=actor_id,
-                                    content=response,
-                                    run_id=run_id,
-                                )
-                            if run_status == RunStatus.WAITING_HUMAN.value:
-                                waiting_action = "human_handoff"
-                        except Exception:
-                            # A provider or adapter outage is represented as a
-                            # safe handoff; the request never exposes internals.
-                            run_status, waiting_action = (
-                                RunStatus.WAITING_HUMAN.value,
-                                "human_handoff",
-                            )
-                    elif run_status == RunStatus.RUNNING_WORKFLOW.value:
-                        try:
-                            mutation_type = mutation_type_for_route(routed.workflow_id)
-                            if mutation_type is not None:
-                                prepared_context, prepared_preview, token = prepare_mutation(
-                                    context=routed_context,
-                                    mutation_type=mutation_type,
-                                    arguments=extract_arguments(mutation_type, payload.content),
-                                    confirmations=ConfirmationRepository(get_engine()),
-                                    checkpoints=RepositoryCheckpointStore(
-                                        RunRepository(get_engine())
-                                    ),
-                                )
-                                run_status = prepared_context.status.value
-                                preview = prepared_preview.as_public()
-                                confirmation_token = token
-                                confirmation_expires_at = (
-                                    str(prepared_context.state.get("mutation_expires_at", ""))
-                                    or None
-                                )
-                                waiting_action = "confirmation_required"
-                            elif routed.workflow_id in LOW_RISK_ROUTES:
-                                low_risk_context = execute_low_risk(
-                                    context=routed_context,
-                                    route=routed.workflow_id,
-                                    arguments=extract_low_risk_arguments(
-                                        routed.workflow_id,
-                                        payload.content,
-                                        intent=routed.intent,
-                                    ),
-                                    executions=MutationExecutionRepository(get_engine()),
-                                    checkpoints=RepositoryCheckpointStore(
-                                        RunRepository(get_engine())
-                                    ),
-                                    handoffs=HandoffRepository(get_engine()),
-                                    audit=AuditRepository(get_engine()),
-                                ).context
-                                run_status = low_risk_context.status.value
-                                waiting_action = (
-                                    "human_handoff"
-                                    if low_risk_context.status is RunStatus.WAITING_HUMAN
-                                    else None
-                                )
-                                assistant_response = (
-                                    "已提交请求，系统已记录。"
-                                    if low_risk_context.status is RunStatus.COMPLETED
-                                    else "请求状态暂时无法确认，已转人工处理。"
-                                )
-                                messages.append_assistant(
-                                    conversation_id=conversation_id,
-                                    tenant_id=DEMO_TENANT_ID,
-                                    actor_id=actor_id,
-                                    content=assistant_response,
-                                    run_id=run_id,
-                                )
-                            else:
-                                raise MutationWorkflowError("UNKNOWN_MUTATION", "暂不支持该操作")
-                        except (MutationWorkflowError, LowRiskWorkflowError) as error:
-                            state = dict(routed_context.state)
-                            state.update(
-                                {"mutation_error": error.code, "mutation_message": str(error)}
-                            )
-                            target_status = (
-                                RunStatus.WAITING_USER
-                                if error.code == "MISSING_SLOTS"
-                                else RunStatus.WAITING_HUMAN
-                            )
-                            next_step = (
-                                "collect_slots"
-                                if target_status is RunStatus.WAITING_USER
-                                else "terminal"
-                            )
-                            event_type = (
-                                EventType.WAITING_FOR_USER
-                                if target_status is RunStatus.WAITING_USER
-                                else EventType.FAILED
-                            )
-                            try:
-                                RepositoryCheckpointStore(RunRepository(get_engine())).checkpoint(
-                                    context=routed_context,
-                                    status=target_status,
-                                    next_step=next_step,
-                                    state=state,
-                                    events=(
-                                        DomainEvent(
-                                            event_type=event_type, payload={"reason": error.code}
-                                        ),
-                                    ),
-                                )
-                            except Exception:
-                                pass
-                            run_status = target_status.value
-                            waiting_action = (
-                                "collect_slots"
-                                if target_status is RunStatus.WAITING_USER
-                                else "human_handoff"
-                            )
-            except ModelGatewayError:
-                RunRoutingRepository(get_engine()).select_route(
-                    context=context.model_copy(update={"status": RunStatus.ROUTING}),
-                    decision=RouteDecision(
-                        outcome=RouteOutcome.HANDOFF, reason_code="CLASSIFIER_UNAVAILABLE"
-                    ),
-                )
-                run_status, waiting_action = RunStatus.WAITING_HUMAN.value, "human_handoff"
+            request.app.state.run_executor.submit(
+                execute_message_run,
+                conversation_id=conversation_id,
+                content=payload.content,
+                actor_id=actor_id,
+                run_id=run_id,
+                tenant_id=DEMO_TENANT_ID,
+                settings=settings,
+            )
+            return MessageSendResponse(
+                message_id=message.message_id,
+                run_id=run_id,
+                run_status=RunStatus.CREATED.value,
+            )
+
+    @app.post(
+        "/v1/runs/{run_id}/retry",
+        response_model=MessageSendResponse,
+        status_code=202,
+    )
+    def retry_run(
+        run_id: UUID,
+        payload: RetryRunRequest,
+        request: Request,
+        actor_id: str = Depends(get_demo_actor),
+        messages: MessageRepository = Depends(_message_repository),
+        _admission: None = Depends(require_admission),
+    ) -> MessageSendResponse:
+        """Explicitly replay the original user request as a new child Run."""
+        runs = RunRepository(get_engine())
+        source = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if source is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        if source.status not in {RunStatus.FAILED.value, RunStatus.EXPIRED.value}:
+            raise HTTPException(status_code=409, detail="run_not_retryable")
+        if source.conversation_id is None:
+            raise HTTPException(status_code=500, detail="run_data_invalid")
+        original = messages.latest_user_for_run(
+            run_id=run_id,
+            conversation_id=source.conversation_id,
+            tenant_id=DEMO_TENANT_ID,
+            actor_id=actor_id,
+        )
+        if original is None:
+            raise HTTPException(status_code=409, detail="retry_source_message_missing")
+        settings = get_settings()
+        child_run_id = uuid4()
+        fingerprint = "|".join((settings.model or "unconfigured", settings.api_base or "unconfigured"))
+        context = RunContext(
+            run_id=child_run_id,
+            conversation_id=source.conversation_id,
+            tenant_id=DEMO_TENANT_ID,
+            actor_id=actor_id,
+            status=RunStatus.CREATED,
+        )
+        spec = RunCreationSpec(
+            policy_version="phase3-readonly-v1",
+            model_config_hash=f"sha256:{sha256(fingerprint.encode()).hexdigest()}",
+            prompt_version="agent-v1",
+            current_step="route",
+            max_steps=6,
+            deadline_at=datetime.now(UTC) + timedelta(seconds=60),
+            parent_run_id=run_id,
+        )
+        try:
+            RunLifecycleRepository(get_engine()).create_run(context=context, spec=spec)
+        except ActiveRunConflictError as error:
+            snapshot = error.snapshot
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ACTIVE_RUN_EXISTS",
+                    "run_id": str(snapshot.run_id) if snapshot else None,
+                    "status": snapshot.status if snapshot else None,
+                },
+            ) from error
+        try:
+            message = messages.append_user(
+                conversation_id=source.conversation_id,
+                tenant_id=DEMO_TENANT_ID,
+                actor_id=actor_id,
+                content=original.content_redacted,
+                client_message_id=payload.client_message_id,
+                run_id=child_run_id,
+            )
+        except Exception as error:
+            RunLifecycleRepository(get_engine()).cancel_unstarted_run(
+                run_id=child_run_id,
+                tenant_id=DEMO_TENANT_ID,
+                reason="RETRY_MESSAGE_PROJECTION_FAILED",
+            )
+            raise HTTPException(status_code=503, detail="retry_unavailable") from error
+        request.app.state.run_executor.submit(
+            execute_message_run,
+            conversation_id=source.conversation_id,
+            content=original.content_redacted,
+            actor_id=actor_id,
+            run_id=child_run_id,
+            tenant_id=DEMO_TENANT_ID,
+            settings=settings,
+        )
         return MessageSendResponse(
             message_id=message.message_id,
-            run_id=run_id,
-            run_status=run_status,
-            assistant_response=assistant_response,
-            waiting_action=waiting_action,
-            confirmation_token=confirmation_token,
-            preview=preview,
-            confirmation_expires_at=confirmation_expires_at,
-            token_refresh_required=token_refresh_required,
+            run_id=child_run_id,
+            run_status=RunStatus.CREATED.value,
         )
 
     @app.post("/v1/runs/{run_id}/confirmations", response_model=ConfirmationResponse)
@@ -1050,18 +1141,14 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
                 else 400
             )
             raise HTTPException(status_code=status_code, detail=error.code) from error
-        try:
-            messages.append_assistant(
-                conversation_id=context.conversation_id,
-                tenant_id=DEMO_TENANT_ID,
-                actor_id=actor_id,
-                content=response_text,
-                run_id=run_id,
-            )
-        except Exception:
-            # The durable run remains authoritative even if message projection
-            # is temporarily unavailable.
-            pass
+        publish_terminal_response(
+            context=updated,
+            messages=messages,
+            runs=runs,
+            preferred_content=response_text,
+            reason_code=("CONFIRMATION_REJECTED" if not accepted else None),
+            retryable=False,
+        )
         return ConfirmationResponse(
             run_id=run_id,
             run_status=updated.status.value,
@@ -1104,6 +1191,7 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         ticket_id: UUID,
         payload: HandoffResolveRequest,
         actor_id: str = Depends(get_demo_actor),
+        messages: MessageRepository = Depends(_message_repository),
     ) -> HandoffResponse:
         handoffs = HandoffRepository(get_engine())
         ticket = handoffs.get_for_actor(
@@ -1144,6 +1232,19 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         )
         if resolved is None:
             raise HTTPException(status_code=409, detail="handoff_resolution_conflict")
+        response_text = (
+            "人工审核已批准，本次流程已完成。"
+            if payload.outcome == "verified_success"
+            else "人工审核未批准，本次流程已终止。"
+        )
+        publish_terminal_response(
+            context=context.model_copy(update={"status": target, "state": state}),
+            messages=messages,
+            runs=runs,
+            preferred_content=response_text,
+            reason_code=("HUMAN_REVIEW_REJECTED" if target is RunStatus.FAILED else None),
+            retryable=False,
+        )
         AuditRepository(get_engine()).append(
             tenant_id=DEMO_TENANT_ID,
             actor_ref=actor_id,
@@ -1164,10 +1265,67 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             resolution=resolved.resolution,
         )
 
+    @app.get("/v1/runs/{run_id}/human-review", response_model=HumanReviewResponse)
+    def get_human_review(
+        run_id: UUID,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> HumanReviewResponse:
+        runs = RunRepository(get_engine())
+        snapshot = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        if snapshot.status != RunStatus.WAITING_HUMAN.value:
+            raise HTTPException(status_code=409, detail="run_not_waiting_human")
+        handoffs = HandoffRepository(get_engine())
+        ticket = handoffs.get_open_for_run(
+            run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_ref=actor_id
+        )
+        if ticket is None:
+            # Runs created before the human-review projection was introduced
+            # have the decision in their checkpoint but no ticket row. Rebuild
+            # a redacted ticket on first read so those sessions remain usable.
+            checkpoint = runs.load_latest_checkpoint(run_id=run_id, tenant_id=DEMO_TENANT_ID)
+            raw_state = checkpoint.get("state", {}) if checkpoint else {}
+            state = raw_state if isinstance(raw_state, dict) else {}
+            raw_args = state.get("mutation_args", {})
+            arguments = raw_args if isinstance(raw_args, dict) else {}
+            reason_code = str(
+                state.get("mutation_error") or snapshot.terminal_reason or "HUMAN_REVIEW_REQUIRED"
+            )[:128]
+            details: dict[str, object] = {
+                "message": str(state.get("mutation_message") or "请求需要人工处理")[:500],
+            }
+            for key in ("order_id", "item_id"):
+                value = arguments.get(key)
+                if value:
+                    details[key] = str(value)[:128]
+            ticket = handoffs.get_or_create_open_for_run(
+                run_id=run_id,
+                tenant_id=DEMO_TENANT_ID,
+                actor_ref=actor_id,
+                reason_code=reason_code,
+                operation=str(state.get("mutation_type") or state.get("route") or "human_review"),
+                details=details,
+            )
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="human_review_not_found")
+        return HumanReviewResponse(
+            ticket_id=ticket.ticket_id,
+            run_id=ticket.run_id,
+            status=ticket.status,
+            reason_code=ticket.reason_code,
+            operation=ticket.operation,
+            details=ticket.details,
+            created_at=ticket.created_at.isoformat(),
+            resolved_at=ticket.resolved_at.isoformat() if ticket.resolved_at else None,
+            resolution=ticket.resolution,
+        )
+
     @app.post("/v1/runs/{run_id}/cancel", response_model=RunResponse)
     def cancel_run(
         run_id: UUID,
         actor_id: str = Depends(get_demo_actor),
+        messages: MessageRepository = Depends(_message_repository),
     ) -> RunResponse:
         runs = RunRepository(get_engine())
         snapshot = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
@@ -1207,6 +1365,19 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             step_count=snapshot.step_count + 1,
             row_version=version,
         )
+        runs.set_terminal_reason(
+            run_id=run_id, tenant_id=DEMO_TENANT_ID, reason="CANCELLED_BY_USER"
+        )
+        publish_terminal_response(
+            context=context.model_copy(update={"status": RunStatus.CANCELLED, "state": state}),
+            messages=messages,
+            runs=runs,
+            reason_code="CANCELLED_BY_USER",
+            retryable=False,
+        )
+        latest = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if latest is not None:
+            updated = latest
         return _run_response(
             updated,
             run_id=run_id,
@@ -1236,6 +1407,36 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             preview=preview,
             confirmation_expires_at=expiry,
         )
+
+    @app.get("/v1/conversations/{conversation_id}/active-run", response_model=ActiveRunResponse)
+    def get_active_run(
+        conversation_id: UUID,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> ActiveRunResponse:
+        conversations = ConversationRepository(get_engine()).list_for_actor(
+            tenant_id=DEMO_TENANT_ID, actor_id=actor_id
+        )
+        if not any(item.id == conversation_id for item in conversations):
+            raise HTTPException(status_code=404, detail="conversation_not_found")
+        snapshot = RunLifecycleRepository(get_engine()).active_for_conversation(
+            conversation_id=conversation_id,
+            tenant_id=DEMO_TENANT_ID,
+            actor_id=actor_id,
+        )
+        if snapshot is None:
+            return ActiveRunResponse(run=None)
+        return ActiveRunResponse(
+            run=_run_response(
+                snapshot,
+                run_id=snapshot.run_id,
+                conversation_id=conversation_id,
+            )
+        )
+
+    @app.get("/v1/runtime/state-machine", response_model=StateMachineResponse)
+    def get_state_machine(actor_id: str = Depends(get_demo_actor)) -> StateMachineResponse:
+        del actor_id
+        return StateMachineResponse(states=state_machine_definition())
 
     @app.get("/v1/runs/{run_id}/events")
     def get_run_events(
@@ -1268,6 +1469,22 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             for event in events
         ]
 
+    @app.get("/v1/runs/{run_id}/timeline")
+    def get_run_timeline(
+        run_id: UUID,
+        after_sequence: int = 0,
+        limit: int = 200,
+        actor_id: str = Depends(get_demo_actor),
+        runs: RunRepository = Depends(_run_repository),
+    ) -> list[dict[str, object]]:
+        return get_run_events(
+            run_id=run_id,
+            after_sequence=after_sequence,
+            limit=limit,
+            actor_id=actor_id,
+            runs=runs,
+        )
+
     @app.get("/v1/runs/{run_id}/evidence", response_model=list[EvidenceResponse])
     def get_run_evidence(
         run_id: UUID,
@@ -1298,6 +1515,80 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             )
             for item in evidence
         ]
+
+    @app.get("/v1/runs/{run_id}/stream")
+    def stream_run(
+        run_id: UUID,
+        last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+        actor_id: str = Depends(get_demo_actor),
+        runs: RunRepository = Depends(_run_repository),
+    ) -> StreamingResponse:
+        try:
+            after = int(last_event_id or "0")
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail="invalid_event_cursor") from error
+        snapshot = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+
+        def events() -> Iterator[str]:
+            cursor = after
+            deadline = monotonic() + 55.0
+            while monotonic() < deadline:
+                batch = runs.replay_events(
+                    run_id=run_id,
+                    tenant_id=DEMO_TENANT_ID,
+                    actor_id=actor_id,
+                    after_sequence=cursor,
+                    limit=200,
+                )
+                if batch:
+                    for event in batch:
+                        cursor = event.sequence
+                        payload = json.dumps(
+                            event.event.payload, ensure_ascii=False, separators=(",", ":")
+                        )
+                        yield (
+                            f"id: {event.sequence}\n"
+                            f"event: {event.event.event_type.value}\n"
+                            f"data: {payload}\n\n"
+                        )
+                    current = runs.load_run(
+                        run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id
+                    )
+                    if current is not None and current.status in {
+                        item.value
+                        for item in (
+                            RunStatus.COMPLETED,
+                            RunStatus.FAILED,
+                            RunStatus.CANCELLED,
+                            RunStatus.EXPIRED,
+                        )
+                    }:
+                        return
+                    continue
+                yield ": heartbeat\n\n"
+                current = runs.load_run(run_id=run_id, tenant_id=DEMO_TENANT_ID, actor_id=actor_id)
+                if current is not None and current.status in {
+                    item.value
+                    for item in (
+                        RunStatus.COMPLETED,
+                        RunStatus.FAILED,
+                        RunStatus.CANCELLED,
+                        RunStatus.EXPIRED,
+                    )
+                }:
+                    return
+                sleep(0.5)
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.get("/v1/conversations/{conversation_id}/stream")
     def stream_conversation(
@@ -1361,7 +1652,11 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         del path, request
         index = web_dist / "index.html"
         if index.is_file():
-            return FileResponse(index)
+            # index.html points at content-hashed Vite bundles. Never cache
+            # the HTML shell across deployments, otherwise a browser can keep
+            # an old bundle reference after the image has been rebuilt and
+            # render a blank page when that asset no longer exists.
+            return FileResponse(index, headers={"Cache-Control": "no-store, max-age=0"})
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="web_build_not_found")
 
     return app

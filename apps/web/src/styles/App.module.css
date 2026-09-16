@@ -21,6 +21,7 @@
 
 .rightPanel {
   border-width: 0 0 0 1px;
+  overflow-y: auto;
 }
 
 .leftPanel nav {
@@ -32,6 +33,23 @@
   display: grid;
   gap: 0.5rem;
   margin-top: 2rem;
+}
+
+.newConversation {
+  width: 100%;
+  margin-top: 1.25rem;
+  border: 1px solid #235bd6;
+  border-radius: 0.5rem;
+  background: #235bd6;
+  color: #fff;
+  cursor: pointer;
+  padding: 0.65rem 0.75rem;
+  font-weight: 700;
+}
+
+.newConversation:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .scenarios button,
@@ -63,6 +81,21 @@
   display: flex;
   justify-content: space-between;
   margin: 1rem 0;
+  color: #60718c;
+  font-size: 0.85rem;
+}
+
+.activityInline {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.85rem;
+  border-left: 3px solid #235bd6;
+  background: #f3f7ff;
+  color: #173f9c;
+}
+
+.activityInline span {
   color: #60718c;
   font-size: 0.85rem;
 }
@@ -187,6 +220,239 @@
 
 .traceEvent small {
   color: #60718c;
+}
+
+.activitySummary {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.85rem;
+  border: 1px solid #bfd2ff;
+  border-radius: 0.7rem;
+  background: linear-gradient(135deg, #f3f7ff, #ffffff);
+}
+
+.activitySummary strong {
+  color: #173f9c;
+  font-size: 1rem;
+}
+
+.activitySummary span,
+.activitySummary small {
+  color: #60718c;
+  line-height: 1.45;
+}
+
+.humanReview {
+  display: grid;
+  gap: 0.55rem;
+  margin: 1rem 0;
+  padding: 0.85rem;
+  border: 1px solid #e2a22b;
+  border-radius: 0.7rem;
+  background: #fffaf0;
+}
+
+.reviewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reviewHeader .eyebrow {
+  margin: 0;
+}
+
+.reviewHeader > span {
+  color: #8a5a00;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.humanReview h3,
+.humanReview p {
+  margin: 0;
+}
+
+.humanReview h3 {
+  color: #614600;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.reviewDescription,
+.humanReview > p {
+  color: #6b5a38;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.reviewDetails {
+  display: grid;
+  gap: 0.35rem;
+  border-top: 1px solid #f0dba9;
+  border-bottom: 1px solid #f0dba9;
+  padding: 0.55rem 0;
+}
+
+.reviewDetails div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.5rem;
+  font-size: 0.74rem;
+}
+
+.reviewDetails span {
+  color: #8a7a5b;
+}
+
+.reviewDetails strong {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.humanReview textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #d8c28e;
+  border-radius: 0.45rem;
+  padding: 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.humanReview > button {
+  border: 1px solid #b57a00;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #614600;
+  cursor: pointer;
+  padding: 0.55rem 0.65rem;
+  font-weight: 700;
+}
+
+.humanReview > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.reviewActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.reviewActions button {
+  border: 1px solid #b57a00;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #614600;
+  cursor: pointer;
+  padding: 0.55rem 0.45rem;
+  font-weight: 700;
+}
+
+.reviewActions button:first-child {
+  border-color: #237a52;
+  background: #237a52;
+  color: #fff;
+}
+
+.reviewActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.stateMachine {
+  display: grid;
+  gap: 0.25rem;
+  margin: 1rem 0 1.25rem;
+  padding-left: 0.25rem;
+}
+
+.stateNode {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 1.8rem;
+  color: #7a879b;
+  font-size: 0.78rem;
+}
+
+.stateDot {
+  width: 0.62rem;
+  height: 0.62rem;
+  border: 2px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.stateCurrent {
+  color: #173f9c;
+  font-weight: 700;
+}
+
+.stateCurrent .stateDot {
+  border-color: #235bd6;
+  background: #235bd6;
+  box-shadow: 0 0 0 4px #dce8ff;
+}
+
+.stateDone {
+  color: #237a52;
+}
+
+.timelineHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timelineHeader .eyebrow {
+  margin-bottom: 0;
+}
+
+.timelineHeader > span {
+  color: #237a52;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.timeline {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.timelineItem {
+  border: 1px solid #e1e7f0;
+  border-radius: 0.55rem;
+  background: #fbfcfe;
+  font-size: 0.75rem;
+}
+
+.timelineItem summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.45rem;
+  cursor: pointer;
+  padding: 0.55rem;
+  list-style-position: inside;
+}
+
+.timelineItem summary small {
+  grid-column: 2;
+  color: #60718c;
+}
+
+.timelineItem pre {
+  overflow-x: auto;
+  margin: 0;
+  border-top: 1px solid #e1e7f0;
+  padding: 0.55rem;
+  color: #334155;
+  font-size: 0.68rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .evidenceList {

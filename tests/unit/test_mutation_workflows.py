@@ -75,6 +75,16 @@ def test_reason_is_normalized_and_extractor_keeps_order_id_untrusted() -> None:
     assert arguments_hash(preview.normalized_args).startswith("sha256:")
 
 
+def test_refund_request_adjacent_to_chinese_keeps_missing_reason_visible() -> None:
+    initial = extract_arguments("request_refund", "我要把这个ORD-DEMO-002退款")
+    assert initial == {"order_id": "ORD-DEMO-002", "item_id": ""}
+    continuation = extract_arguments(
+        "request_refund", "商品BHD308/10，原因是质量问题"
+    )
+    assert continuation["item_id"] == "BHD308/10"
+    assert continuation["reason"]
+
+
 def test_demo_business_boundary_requires_readback_identity() -> None:
     system = DemoMutationSystem()
     outcome = system.commit(

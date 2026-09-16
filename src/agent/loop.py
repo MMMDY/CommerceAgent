@@ -111,6 +111,7 @@ class AgentStepExecutor:
         cancelled: bool | Callable[[], bool] = False,
         token_budget_remaining: int | None = None,
         stage_observer: StageObserver | None = None,
+        action_observer: Callable[[str, dict[str, object]], None] | None = None,
     ) -> LoopResult:
         if _is_cancelled(cancelled):
             _record_skipped_action(stage_observer)
@@ -141,9 +142,15 @@ class AgentStepExecutor:
                 decision_type=None,
                 reason="deadline_exceeded",
             )
+        _record_action(action_observer, "model_request_started", {"step": prompt.current_step})
         try:
             model_result = self._model.decide(prompt)
         except ModelGatewayError:
+            _record_action(
+                action_observer,
+                "model_request_failed",
+                {"step": prompt.current_step, "error_code": "MODEL_GATEWAY_ERROR"},
+            )
             _record_stage(stage_observer, "request_decision", "failed")
             if self._model_invocations is not None:
                 try:
@@ -170,6 +177,11 @@ class AgentStepExecutor:
                 decision_type=None,
                 reason="model_unavailable",
             )
+        _record_action(
+            action_observer,
+            "model_request_succeeded",
+            {"step": prompt.current_step, "outcome": "decision_received"},
+        )
         _record_stage(stage_observer, "request_decision", "completed")
         if self._model_invocations is not None:
             try:
@@ -236,7 +248,19 @@ class AgentStepExecutor:
                         usage_tokens=model_result.usage_tokens,
                     )
                 self._validator.validate(decision=decision, boundary=boundary, tool_spec=spec)
-            except (DecisionValidationError, ToolRegistryError):
+            except (DecisionValidationError, ToolRegistryError) as error:
+                _record_action(
+                    action_observer,
+                    "decision_validation_failed",
+                    {
+                        "error_code": (
+                            error.error_code
+                            if isinstance(error, DecisionValidationError)
+                            else "TOOL_NOT_ALLOWED"
+                        ),
+                        "tool_name": decision.tool,
+                    },
+                )
                 _record_stage(stage_observer, "validate", "failed")
                 _record_stage(stage_observer, "execute", "skipped")
                 _record_stage(stage_observer, "observe", "completed")
@@ -248,6 +272,11 @@ class AgentStepExecutor:
                     reason="decision_rejected",
                 )
             _record_stage(stage_observer, "validate", "completed")
+            _record_action(
+                action_observer,
+                "tool_request_started",
+                {"tool_name": spec.name, "tool_version": spec.version},
+            )
             try:
                 execution = self._executor.execute(
                     spec=spec,
@@ -257,6 +286,11 @@ class AgentStepExecutor:
                     deadline_at=deadline_at,
                 )
             except Exception:
+                _record_action(
+                    action_observer,
+                    "tool_request_failed",
+                    {"tool_name": spec.name, "error_code": "TOOL_EXECUTION_FAILED"},
+                )
                 _record_stage(stage_observer, "execute", "failed")
                 _record_stage(stage_observer, "observe", "completed")
                 return LoopResult(
@@ -266,6 +300,20 @@ class AgentStepExecutor:
                     decision=decision,
                     reason="tool_execution_failed",
                 )
+            _record_action(
+                action_observer,
+                (
+                    "tool_request_succeeded"
+                    if execution.result.error is None
+                    else "tool_request_failed"
+                ),
+                {
+                    "tool_name": spec.name,
+                    "error_code": execution.result.error.code.value
+                    if execution.result.error is not None
+                    else None,
+                },
+            )
             _record_stage(stage_observer, "execute", "completed")
             _record_stage(stage_observer, "observe", "completed")
             return LoopResult(
@@ -284,16 +332,12 @@ class AgentStepExecutor:
             # A single semantic retry is safe here: terminal decisions have
             # no tool side effects.  The validator remains strict, so an
             # invalid retry still fails closed.
-            if (
-                str(error) == "decision references untrusted evidence"
-                and decision.type
-                in {
-                    DecisionType.RESPOND,
-                    DecisionType.FINISH,
-                    DecisionType.ASK_USER,
-                    DecisionType.HANDOFF,
-                }
-            ):
+            if str(error) == "decision references untrusted evidence" and decision.type in {
+                DecisionType.RESPOND,
+                DecisionType.FINISH,
+                DecisionType.ASK_USER,
+                DecisionType.HANDOFF,
+            }:
                 try:
                     retry_result = self._model.decide(prompt)
                     if self._model_invocations is not None:
@@ -318,7 +362,13 @@ class AgentStepExecutor:
                     self._validator.validate(decision=retry_decision, boundary=boundary)
                     decision = retry_decision
                     model_result = retry_result
-                except (DecisionValidationError, ModelGatewayError):
+                except (DecisionValidationError, ModelGatewayError) as retry_error:
+                    if isinstance(retry_error, DecisionValidationError):
+                        _record_action(
+                            action_observer,
+                            "decision_validation_failed",
+                            {"error_code": retry_error.error_code, "retry": True},
+                        )
                     _record_stage(stage_observer, "validate", "failed")
                     _record_stage(stage_observer, "execute", "skipped")
                     _record_stage(stage_observer, "observe", "completed")
@@ -330,6 +380,11 @@ class AgentStepExecutor:
                         reason="decision_rejected",
                     )
             else:
+                _record_action(
+                    action_observer,
+                    "decision_validation_failed",
+                    {"error_code": error.error_code},
+                )
                 _record_stage(stage_observer, "validate", "failed")
                 _record_stage(stage_observer, "execute", "skipped")
                 _record_stage(stage_observer, "observe", "completed")
@@ -465,6 +520,7 @@ class AgentLoop:
         deadline_at: datetime,
         cancelled: Callable[[], bool] | None = None,
         token_budget_remaining: int | None = None,
+        action_observer: Callable[[str, dict[str, object]], None] | None = None,
     ) -> AgentRunResult:
         """Advance only committed readonly contexts until a pause or terminal state."""
 
@@ -482,6 +538,7 @@ class AgentLoop:
                 deadline_at=deadline_at,
                 cancelled=is_cancelled,
                 token_budget_remaining=remaining_budget,
+                action_observer=action_observer,
             )
             current = result.context
             steps.append(result.loop)
@@ -510,6 +567,18 @@ class AgentLoop:
 def _record_stage(observer: StageObserver | None, stage: str, outcome: str) -> None:
     if observer is not None:
         observer.record(stage, outcome=outcome)
+
+
+def _record_action(
+    observer: Callable[[str, dict[str, object]], None] | None,
+    action: str,
+    payload: dict[str, object],
+) -> None:
+    if observer is not None:
+        try:
+            observer(action, payload)
+        except Exception:
+            return
 
 
 def _record_skipped_action(observer: StageObserver | None) -> None:

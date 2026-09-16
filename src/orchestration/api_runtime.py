@@ -129,9 +129,7 @@ class ApiPromptBuilder(PromptBuilder):
             "each call must retain the original user order_id. "
             f"Tool argument rules: {tool_rules}"
         )
-        conversation = (
-            Message(role="system", content=runtime_rules),
-        ) + tuple(
+        conversation = (Message(role="system", content=runtime_rules),) + tuple(
             Message(
                 role=cast(Literal["user", "assistant", "system"], item.role),
                 content=item.content_redacted,
@@ -185,6 +183,7 @@ def execute_readonly_run(
     route: str,
     messages: MessageRepository,
     run_repository: RunRepository,
+    action_observer: Callable[[str, dict[str, object]], None] | None = None,
 ) -> AgentRunResult:
     """Execute a routed readonly run to a terminal/pause state."""
 
@@ -268,6 +267,7 @@ def execute_readonly_run(
         tool_context=tool_context,
         deadline_at=deadline,
         token_budget_remaining=settings.model_max_tokens * 3,
+        action_observer=action_observer,
     )
 
 

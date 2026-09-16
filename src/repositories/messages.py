@@ -121,6 +121,80 @@ class MessageRepository:
             return MessageRecord(message_id, conversation_id, run_id, None, "assistant", content_redacted,
                                  content_hash, int(sequence), now, True)
 
+    def append_assistant_once_for_run(
+        self, *, conversation_id: UUID, tenant_id: str, actor_id: str, run_id: UUID,
+        content: str,
+    ) -> MessageRecord:
+        """Append one terminal assistant response for a run, idempotently.
+
+        The conversation row is locked before checking the existing response.
+        This makes retries, worker recovery, and duplicate UI submissions share
+        one serialized projection boundary.
+        """
+        if not content.strip() or len(content) > 8000:
+            raise ValueError("message content is invalid")
+        content_redacted = str(_sanitize(content))
+        with self._engine.begin() as connection:
+            conversation = connection.execute(
+                text(
+                    "SELECT id FROM conversation.conversations WHERE id = :conversation_id "
+                    "AND tenant_id = :tenant_id AND actor_id = :actor_id FOR UPDATE"
+                ),
+                {"conversation_id": conversation_id, "tenant_id": tenant_id, "actor_id": actor_id},
+            ).first()
+            if conversation is None:
+                raise ValueError("conversation is unavailable for this tenant and actor")
+            existing = connection.execute(
+                text(
+                    "SELECT message_id, conversation_id, run_id, client_message_id, role, "
+                    "content_redacted, content_hash, sequence_no, created_at "
+                    "FROM conversation.messages WHERE conversation_id = :conversation_id "
+                    "AND run_id = :run_id AND role = 'assistant' AND is_terminal IS TRUE "
+                    "ORDER BY sequence_no ASC LIMIT 1"
+                ),
+                {"conversation_id": conversation_id, "run_id": run_id},
+            ).first()
+            if existing is not None:
+                return MessageRecord(**dict(existing._mapping), created=False)
+            sequence = connection.execute(
+                text(
+                    "SELECT COALESCE(MAX(sequence_no), 0) + 1 FROM conversation.messages "
+                    "WHERE conversation_id = :conversation_id"
+                ),
+                {"conversation_id": conversation_id},
+            ).scalar_one()
+            now = datetime.now(UTC)
+            message_id = uuid4()
+            content_hash = f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
+            connection.execute(
+                text(
+                    "INSERT INTO conversation.messages (message_id, conversation_id, run_id, "
+                    "client_message_id, role, content_redacted, content_hash, pii_labels_json, "
+                    "is_terminal, sequence_no, created_at) VALUES (:message_id, :conversation_id, :run_id, "
+                    "NULL, 'assistant', :content, :content_hash, '{}'::jsonb, TRUE, :sequence_no, :created_at)"
+                ),
+                {
+                    "message_id": message_id,
+                    "conversation_id": conversation_id,
+                    "run_id": run_id,
+                    "content": content_redacted,
+                    "content_hash": content_hash,
+                    "sequence_no": sequence,
+                    "created_at": now,
+                },
+            )
+            connection.execute(
+                text(
+                    "UPDATE conversation.conversations SET updated_at = :updated_at "
+                    "WHERE id = :conversation_id"
+                ),
+                {"updated_at": now, "conversation_id": conversation_id},
+            )
+            return MessageRecord(
+                message_id, conversation_id, run_id, None, "assistant", content_redacted,
+                content_hash, int(sequence), now, True,
+            )
+
     def find_user_by_client_message_id(
         self,
         *,
@@ -146,6 +220,30 @@ class MessageRepository:
                     "tenant_id": tenant_id,
                     "actor_id": actor_id,
                     "client_message_id": client_message_id,
+                },
+            ).first()
+        return MessageRecord(**dict(row._mapping), created=False) if row is not None else None
+
+    def latest_user_for_run(
+        self, *, run_id: UUID, conversation_id: UUID, tenant_id: str, actor_id: str
+    ) -> MessageRecord | None:
+        """Return the latest user request attached to one owned Run."""
+        with self._engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT m.message_id, m.conversation_id, m.run_id, m.client_message_id, "
+                    "m.role, m.content_redacted, m.content_hash, m.sequence_no, m.created_at "
+                    "FROM conversation.messages AS m JOIN conversation.conversations AS c "
+                    "ON c.id = m.conversation_id WHERE m.run_id = :run_id "
+                    "AND m.conversation_id = :conversation_id AND m.role = 'user' "
+                    "AND c.tenant_id = :tenant_id AND c.actor_id = :actor_id "
+                    "ORDER BY m.sequence_no DESC LIMIT 1"
+                ),
+                {
+                    "run_id": run_id,
+                    "conversation_id": conversation_id,
+                    "tenant_id": tenant_id,
+                    "actor_id": actor_id,
                 },
             ).first()
         return MessageRecord(**dict(row._mapping), created=False) if row is not None else None

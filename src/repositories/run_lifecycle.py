@@ -8,10 +8,20 @@ from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 
 from src.orchestration.router import RouteDecision, RouteOutcome
 from src.orchestration.run_creation import RunCreationSpec
 from src.protocols import ExecutionMode, RunContext, RunStatus
+from src.repositories.runs import RunSnapshot
+
+
+class ActiveRunConflictError(RuntimeError):
+    """A conversation already has a non-terminal run."""
+
+    def __init__(self, snapshot: RunSnapshot | None) -> None:
+        self.snapshot = snapshot
+        super().__init__("conversation already has an active run")
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,51 +55,84 @@ class RunLifecycleRepository:
         now = datetime.now(UTC)
         if spec.deadline_at <= now:
             raise ValueError("run deadline must be in the future")
-        with self._engine.begin() as connection:
-            created = connection.execute(
+        try:
+            with self._engine.begin() as connection:
+                created = connection.execute(
+                    text(
+                        "INSERT INTO runtime.agent_runs "
+                        "(run_id, conversation_id, parent_run_id, tenant_id, actor_ref, status, "
+                        "execution_mode, workflow_id, workflow_version, policy_version, "
+                        "model_config_hash, prompt_version, current_step, step_count, max_steps, "
+                        "deadline_at, created_at, updated_at) "
+                        "SELECT CAST(:run_id AS uuid), conversation.id, "
+                        "CAST(:parent_run_id AS uuid), "
+                        "CAST(:tenant_id AS varchar(64)), CAST(:actor_ref AS varchar(128)), "
+                        "CAST(:status AS varchar(32)), CAST(:execution_mode AS varchar(24)), "
+                        "CAST(:workflow_id AS varchar(64)), "
+                        "CAST(:workflow_version AS varchar(32)), "
+                        "CAST(:policy_version AS varchar(64)), "
+                        "CAST(:model_config_hash AS varchar(80)), "
+                        "CAST(:prompt_version AS varchar(64)), CAST(:current_step AS varchar(64)), "
+                        "0, CAST(:max_steps AS integer), CAST(:deadline_at AS timestamptz), "
+                        "CAST(:now AS timestamptz), CAST(:now AS timestamptz) "
+                        "FROM conversation.conversations AS conversation "
+                        "WHERE conversation.id = CAST(:conversation_id AS uuid) "
+                        "AND conversation.tenant_id = CAST(:tenant_id AS varchar(64)) "
+                        "AND conversation.actor_id = CAST(:actor_ref AS varchar(128))"
+                    ),
+                    {
+                        "run_id": context.run_id,
+                        "conversation_id": context.conversation_id,
+                        "parent_run_id": spec.parent_run_id,
+                        "tenant_id": context.tenant_id,
+                        "actor_ref": context.actor_id,
+                        "status": context.status.value,
+                        "execution_mode": (
+                            spec.execution_mode.value if spec.execution_mode is not None else None
+                        ),
+                        "workflow_id": context.workflow_id,
+                        "workflow_version": context.workflow_version,
+                        "policy_version": spec.policy_version,
+                        "model_config_hash": spec.model_config_hash,
+                        "prompt_version": spec.prompt_version,
+                        "current_step": spec.current_step,
+                        "max_steps": spec.max_steps,
+                        "deadline_at": spec.deadline_at,
+                        "now": now,
+                    },
+                )
+                if created.rowcount != 1:
+                    raise ValueError("conversation is unavailable for this tenant and actor")
+        except IntegrityError as error:
+            snapshot = self.active_for_conversation(
+                conversation_id=context.conversation_id,
+                tenant_id=context.tenant_id,
+                actor_id=context.actor_id,
+            )
+            if snapshot is not None:
+                raise ActiveRunConflictError(snapshot) from error
+            raise
+
+    def active_for_conversation(
+        self, *, conversation_id: UUID, tenant_id: str, actor_id: str
+    ) -> RunSnapshot | None:
+        with self._engine.connect() as connection:
+            row = connection.execute(
                 text(
-                    "INSERT INTO runtime.agent_runs "
-                    "(run_id, conversation_id, parent_run_id, tenant_id, actor_ref, status, "
-                    "execution_mode, workflow_id, workflow_version, policy_version, "
-                    "model_config_hash, prompt_version, current_step, step_count, max_steps, "
-                    "deadline_at, created_at, updated_at) "
-                    "SELECT CAST(:run_id AS uuid), conversation.id, CAST(:parent_run_id AS uuid), "
-                    "CAST(:tenant_id AS varchar(64)), CAST(:actor_ref AS varchar(128)), "
-                    "CAST(:status AS varchar(32)), CAST(:execution_mode AS varchar(24)), "
-                    "CAST(:workflow_id AS varchar(64)), CAST(:workflow_version AS varchar(32)), "
-                    "CAST(:policy_version AS varchar(64)), "
-                    "CAST(:model_config_hash AS varchar(80)), "
-                    "CAST(:prompt_version AS varchar(64)), CAST(:current_step AS varchar(64)), "
-                    "0, CAST(:max_steps AS integer), CAST(:deadline_at AS timestamptz), "
-                    "CAST(:now AS timestamptz), CAST(:now AS timestamptz) "
-                    "FROM conversation.conversations AS conversation "
-                    "WHERE conversation.id = CAST(:conversation_id AS uuid) "
-                    "AND conversation.tenant_id = CAST(:tenant_id AS varchar(64)) "
-                    "AND conversation.actor_id = CAST(:actor_ref AS varchar(128))"
+                    "SELECT run_id, tenant_id, status, current_step, row_version, "
+                    "last_checkpoint_seq, conversation_id, step_count, terminal_reason "
+                    "FROM runtime.agent_runs WHERE conversation_id = :conversation_id "
+                    "AND tenant_id = :tenant_id AND actor_ref = :actor_id "
+                    "AND status NOT IN ('completed', 'failed', 'cancelled', 'expired') "
+                    "ORDER BY created_at DESC LIMIT 1"
                 ),
                 {
-                    "run_id": context.run_id,
-                    "conversation_id": context.conversation_id,
-                    "parent_run_id": spec.parent_run_id,
-                    "tenant_id": context.tenant_id,
-                    "actor_ref": context.actor_id,
-                    "status": context.status.value,
-                    "execution_mode": (
-                        spec.execution_mode.value if spec.execution_mode is not None else None
-                    ),
-                    "workflow_id": context.workflow_id,
-                    "workflow_version": context.workflow_version,
-                    "policy_version": spec.policy_version,
-                    "model_config_hash": spec.model_config_hash,
-                    "prompt_version": spec.prompt_version,
-                    "current_step": spec.current_step,
-                    "max_steps": spec.max_steps,
-                    "deadline_at": spec.deadline_at,
-                    "now": now,
+                    "conversation_id": conversation_id,
+                    "tenant_id": tenant_id,
+                    "actor_id": actor_id,
                 },
-            )
-            if created.rowcount != 1:
-                raise ValueError("conversation is unavailable for this tenant and actor")
+            ).one_or_none()
+        return RunSnapshot(**dict(row._mapping)) if row is not None else None
 
     def cancel_unstarted_run(self, *, run_id: UUID, tenant_id: str, reason: str) -> None:
         """Release a run reservation that could not be attached to a message.

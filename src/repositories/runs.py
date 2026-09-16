@@ -142,12 +142,15 @@ class RunRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def load_run(self, *, run_id: UUID, tenant_id: str, actor_id: str | None = None) -> RunSnapshot | None:
+    def load_run(
+        self, *, run_id: UUID, tenant_id: str, actor_id: str | None = None
+    ) -> RunSnapshot | None:
         actor_clause = " AND actor_ref = :actor_id" if actor_id is not None else ""
         statement = text(
             "SELECT run_id, tenant_id, status, current_step, row_version, last_checkpoint_seq, "
             "conversation_id, step_count, terminal_reason "
-            "FROM runtime.agent_runs WHERE run_id = :run_id AND tenant_id = :tenant_id" + actor_clause
+            "FROM runtime.agent_runs WHERE run_id = :run_id AND tenant_id = :tenant_id"
+            + actor_clause
         )
         with self._engine.connect() as connection:
             row = connection.execute(
@@ -155,6 +158,108 @@ class RunRepository:
                 {"run_id": run_id, "tenant_id": tenant_id, "actor_id": actor_id},
             ).one_or_none()
         return RunSnapshot(**dict(row._mapping)) if row is not None else None
+
+    def terminal_runs_without_response(
+        self, *, tenant_id: str, limit: int = 100
+    ) -> tuple[RunSnapshot, ...]:
+        """Find terminal Runs whose user-visible terminal projection is missing."""
+        if not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        with self._engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT run.run_id, run.tenant_id, run.status, run.current_step, "
+                    "run.row_version, run.last_checkpoint_seq, run.conversation_id, "
+                    "run.step_count, run.terminal_reason "
+                    "FROM runtime.agent_runs AS run "
+                    "WHERE run.tenant_id = :tenant_id "
+                    "AND run.status IN ('completed', 'failed', 'cancelled', 'expired') "
+                    "AND NOT EXISTS (SELECT 1 FROM conversation.messages AS message "
+                    "WHERE message.run_id = run.run_id AND message.role = 'assistant' "
+                    "AND message.is_terminal IS TRUE) "
+                    "ORDER BY run.updated_at ASC LIMIT :limit"
+                ),
+                {"tenant_id": tenant_id, "limit": limit},
+            ).all()
+        return tuple(RunSnapshot(**dict(row._mapping)) for row in rows)
+
+    def actor_for_run(self, *, run_id: UUID, tenant_id: str) -> str | None:
+        with self._engine.connect() as connection:
+            return connection.execute(
+                text(
+                    "SELECT actor_ref FROM runtime.agent_runs "
+                    "WHERE run_id = :run_id AND tenant_id = :tenant_id"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id},
+            ).scalar_one_or_none()
+
+    def append_event(
+        self,
+        *,
+        run_id: UUID,
+        tenant_id: str,
+        event_type: EventType,
+        step_id: str,
+        payload: dict[str, Any],
+    ) -> int:
+        """Append an observable event without advancing the lifecycle checkpoint."""
+
+        event_id = uuid4()
+        correlation_id = run_id
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        payload_hash = _payload_hash(payload)
+        with self._engine.begin() as connection:
+            owned = connection.execute(
+                text(
+                    "SELECT run_id FROM runtime.agent_runs WHERE run_id = :run_id "
+                    "AND tenant_id = :tenant_id FOR UPDATE"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id},
+            ).first()
+            if owned is None:
+                raise ValueError("run_not_found")
+            row = connection.execute(
+                text(
+                    "SELECT COALESCE(MAX(event_seq), 0) + 1 FROM runtime.run_events "
+                    "WHERE run_id = :run_id"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id},
+            ).first()
+            sequence = int(row[0])
+            connection.execute(
+                text(
+                    "INSERT INTO runtime.run_events "
+                    "(event_id, run_id, event_seq, event_type, event_version, step_id, "
+                    "payload_json, payload_hash, correlation_id, created_at) "
+                    "VALUES (:event_id, :run_id, :event_seq, :event_type, '1.0', :step_id, "
+                    "CAST(:payload AS jsonb), :payload_hash, :correlation_id, now())"
+                ),
+                {
+                    "event_id": event_id,
+                    "run_id": run_id,
+                    "event_seq": sequence,
+                    "event_type": event_type.value,
+                    "step_id": step_id[:64],
+                    "payload": serialized,
+                    "payload_hash": payload_hash,
+                    "correlation_id": correlation_id,
+                },
+            )
+        return sequence
+
+    def set_terminal_reason(
+        self, *, run_id: UUID, tenant_id: str, reason: str | None
+    ) -> None:
+        """Persist the stable public reason used by the run snapshot."""
+        with self._engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE runtime.agent_runs SET terminal_reason = :reason, "
+                    "updated_at = now(), row_version = row_version + 1 "
+                    "WHERE run_id = :run_id AND tenant_id = :tenant_id"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id, "reason": reason},
+            )
 
     def commit_step(
         self,

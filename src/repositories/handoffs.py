@@ -86,6 +86,81 @@ class HandoffRepository:
         del values["details_redacted_json"]
         return HandoffTicket(**values)
 
+    def get_open_for_run(
+        self, *, run_id: UUID, tenant_id: str, actor_ref: str
+    ) -> HandoffTicket | None:
+        """Return the open handoff owned by this actor for a run."""
+
+        with self._engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT ticket_id, run_id, tenant_id, actor_ref, reason_code, status, operation, "
+                    "details_redacted_json, created_at, resolved_at, resolution "
+                    "FROM runtime.handoff_tickets WHERE run_id = :run_id AND tenant_id = :tenant_id "
+                    "AND actor_ref = :actor_ref AND status = 'open' "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id, "actor_ref": actor_ref},
+            ).one_or_none()
+        if row is None:
+            return None
+        values = dict(row._mapping)
+        details = values.pop("details_redacted_json")
+        if not isinstance(details, dict):
+            raise ValueError("handoff details are not an object")
+        values["details"] = details
+        return HandoffTicket(**values)
+
+    def get_or_create_open_for_run(
+        self,
+        *,
+        run_id: UUID,
+        tenant_id: str,
+        actor_ref: str,
+        reason_code: str,
+        operation: str | None,
+        details: dict[str, object],
+    ) -> HandoffTicket | None:
+        """Atomically reuse or create an open ticket for legacy runs."""
+
+        with self._engine.begin() as connection:
+            owned = connection.execute(
+                text(
+                    "SELECT run_id FROM runtime.agent_runs WHERE run_id = :run_id "
+                    "AND tenant_id = :tenant_id AND actor_ref = :actor_ref FOR UPDATE"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id, "actor_ref": actor_ref},
+            ).first()
+            if owned is None:
+                return None
+            existing = connection.execute(
+                text(
+                    "SELECT ticket_id FROM runtime.handoff_tickets WHERE run_id = :run_id "
+                    "AND tenant_id = :tenant_id AND actor_ref = :actor_ref AND status = 'open' "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id, "actor_ref": actor_ref},
+            ).scalar_one_or_none()
+            if existing is None:
+                connection.execute(
+                    text(
+                        "INSERT INTO runtime.handoff_tickets "
+                        "(ticket_id, run_id, tenant_id, actor_ref, reason_code, status, operation, "
+                        "details_redacted_json, created_at) VALUES (:ticket_id, :run_id, :tenant_id, "
+                        ":actor_ref, :reason_code, 'open', :operation, CAST(:details AS jsonb), now())"
+                    ),
+                    {
+                        "ticket_id": uuid4(),
+                        "run_id": run_id,
+                        "tenant_id": tenant_id,
+                        "actor_ref": actor_ref,
+                        "reason_code": reason_code,
+                        "operation": operation,
+                        "details": _json(details),
+                    },
+                )
+        return self.get_open_for_run(run_id=run_id, tenant_id=tenant_id, actor_ref=actor_ref)
+
     def resolve(
         self,
         *,

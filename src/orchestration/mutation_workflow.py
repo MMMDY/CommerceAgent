@@ -52,9 +52,12 @@ MUTATION_ROUTE_TO_TYPE = {
 class MutationWorkflowError(RuntimeError):
     """A mutation could not safely advance."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self, code: str, message: str, *, missing_slots: tuple[str, ...] = ()
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.missing_slots = missing_slots
 
 
 class DemoMutationSystem:
@@ -142,7 +145,9 @@ def prepare_mutation(
             arguments=arguments,
         )
     except MutationPlanningError as error:
-        raise MutationWorkflowError(error.code, str(error)) from error
+        raise MutationWorkflowError(
+            error.code, str(error), missing_slots=error.missing_slots
+        ) from error
     now = datetime.now(UTC)
     expires_at = now + token_ttl
     token_plaintext = secrets.token_urlsafe(32)

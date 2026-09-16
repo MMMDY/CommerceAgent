@@ -46,6 +46,13 @@ def test_handoff_is_tenant_and_actor_bound_and_resolves_once(engine: Engine) -> 
     assert ticket.status == "open"
     assert ticket.reason_code == "VERIFY_MISMATCH"
     assert ticket.details["readback_found"] is False
+    open_ticket = repository.get_open_for_run(
+        run_id=run_id,
+        tenant_id=tenant_id,
+        actor_ref="contract-actor",
+    )
+    assert open_ticket is not None
+    assert open_ticket.ticket_id == ticket_id
 
     resolved = repository.resolve(
         ticket_id=ticket_id,
@@ -55,6 +62,11 @@ def test_handoff_is_tenant_and_actor_bound_and_resolves_once(engine: Engine) -> 
     assert resolved is not None
     assert resolved.status == "resolved"
     assert resolved.resolution == "verified_failure"
+    assert repository.get_open_for_run(
+        run_id=run_id,
+        tenant_id=tenant_id,
+        actor_ref="contract-actor",
+    ) is None
     assert repository.resolve(
         ticket_id=ticket_id,
         tenant_id=tenant_id,

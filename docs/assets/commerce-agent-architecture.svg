@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">CommerceAgent architecture</title>
+  <desc id="desc">A transparent e-commerce agent architecture showing the web workbench, orchestration, trust boundary, tools, persistence and evaluation.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#101827"/><stop offset="1" stop-color="#182b46"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#60a5fa"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#020617" flood-opacity=".35"/></filter>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#67e8f9"/></marker>
+  </defs>
+  <rect width="1200" height="620" rx="28" fill="url(#bg)"/>
+  <circle cx="1080" cy="70" r="210" fill="#2563eb" opacity=".08"/><circle cx="110" cy="570" r="190" fill="#06b6d4" opacity=".06"/>
+  <text x="64" y="68" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="28" font-weight="750">CommerceAgent</text>
+  <text x="64" y="101" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="15">透明、可恢复、受策略约束的电商客服 Agent</text>
+  <g filter="url(#shadow)">
+    <rect x="64" y="155" width="220" height="165" rx="18" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.5"/>
+    <rect x="330" y="135" width="270" height="205" rx="18" fill="#17334c" stroke="#67e8f9" stroke-width="1.5"/>
+    <rect x="650" y="135" width="220" height="205" rx="18" fill="#183b42" stroke="#34d399" stroke-width="1.5"/>
+    <rect x="920" y="155" width="216" height="165" rx="18" fill="#263552" stroke="#a78bfa" stroke-width="1.5"/>
+  </g>
+  <text x="88" y="192" fill="#bfdbfe" font-family="Inter,Segoe UI,sans-serif" font-size="13" font-weight="700" letter-spacing="1">EXPERIENCE</text>
+  <text x="88" y="227" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="21" font-weight="700">Web Workbench</text>
+  <text x="88" y="257" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">状态机 · Trace · SSE</text><text x="88" y="283" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">人工审核 · 终态回复</text>
+  <text x="354" y="172" fill="#a5f3fc" font-family="Inter,Segoe UI,sans-serif" font-size="13" font-weight="700" letter-spacing="1">ORCHESTRATION</text>
+  <text x="354" y="207" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="21" font-weight="700">Run Lifecycle</text>
+  <text x="354" y="239" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">Route → Decide → Validate</text><text x="354" y="266" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">Execute → Observe → Checkpoint</text>
+  <text x="354" y="304" fill="#67e8f9" font-family="ui-monospace,SFMono-Regular,monospace" font-size="13">created · running · waiting · terminal</text>
+  <text x="674" y="172" fill="#bbf7d0" font-family="Inter,Segoe UI,sans-serif" font-size="13" font-weight="700" letter-spacing="1">TRUST BOUNDARY</text>
+  <text x="674" y="207" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="21" font-weight="700">Guardrails</text>
+  <text x="674" y="239" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">Route / tool allowlist</text><text x="674" y="266" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">Scope / owner / policy check</text>
+  <text x="674" y="304" fill="#86efac" font-family="ui-monospace,SFMono-Regular,monospace" font-size="13">fail closed · no hidden side effects</text>
+  <text x="944" y="192" fill="#ddd6fe" font-family="Inter,Segoe UI,sans-serif" font-size="13" font-weight="700" letter-spacing="1">CAPABILITIES</text>
+  <text x="944" y="227" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="21" font-weight="700">Tools &amp; Data</text>
+  <text x="944" y="257" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">Orders · Catalog · Policy</text><text x="944" y="283" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">RAG · Read-only fixtures</text>
+  <path d="M284 237 H324" stroke="url(#accent)" stroke-width="3" marker-end="url(#arrow)"/><path d="M600 237 H644" stroke="url(#accent)" stroke-width="3" marker-end="url(#arrow)"/><path d="M870 237 H914" stroke="url(#accent)" stroke-width="3" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="165" y="405" width="330" height="130" rx="18" fill="#17263c" stroke="#475569"/><rect x="535" y="405" width="330" height="130" rx="18" fill="#17263c" stroke="#475569"/></g>
+  <text x="193" y="442" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="13" font-weight="700" letter-spacing="1">DURABLE TRUTH</text><text x="193" y="476" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="20" font-weight="700">PostgreSQL Runtime</text><text x="193" y="505" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">checkpoints · events · idempotency · outbox</text>
+  <text x="563" y="442" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="13" font-weight="700" letter-spacing="1">QUALITY LOOP</text><text x="563" y="476" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="20" font-weight="700">Bounded Evaluation</text><text x="563" y="505" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="14">hard checks · judge · release evidence</text>
+  <path d="M465 340 V380 H330 V395" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="6 7"/><path d="M760 340 V380 H700 V395" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="6 7"/>
+  <text x="64" y="584" fill="#64748b" font-family="Inter,Segoe UI,sans-serif" font-size="12">Every transition is observable. Every terminal path produces a user-visible outcome.</text>
+</svg>
