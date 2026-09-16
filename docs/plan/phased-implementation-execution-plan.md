@@ -5,7 +5,7 @@
 > 日期：2026-09-16
 > 执行者：Codex  
 > 上位设计：[电商客服 Agent 技术设计方案](./feasibility-and-implementation-plan.md)  
-> 当前整体状态：`in_progress`（Phase 0～6 已验收；Phase 7 仅剩 bounded soak 与最终候选证据收尾）
+> 当前整体状态：`completed`（Phase 0～7 已按当前 bounded soak 方案验收；产物标记为 internal beta）
 
 ## 1. Codex 使用规则
 
@@ -107,7 +107,7 @@ Codex 执行每个阶段时必须：
 - [x] 完成 Phase 2 v2.5：拆分 AgentStepExecutor，新增真正的有界 `AgentLoop.run()`、复用主模型且温度为 0.1 的意图分类器、WorkflowExecutor、执行模式约束和多轮 Harness。
 - [x] 完成 Phase 3 的只读业务 adapter、RAG、完整对话 API/SSE、Trace UI；三个只读场景已具备真实 API/UI 展示链路。
 - [x] 完成 Phase 4～6 的事务 workflow、Rubric Judge/300-case 完整报告、安全恢复和运维硬化。（独立 Judge、数据库恢复与安全/资源门禁均已通过。）
-- [ ] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据。（已生成 partial/blocked 摘要，正式验收未完成。）
+- [x] 完成 Phase 7 的全链路验收并生成 internal beta 发布证据（当前证据包：`docs/releases/internal-beta-20260916-r4/`；bounded soak 已替代旧版连续 24 小时方案）。
 
 ## 4. 阶段总览
 
@@ -120,7 +120,7 @@ Codex 执行每个阶段时必须：
 | Phase 4：事务 workflow | `completed` | 五类 prepare/confirm/commit/verify、低风险写入、接管闭环、确认卡与 workflow Harness | 五类事务 contract/recovery、60-case hard eval、幂等/并发/脱敏门禁通过 |
 | Phase 5：评测 Harness 完整化与面板 | `completed` | Judge、持久化报告、三次运行、报告 UI | forbidden tool 为 0，Judge 不改写 hard fail；独立 Judge release gate 已通过 |
 | Phase 6：安全、恢复与运维硬化 | `completed` | 故障注入、数据保护、降级、备份 | P0 安全/恢复断言全通过 |
-| Phase 7：全链路验收 | `in_progress` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
+| Phase 7：全链路验收 | `completed` | 候选版本、正式报告、运行手册 | 所有阶段 checklist 完成，明确标记 internal beta |
 
 ```text
 Phase 0 工程骨架
@@ -659,6 +659,17 @@ python -m src.harness.runner --dataset evals/commerce_bench_zh/cases.jsonl --tra
 - 相关验证：全量 Python `219 passed, 42 skipped`；Phase 6/部署/安全/恢复/Harness 子集 `24 passed`；Ruff、mypy、前端 test/build 均通过。
 - 证据：`evals/reports/release-soak-bounded.json`（原始运行产物保持 ignored）；旧 `release-soak.json` 仅保留为已停止的历史审计记录。
 
+### 2026-09-16 — Phase 7 — 候选冻结与最终 internal-beta 证据
+
+- 状态：completed（当前 bounded soak 方案下的 Phase 7 全链路门禁通过）。
+- 候选源码 commit：`9efde6e1d84b4a42fd460f6958a50c72a883c3c9`；证据包：`docs/releases/internal-beta-20260916-r4/`。
+- Release run：`evals/reports/release-20260916-bounded-judge-v2/report.json` → `status=completed`、900 attempts、300/300 hard pass、296/300 final pass、三次全通过率 `0.9867`、`self_judged=false`、`release_gate=true`。
+- Calibration：30 cases，agreement `1.0`，status `complete`；`scripts/release_check.py --require-clean --candidate-commit 9efde6e1d84b4a42fd460f6958a50c72a883c3c9` → pass。
+- Manifest：`docs/releases/internal-beta-20260916-r4/manifest.json`，`source_commit` 与 release report 一致，生成时 worktree clean；manifest 同时记录 bounded soak 报告。
+- 交付边界：仍为 `internal beta / mock business data`，不声称生产退款能力；不设置连续 24 小时运行测试。
+- 剩余 TODO：无。
+- BLOCKED：无。
+
 ## 9. Phase 4：确定性事务 Workflow
 
 ### 9.1 目标与依赖
@@ -922,11 +933,11 @@ scripts/soak_monitor.sh --status --output evals/reports/soak-smoke.json
 - [x] 增加 `scripts/release_check.py` 与 `scripts/collect_release_evidence.sh`：校验 clean worktree、source commit、独立 Judge、300×3 结果、校准一致率和报告状态；不满足条件时 fail closed。
 - [x] 生成 `docs/releases/internal-beta-20260916/release-summary.md`，明确 internal beta/mock data 限制和已验证证据；最新独立 Judge 证据为 `docs/releases/internal-beta-20260916-r3/`。
 - [x] 冻结代码、依赖、DB migration、prompt、workflow、policy、tool schema、dataset 和 rubric 版本（`scripts/create_release_manifest.py` 对全部 Git tracked 输入生成内容哈希，排除 `.env`）。
-- [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（冻结 manifest 生成时强制 clean，候选 `source_commit=bd0cb55`）。
+- [x] 确认 Git worktree clean，记录 `git rev-parse HEAD`；报告中的 `source_commit` 必须对应实际执行代码，禁止仅写分支名（r4 manifest 生成时 clean，候选 `source_commit=9efde6e1d84b4a42fd460f6958a50c72a883c3c9`）。
 - [x] 从空数据库执行全新 app+DB 部署，不依赖开发机残留状态（临时 `commerce_empty_*` 数据库迁移至 `20260916_0011`，app 容器 `/health/live`、`/health/ready` 与 SPA 返回 200；验证后已清理）。
 - [x] 执行后端、前端、workflow、security、recovery 和 deployment 全量测试（Python `216 passed`；隔离 PostgreSQL contract/recovery `40 passed`；前端 test/build、部署测试通过）。
-- [x] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过（`release-20260916-judge-chat-v3`：900 attempts、300 hard pass、296 final pass、`self_judged=false`）。
-- [x] 生成按 track 分层的正式 JSON/Markdown 报告（`evals/reports/release-20260916-judge-chat-v3/`，原始产物保持 ignored）。
+- [x] 使用独立 Judge 对固定 300-case 执行三次 release run；Judge 缺失、同候选模型或任一 case 无结果时不得通过（r4：900 attempts、300 hard pass、296 final pass、`self_judged=false`）。
+- [x] 生成按 track 分层的正式 JSON/Markdown 报告（`evals/reports/release-20260916-bounded-judge-v2/`，原始产物保持 ignored）。
 - [x] 从 Web 完整演示 FAQ/商品对比、订单物流、退款确认和失败 case 定位（scenario API、SSE/Trace、confirmation 与 `/evals` 页面复验通过）。
 - [x] 执行 Compose 停止/重启，验证会话、run、checkpoint、评测报告不丢失（deployment smoke 与服务重建复验）。
 - [x] 执行备份/恢复演练，记录恢复点和验证查询（`backups/phase6-smoke.dump`，空库关系计数已核验）。
@@ -988,8 +999,8 @@ bounded soak 启动命令应立即返回；只有后续 `--status` 显示 `compl
 - [x] app + DB 上限 640 MiB，默认无额外 worker/Redis/本地模型。
 - [x] DB 重启、应用重启和备份恢复后核心数据完整。
 - [x] 所有报告可追溯到代码、模型、prompt、workflow、policy、tool、dataset 和 rubric 版本（release manifest）。
-- [ ] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，bounded soak 产物完整（bounded soak 已通过；本次方案改动尚待重新冻结候选 SHA）。
-- [ ] 所有 Phase 0～7 验收 checklist 已勾选。
+- [x] 正式报告中的 `source_commit` 等于 clean worktree 的候选 commit SHA，bounded soak 产物完整（r4 report/manifest 均指向 `9efde6e1d84b4a42fd460f6958a50c72a883c3c9`，bounded soak 为 20 samples / 613 seconds / 0 errors）。
+- [x] 所有 Phase 0～7 验收 checklist 已勾选。
 
 ### 12.5 交付产物
 
