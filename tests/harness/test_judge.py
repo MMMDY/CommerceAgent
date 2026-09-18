@@ -1,5 +1,7 @@
+from decimal import Decimal
 from pathlib import Path
 
+from src.cost.models import ModelPricing
 from src.harness.judge import JudgeConfig, RubricJudge
 from src.harness.loader import CaseLoader
 from src.harness.schema import HardEvalResult, NormalizedTrace
@@ -89,3 +91,44 @@ def test_judge_input_redacts_prompt_injection_secrets() -> None:
     )
     assert "supersecret" not in str(seen)
     assert result.judge_pass is False
+
+
+def test_judge_usage_and_cost_are_recorded_separately_from_agent_cost() -> None:
+    case = _case()
+    pricing = ModelPricing(
+        pricing_version_id="judge-pricing-v1",
+        provider="judge-provider",
+        model="judge",
+        input_per_million=Decimal("1"),
+        output_per_million=Decimal("2"),
+    )
+    payload = {
+        "case_id": case.id,
+        "rubric_id": "workflow_response_v1",
+        "dimension_scores": {
+            "task_progress": 4,
+            "confirmation_clarity": 4,
+            "no_false_claim": 4,
+            "clarity": 4,
+        },
+        "critical_violations": [],
+        "evidence": [],
+        "rationale": "ok",
+        "__commerce_agent_provider_usage__": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150,
+        },
+    }
+    result = RubricJudge(
+        JudgeConfig("judge", "http://unused", "secret"),
+        request=lambda _input: payload,
+        pricing=pricing,
+    ).evaluate(
+        case=case,
+        trace=NormalizedTrace(case_id=case.id, status="complete"),
+        hard_result=HardEvalResult(case_id=case.id, passed=True),
+    )
+
+    assert result.usage_tokens == 150
+    assert result.judge_cost_microusd == 200

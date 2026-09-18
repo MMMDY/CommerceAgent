@@ -42,6 +42,7 @@ def build_runtime_registrations(*, settings: Settings) -> RuntimeRegistrationCon
         for rule in DEFAULT_INTENT_ROUTE_RULES
     }
     workflows.add(("knowledge_query", "1"))
+    workflows.add(("conversational_response", "1"))
     write_workflow_ids = {
         "cancel_order",
         "change_order",

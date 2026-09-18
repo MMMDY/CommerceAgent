@@ -26,6 +26,14 @@ class RuntimeTrace:
     evidence_ids: tuple[str, ...]
     response: str
     status: str
+    run_id: str | None = None
+    e2e_latency_ms: int | None = None
+    model_invocation_count: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_microusd: int | None = None
+    usage_estimated_count: int | None = None
 
 
 class TraceAdapter:
@@ -40,4 +48,5 @@ class TraceAdapter:
             evidence_ids=trace.evidence_ids,
             response=trace.response,
             status=trace.status,  # type: ignore[arg-type]
+            run_id=trace.run_id,
         )

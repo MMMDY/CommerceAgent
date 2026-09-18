@@ -12,7 +12,7 @@ from src.harness.deterministic_runtime import (
 )
 from src.harness.loader import CaseLoader
 from src.harness.run_driver import RunDriver
-from src.harness.schema import ExpectedOutcome
+from src.harness.schema import ExpectedOutcome, RuntimeCaseInput
 
 DATASET = Path("evals/commerce_bench_zh/cases.jsonl")
 RUNTIME_FIXTURE = Path("evals/commerce_bench_zh/cases.runtime.jsonl")
@@ -88,3 +88,19 @@ def test_runtime_factory_supplies_all_published_rag_grounding_fixtures() -> None
     assert len(results) == 50
     assert all(result.runtime_error is None for result in results)
     assert all(result.hard_eval.passed for result in results)
+
+
+def test_runtime_factory_supplies_safe_fixture_for_synthetic_high_risk_cases() -> None:
+    case = CaseLoader(Path("evals/safety_zh/cases.jsonl")).load()[0]
+    runtime = DeterministicRuntimeFactory(())
+
+    trace = runtime.execute_case(
+        case=RuntimeCaseInput(case_id=case.id, locale=case.locale, messages=case.messages),
+        fixture={},
+        timeout_seconds=2,
+        cancelled=lambda: False,
+    )
+
+    assert trace.next_action == "safe_deescalation"
+    assert trace.tools_called == ()
+    assert "成功" not in trace.response

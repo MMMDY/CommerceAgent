@@ -169,11 +169,15 @@ class DeterministicRuntimeFactory:
         if definition is None:
             definition = _build_workflow_fixture(case)
         if definition is None:
+            definition = _build_long_tail_fixture(case)
+        if definition is None:
             definition = _build_rag_fixture(case)
         if definition is None:
             definition = _build_clarification_fixture(case)
         if definition is None:
             definition = _build_guardrail_fixture(case)
+        if definition is None:
+            definition = _build_safety_fixture(case)
         if definition is None:
             raise RuntimeFixtureError("runtime fixture case is unavailable")
 
@@ -487,6 +491,47 @@ def _fixture_tool_data(name: str) -> dict[str, object]:
     return {"status": "accepted"}
 
 
+def _build_long_tail_fixture(case: RuntimeCaseInput) -> DeterministicCaseFixture | None:
+    """Build code-owned, tool-free responses for the frozen long-tail slice.
+
+    This is an independent hard-gate fixture, not a production-model result.
+    Keeping the mapping in the runtime boundary lets the evaluator verify the
+    no-tool and bounded-response contract without passing the case's expected
+    answer into an Agent model.
+    """
+
+    if not case.case_id.startswith("long_tail_response_"):
+        return None
+    scenarios = {
+        "0001": ("social_chat", "听起来你今天状态很棒！愿意分享这份好心情，本身就很有感染力。"),
+        "0002": ("social_chat", "今天状态不错很棒，愿这份好心情继续陪着你。"),
+        "0003": ("greeting", "你好！我可以帮你查商品、订单、物流以及处理售后问题。"),
+        "0004": ("thanks", "不客气！如果还想继续查订单或处理售后，我可以接着帮你。"),
+        "0005": ("capability_query", "我可以帮你查商品、订单、物流、支付和售后进度。"),
+        "0006": ("social_chat", "当然可以随便聊两句；如果你需要，我也能帮你查商品或订单。"),
+    }
+    suffix = case.case_id.rsplit("_", 1)[-1]
+    scenario = scenarios.get(suffix)
+    if scenario is None:
+        return None
+    intent, response = scenario
+    decision = Decision(
+        type=DecisionType.RESPOND,
+        intent=intent,
+        route="conversational_response",
+        confidence=1.0,
+        response=response,
+    )
+    plan = RuntimePlanFixture(
+        route="conversational_response",
+        workflow_id="conversational_response",
+        current_step="respond",
+        allowed_decisions=(DecisionType.RESPOND,),
+        trace_next_action="respond",
+    )
+    return DeterministicCaseFixture(case_id=case.case_id, plan=plan, decision=decision)
+
+
 def _build_rag_fixture(case: RuntimeCaseInput) -> DeterministicCaseFixture | None:
     """Build deterministic RAG fixtures from the published knowledge facts.
 
@@ -592,4 +637,36 @@ def _build_guardrail_fixture(case: RuntimeCaseInput) -> DeterministicCaseFixture
     response = "为保护账户安全，无法直接处理该请求。" if outcome == "refuse" else "我会依据已验证的信息继续说明。"
     decision = Decision(type=decision_type, intent="guardrail", route="guardrail", confidence=1.0, response=response)
     plan = RuntimePlanFixture(route="guardrail", workflow_id="guardrail", current_step="safety_review", allowed_decisions=(decision_type,), trace_next_action=outcome)
+    return DeterministicCaseFixture(case_id=case.case_id, plan=plan, decision=decision)
+
+
+def _build_safety_fixture(case: RuntimeCaseInput) -> DeterministicCaseFixture | None:
+    """Provide a code-owned safe response for synthetic high-risk cases.
+
+    This fixture is only deterministic hard-gate coverage. It deliberately
+    exposes no tools, never claims that a transaction succeeded, and does not
+    use the case's expected outcome or safety label as an execution hint.
+    Live model/Safety Router behavior remains a separate release gate.
+    """
+
+    if not case.case_id.startswith("safety_response_"):
+        return None
+    response = (
+        "为了保护账户和交易安全，我不能执行或确认这项操作。"
+        "请通过官方渠道核验信息；如需继续，我可以说明安全的下一步。"
+    )
+    decision = Decision(
+        type=DecisionType.RESPOND,
+        intent="safety_boundary",
+        route="safety_deescalation",
+        confidence=1.0,
+        response=response,
+    )
+    plan = RuntimePlanFixture(
+        route="safety_deescalation",
+        workflow_id="safety_deescalation",
+        current_step="safety_response",
+        allowed_decisions=(DecisionType.RESPOND,),
+        trace_next_action="safe_deescalation",
+    )
     return DeterministicCaseFixture(case_id=case.case_id, plan=plan, decision=decision)

@@ -8,10 +8,11 @@
 
 <p>
   <a href="#30-秒启动"><strong>30 秒启动</strong></a> ·
-  <a href="#产品亮点">产品亮点</a> ·
+  <a href="#亮点">亮点</a> ·
   <a href="#架构概览">架构</a> ·
   <a href="#演示场景">演示场景</a> ·
-  <a href="#开发与测试">开发</a>
+  <a href="#开发与测试">开发</a> ·
+  <a href="#数据与评测文档">数据与评测</a>
 </p>
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
@@ -19,7 +20,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.116-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-223%20passed-22c55e?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-348%20passed-22c55e?logo=pytest&logoColor=white)
 
 </div>
 
@@ -71,8 +72,6 @@ CLASSIFIER_API_BASE=https://your-compatible-endpoint/v1
 CLASSIFIER_API_KEY=your-api-key
 CLASSIFIER_TEMPERATURE=0.1
 ```
-
-`.env` 只由后端读取，禁止提交到 Git、发送给前端或写入 Trace。
 
 ### 2. 启动数据库、迁移和应用
 
@@ -130,7 +129,7 @@ curl http://127.0.0.1:19473/health/ready
 
 输入框和发送按钮在 Run 结束前会锁定，避免重复点击造成并发堵塞。页面刷新或 SSE 断线后，Run、消息和 Trace 会从服务端恢复。
 
-## 产品亮点
+## 亮点
 
 ### 1. 透明的 Agent 执行体验
 
@@ -162,7 +161,7 @@ curl http://127.0.0.1:19473/health/ready
 
 这类回复只引用可信工具已经返回的事实，不会为了“看起来成功”而编造业务结果。
 
-### 5. 可量化的评测与发布证据
+### 5. 可量化的评测
 
 - 内置中文电商客服评测集和 rubric；
 - 支持 hard evaluation 与独立 Judge；
@@ -248,6 +247,14 @@ sequenceDiagram
 | `GET` | `/v1/runs/{run_id}/stream` | 订阅 Run SSE 事件 |
 | `POST` | `/v1/runs/{run_id}/retry` | 显式重试失败/过期 Run |
 | `GET` | `/v1/runs/{run_id}/human-review` | 查看人工审核工单 |
+| `GET` | `/v1/runs/{run_id}/visualization` | 获取脱敏 Agent 流程、时延、Token、成本和工具摘要 |
+| `POST` | `/v1/runs/{run_id}/feedback` | 提交 owner 点赞/点踩与可选授权纠错 |
+| `GET` | `/internal/v1/operations/summary` | 查看 P50/P95/P99、Token、成本和趋势 |
+| `GET` | `/internal/v1/safety/events` | 管理员查看脱敏 P0 Safety 审计事件（需 admin） |
+| `GET` | `/internal/v1/failures` | 查看脱敏失败样本与归因状态（需 admin） |
+| `POST` | `/internal/v1/failures/{failure_id}/skill` | 达到 5 个独立来源后创建待审 Skill 候选（需 admin） |
+| `GET` | `/internal/v1/skills` | 查看 Skill 状态漏斗和审批队列（需 admin） |
+| `GET` | `/internal/v1/releases` | 查看 Shadow/Canary 发布阶段（需 admin） |
 
 示例：
 
@@ -280,7 +287,7 @@ npm ci
 npm run build
 ```
 
-当前基线：`223 passed`；未配置 PostgreSQL contract 或 live model 的测试会条件跳过。项目采用有明确超时、步骤和结束条件的测试，不设置连续 24 小时运行测试。
+当前代码回归：`367 passed, 56 skipped`；隔离 PostgreSQL contract：`45 passed`。Live Model、Live RAG、Recovery 和未配置 `DATABASE_TEST_URL` 的测试按条件跳过，不能解读为线上能力证据。完整命令与限制见 [最新验证证据](docs/plan/evidence/phase-n0-validation-20260918-rerun.md)。项目采用有明确超时、步骤和结束条件的测试，不设置连续 24 小时运行测试。
 
 ### 运行评测
 
@@ -343,12 +350,37 @@ docker compose --profile maintenance run --rm migrate
 - [x] 终态回复、失败恢复和显式重试
 - [x] PostgreSQL checkpoint、幂等和启动补偿
 - [x] 有界评测与 release evidence
+- [x] Run 流程、时延、Token、成本和评测平均分可视化
+- [x] 失败样本、Skill 审批和发布控制面基础接口/页面
+- [x] 自动评测无真人时保持 Skill `PENDING_REVIEW`，禁止自动越级上线
 - [ ] 接入真实订单、退款和物流服务适配器
 - [ ] 增加多租户生产认证与角色化人工工作台
 - [ ] 将 SSE 通知扩展为可横向扩展的事件订阅服务
 
+## 数据与评测文档
+
+### 数据库
+
+- [数据库逻辑数据模型、表职责与数据保留策略](docs/plan/feasibility-and-implementation-plan.md#6-数据库逻辑-schema-设计)：涵盖会话、消息、Run/Trace、知识、记忆、评测结果和审计数据。
+- [PostgreSQL 实际表结构与版本迁移](infra/migrations/versions/)：以已应用的 Alembic migrations 为准；逻辑设计与实现不一致时，运行时结构以迁移为准。
+- [控制面审批与渐进发布实现计划](docs/plan/next-generation-agent-phased-code-implementation-plan.md)：说明失败归因、Skill 人审边界、Shadow/Canary 和前端可视化的阶段状态。
+- [数据库备份与恢复演练](docs/runbooks/backup-restore.md)。
+
+### 评测
+
+- [300-case 数据集、Track 划分与混合判分协议](evals/commerce_bench_zh/README.md)：说明确定性 hard evaluation、LLM Judge、运行和数据适用边界。
+- [Judge Rubric](evals/commerce_bench_zh/rubrics.json) 与 [Judge Prompt/运行约束](evals/commerce_bench_zh/JUDGE_PROMPT.md)。
+- [数据集质量审核记录](evals/commerce_bench_zh/quality-audit.md)、[来源选择与哈希](evals/commerce_bench_zh/SOURCES.md)及[数据许可说明](evals/commerce_bench_zh/LICENSE-DATA.md)。
+- [总体设计中的评测指标与发布门槛](docs/plan/feasibility-and-implementation-plan.md#11-评测指标与发布门槛)。
+- [最新 Internal Beta 评测摘要](docs/releases/internal-beta-20260916-r4/release-summary.md)：历史 deterministic/独立 Judge 报告，300 case × 3 次共 900 次运行，hard pass `300/300`，最终通过 `296/300`，三次全通过率 `0.9867`；该数值不是线上准确率。
+- [下一代评测与失败学习验证证据](docs/plan/evidence/phase-n0-validation-20260918-rerun.md)：包含当前测试、前端流程可视化、失败归因、Skill 审批边界和线上证据限制。
+- 详细报告在 `evals/reports/release-20260916-bounded-judge-v2/report.md` 和 `report.json`；评测报告目录默认被 `.gitignore` 忽略，仅在本地生成，不随仓库提交。
+
 ## 设计文档
 
+- [产品说明总结](docs/summary/product-overview.md)
+- [下一代 Agent 持续改进实施方案](docs/plan/next-generation-agent-continuous-improvement-plan.md)
+- [下一代 Agent 阶段性代码改进计划](docs/plan/next-generation-agent-phased-code-implementation-plan.md)
 - [总体技术设计](docs/plan/feasibility-and-implementation-plan.md)
 - [分阶段实施计划](docs/plan/phased-implementation-execution-plan.md)
 - [演示工作台透明化升级方案](docs/plan/demo-workbench-transparency-upgrade-plan.md)

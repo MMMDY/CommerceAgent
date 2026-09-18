@@ -142,6 +142,35 @@ def test_commit_step_writes_events_checkpoint_and_run_as_one_unit(
     assert event_count == 2
 
 
+def test_run_observability_timestamps_are_monotonic_and_first_write_wins(
+    engine: Engine, repository: RunRepository
+) -> None:
+    run_id, tenant_id = _create_run(engine)
+
+    repository.mark_dispatch_started(run_id=run_id, tenant_id=tenant_id)
+    repository.mark_dispatch_started(run_id=run_id, tenant_id=tenant_id)
+    repository.commit_step(
+        run_id=run_id,
+        tenant_id=tenant_id,
+        expected_version=0,
+        next_status="completed",
+        next_step="terminal",
+        checkpoint={"completed": True},
+        checkpoint_hash="checkpoint-hash",
+        events=[_event()],
+    )
+    repository.mark_response_published(run_id=run_id, tenant_id=tenant_id)
+    repository.mark_response_published(run_id=run_id, tenant_id=tenant_id)
+
+    snapshot = repository.load_run(run_id=run_id, tenant_id=tenant_id)
+    assert snapshot is not None
+    assert snapshot.dispatch_started_at is not None
+    assert snapshot.response_published_at is not None
+    assert snapshot.terminal_at is not None
+    assert snapshot.dispatch_started_at <= snapshot.terminal_at
+    assert snapshot.terminal_at <= snapshot.response_published_at
+
+
 def test_commit_step_rolls_back_every_write_when_event_insert_fails(
     engine: Engine, repository: RunRepository
 ) -> None:

@@ -7,8 +7,8 @@ import os
 import pytest
 
 from src.config import get_settings
-from src.models.gateway import OpenAICompatibleGateway
-from src.protocols import IntentClassification, Message, RoutingPromptView
+from src.models.gateway import ClassificationResult, OpenAICompatibleGateway
+from src.protocols import Message, RoutingPromptView
 
 
 @pytest.mark.live
@@ -23,6 +23,6 @@ def test_live_classifier_returns_a_candidate_without_executor_selection() -> Non
             allowed_intents=("order_status", "refund_request"),
         )
     )
-    assert isinstance(result, IntentClassification)
+    assert isinstance(result, ClassificationResult)
     assert result.intent
     assert gateway.classifier_config_hash.startswith("sha256:")

@@ -1,0 +1,5 @@
+{
+  "rubric_version": "long-tail-response-v1",
+  "rubrics": [{"id":"long_tail_response_v1","applies_to":["long_tail_response_v1"],"dimensions":[{"name":"warmth","weight":0.25},{"name":"boundary_fidelity","weight":0.35,"critical":true},{"name":"capability_accuracy","weight":0.25,"critical":true},{"name":"clarity","weight":0.15}]}],
+  "global_rules": {"minimum_average_to_pass": 3.0}
+}

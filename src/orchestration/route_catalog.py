@@ -7,7 +7,7 @@ executor is eligible.  Unknown intents remain handoff by ``IntentRouter``.
 from __future__ import annotations
 
 from src.orchestration.router import IntentRouteRule
-from src.protocols import ExecutionMode
+from src.protocols import ExecutionMode, RequestDomain, ResponsePolicy
 
 _READONLY = ExecutionMode.READONLY_LOOP
 _WORKFLOW = ExecutionMode.WORKFLOW
@@ -57,6 +57,69 @@ DEFAULT_INTENT_ROUTE_RULES += (
         "human_agent", _READONLY, "human_agent", "1", force_handoff=True
     ),
 )
+
+_CONVERSATIONAL_RULES: tuple[IntentRouteRule, ...] = (
+    IntentRouteRule(
+        "greeting",
+        _READONLY,
+        "conversational_response",
+        "1",
+        response_policy=ResponsePolicy.CONVERSATIONAL_RESPONSE,
+        domain=RequestDomain.SOCIAL,
+        min_domain_confidence=0.8,
+        min_risk_confidence=0.8,
+    ),
+    IntentRouteRule(
+        "thanks",
+        _READONLY,
+        "conversational_response",
+        "1",
+        response_policy=ResponsePolicy.CONVERSATIONAL_RESPONSE,
+        domain=RequestDomain.SOCIAL,
+        min_domain_confidence=0.8,
+        min_risk_confidence=0.8,
+    ),
+    IntentRouteRule(
+        "social_chat",
+        _READONLY,
+        "conversational_response",
+        "1",
+        response_policy=ResponsePolicy.CONVERSATIONAL_RESPONSE,
+        domain=RequestDomain.SOCIAL,
+        min_domain_confidence=0.8,
+        min_risk_confidence=0.8,
+    ),
+    IntentRouteRule(
+        "capability_query",
+        _READONLY,
+        "conversational_response",
+        "1",
+        response_policy=ResponsePolicy.CONVERSATIONAL_RESPONSE,
+        domain=RequestDomain.CAPABILITY,
+        min_domain_confidence=0.8,
+        min_risk_confidence=0.8,
+    ),
+    IntentRouteRule(
+        "unsupported_low_risk",
+        _READONLY,
+        "conversational_response",
+        "1",
+        response_policy=ResponsePolicy.GRACEFUL_UNSUPPORTED,
+        domain=RequestDomain.UNSUPPORTED,
+        min_domain_confidence=0.8,
+        min_risk_confidence=0.8,
+    ),
+)
+
+
+def intent_route_rules(
+    *, routing_v2: bool = False, conversational_fallback: bool = False
+) -> tuple[IntentRouteRule, ...]:
+    """Return only routes enabled by the deployment feature flags."""
+
+    if not routing_v2 or not conversational_fallback:
+        return DEFAULT_INTENT_ROUTE_RULES
+    return DEFAULT_INTENT_ROUTE_RULES + _CONVERSATIONAL_RULES
 
 # Slot names are hints for the classifier/prompt only.  Values are always
 # unverified until a trusted tool reads the resource.

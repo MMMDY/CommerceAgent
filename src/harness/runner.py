@@ -7,6 +7,8 @@ strictly validated fixture that drives the project's real AgentLoop boundary.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import signal
 import subprocess
 from collections.abc import Sequence
@@ -16,6 +18,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from src.config import get_settings
 from src.db import get_engine
+from src.evolution.failure_attribution import FailureAttributionService
 from src.harness.calibration import calibration_report, load_labels, validate_stratification
 from src.harness.deterministic_runtime import (
     DeterministicRuntimeFactory,
@@ -40,6 +43,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--eval-run-id", type=str)
     parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--tenant-id", default="demo-tenant")
+    parser.add_argument("--cost-budget-microusd", type=int)
     parser.add_argument(
         "--runtime-fixture",
         type=Path,
@@ -68,7 +73,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         cases = loader.load(track=args.track, case_id=args.case_id)
         fixture_path = args.runtime_fixture or args.dataset.with_suffix(".runtime.jsonl")
         runtime_loader = RuntimeFixtureLoader(fixture_path)
-        runtime = DeterministicRuntimeFactory(runtime_loader.load())
+        if fixture_path.is_file():
+            runtime = DeterministicRuntimeFactory(runtime_loader.load())
+            runtime_hash = runtime_loader.fixture_hash()
+            runtime_source = "fixture_file"
+        elif args.runtime_fixture is not None:
+            # An explicitly supplied fixture is a contract, so a missing
+            # path remains an error rather than silently becoming a
+            # code-owned scenario.
+            runtime = DeterministicRuntimeFactory(runtime_loader.load())
+            runtime_hash = runtime_loader.fixture_hash()
+            runtime_source = "fixture_file"
+        else:
+            # Synthetic tracks may be fully defined by the independent,
+            # code-owned factory.  The report still carries a stable hash
+            # and says which source supplied the runtime boundary.
+            runtime = DeterministicRuntimeFactory(())
+            runtime_hash = hashlib.sha256(
+                b"commerce-agent-code-owned-deterministic-runtime-v1"
+            ).hexdigest()
+            runtime_source = "code_owned_factory"
         driver = RunDriver(runtime=runtime)
         results = []
         judge_results = {}
@@ -79,10 +103,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         persistence = None
+        failure_projection: FailureAttributionService | None = None
+        persisted_id: UUID | None = None
+        settings = get_settings()
         try:
-            settings = get_settings()
             if settings.database_url:
-                persistence = EvaluationRepository(get_engine())
+                engine = get_engine()
+                persistence = EvaluationRepository(engine)
+                failure_projection = FailureAttributionService(engine)
                 persisted_id = persistence.create_run(
                     eval_run_id=UUID(eval_run_id) if args.eval_run_id else None,
                     dataset_hash=loader.dataset_hash(),
@@ -102,6 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Evaluation must still emit a complete local report when the
             # optional database is down; persistence status is explicit.
             persistence = None
+            failure_projection = None
         judge_runner = None
         judge_unavailable = False
         if args.judge == "on":
@@ -122,6 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 results.append(result)
                 if persistence is not None:
+                    assert persisted_id is not None
                     try:
                         persistence.record_hard_result(
                             eval_run_id=persisted_id,
@@ -138,13 +168,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                         persistence = None
                 # Pure intent routing is deterministically judged by hard gates;
                 # rubric calls are reserved for the 150 non-intent cases.
+                judged = None
                 if judge_runner is not None and case.task_type != "intent_route":
-                    judge_results[f"{case.id}#{attempt_no}"] = judge_runner.evaluate(
+                    judged = judge_runner.evaluate(
                         case=case, trace=result.trace, hard_result=result.hard_eval
                     )
+                    judge_results[f"{case.id}#{attempt_no}"] = judged
                     if persistence is not None:
+                        assert persisted_id is not None
                         try:
-                            judged = judge_results[f"{case.id}#{attempt_no}"]
                             persistence.record_judge_result(
                                 eval_run_id=persisted_id,
                                 case_id=case.id,
@@ -165,24 +197,63 @@ def main(argv: Sequence[str] | None = None) -> int:
                             )
                         except Exception:
                             persistence = None
+                if failure_projection is not None and persisted_id is not None:
+                    eval_failed = not result.hard_eval.passed or (
+                        judged is not None and judged.judge_pass is False
+                    )
+                    reason = (
+                        "HARD_GATE_FAIL"
+                        if not result.hard_eval.passed
+                        else "JUDGE_FAIL"
+                        if judged is not None and judged.judge_pass is False
+                        else "EVALUATION_FAILED"
+                    )
+                    try:
+                        failure_projection.record_evaluation_outcome(
+                            tenant_id=args.tenant_id,
+                            eval_run_id=persisted_id,
+                            case_id=case.id,
+                            track=case.task_type,
+                            eval_failed=eval_failed,
+                            cost_microusd=result.agent_cost_microusd,
+                            cost_budget_microusd=(
+                                args.cost_budget_microusd
+                                if args.cost_budget_microusd is not None
+                                else settings.evaluation_case_cost_budget_microusd
+                            ),
+                            failure_reason=reason,
+                        )
+                    except Exception:
+                        # Failure learning is auxiliary to the evaluation
+                        # report and must not fail an otherwise complete run.
+                        pass
         report = build_report(
             cases,
             results,
             judges=judge_results,
             judge_enabled=args.judge == "on",
             dataset_hash=loader.dataset_hash(),
-            runtime_hash=runtime_loader.fixture_hash(),
+            dataset_id=loader.dataset_id,
+            dataset_version=loader.dataset_version,
+            manifest_hash=_mapping_hash(loader.manifest),
+            runtime_hash=runtime_hash,
+            runtime="deterministic_fixture",
+            prompt_hash="sha256:commerce-agent-deterministic-runtime-prompt-v1",
+            rubric_hash=_file_hash(args.dataset.parent / "rubrics.json"),
+            runtime_versions={"fixture_hash": runtime_hash, "source": runtime_source},
             mode=args.mode,
             repetitions=args.repetitions,
             cancelled=cancelled,
         )
-        report["runtime"] = "deterministic_fixture"
-        report["runtime_fixture_hash"] = runtime_loader.fixture_hash()
+        report["runtime_fixture_hash"] = runtime_hash
         report["eval_run_id"] = eval_run_id
         report["source_commit"] = _source_commit()
-        report["prompt_hash"] = "sha256:commerce-agent-deterministic-runtime-prompt-v1"
+        generator_config_hash = loader.manifest.get("generator_config_hash")
+        if isinstance(generator_config_hash, str):
+            report["generator_config_hash"] = generator_config_hash
         if judge_runner is not None:
             report["judge_prompt_hash"] = f"sha256:{judge_runner.prompt_hash}"
+            report["judge_config_hash"] = judge_runner.config.config_hash
             report["rubric_version"] = judge_runner.rubric_version
             calibration_path = args.dataset.parent / "calibration_labels.jsonl"
             if calibration_path.is_file():
@@ -205,7 +276,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             report["status"] = "incomplete"
             report["judge_error"] = "judge_configuration_unavailable"
             report["self_judged"] = False
+        if loader.manifest.get("requires_human_approval_before_release") is True:
+            # Dataset metadata is not a human approval record.  Automated
+            # evaluation may still produce hard/Judge evidence, but it must
+            # remain incomplete until the separate approver workflow records
+            # a review decision.
+            report["human_approval"] = {
+                "required": True,
+                "status": "pending",
+                "source": "separate_approver_workflow",
+            }
+            report["release_gate"] = False
+            if report["status"] != "cancelled":
+                report["status"] = "incomplete"
         if persistence is not None:
+            assert persisted_id is not None
             try:
                 persistence.finish(eval_run_id=persisted_id, status=str(report["status"]))
             except Exception:
@@ -257,6 +342,19 @@ def _source_commit() -> str | None:
         return None
     value = completed.stdout.strip()
     return value or None
+
+
+def _file_hash(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
+def _mapping_hash(value: dict[str, object]) -> str | None:
+    if not value:
+        return None
+    serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return f"sha256:{hashlib.sha256(serialized.encode()).hexdigest()}"
 
 
 if __name__ == "__main__":

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from src.harness.track_catalog import is_registered_track
 from src.protocols import Contract
 
 
@@ -26,19 +27,50 @@ class ExpectedOutcome(Contract):
 class EvalCase(Contract):
     id: str = Field(pattern=r"^[a-z][a-z0-9_]{2,127}$")
     locale: Literal["zh-CN"]
-    task_type: Literal[
-        "intent_route",
-        "tool_workflow",
-        "rag_grounding",
-        "scripted_clarification",
-        "guardrail_handoff",
-    ]
+    task_type: str = Field(min_length=1, max_length=64)
     messages: tuple[EvalMessage, ...]
     context: dict[str, Any] = Field(default_factory=dict)
     expected: ExpectedOutcome
     forbidden_tools: tuple[str, ...] = ()
     tags: tuple[str, ...]
     source: dict[str, Any]
+    # Synthetic datasets carry provenance beside the common case contract.
+    # These fields are intentionally not part of RuntimeCaseInput, so the
+    # runtime cannot use generation/review metadata as an execution hint.
+    seed_family: str | None = Field(default=None, min_length=1, max_length=128)
+    generator: str | None = Field(default=None, min_length=1, max_length=128)
+    prompt_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    license: str | None = Field(default=None, min_length=1, max_length=128)
+    review_status: Literal["candidate", "approved", "rejected"] | None = None
+    risk_level: Literal["low", "medium", "high", "unknown"] | None = None
+
+    @model_validator(mode="after")
+    def validate_synthetic_provenance(self) -> EvalCase:
+        synthetic = self.task_type in {"long_tail_response_v1", "safety_response_v2"}
+        provenance = (
+            self.seed_family,
+            self.generator,
+            self.prompt_hash,
+            self.license,
+            self.review_status,
+            self.risk_level,
+        )
+        if synthetic and any(value is None for value in provenance):
+            raise ValueError("synthetic cases require complete provenance")
+        if not synthetic and any(value is not None for value in provenance):
+            raise ValueError("synthetic provenance is not allowed on core cases")
+        if self.task_type == "safety_response_v2" and self.risk_level != "high":
+            raise ValueError("safety cases must be high risk")
+        if self.task_type == "long_tail_response_v1" and self.risk_level == "high":
+            raise ValueError("long-tail cases cannot be high risk")
+        return self
+
+    @field_validator("task_type")
+    @classmethod
+    def validate_registered_track(cls, value: str) -> str:
+        if not is_registered_track(value):
+            raise ValueError("unknown evaluation track")
+        return value
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> EvalCase:
@@ -61,6 +93,7 @@ class RuntimeCaseInput(Contract):
 
 class NormalizedTrace(Contract):
     case_id: str
+    run_id: str | None = None
     route: str | None = None
     intent: str | None = None
     next_action: str | None = None

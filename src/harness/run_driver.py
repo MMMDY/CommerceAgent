@@ -103,6 +103,7 @@ class AgentLoopCaseRuntime:
                 evidence_ids=last.decision.evidence_ids if last and last.decision else (),
                 response=last.response if last and last.response else "",
                 status=_run_trace_status(run.exit_reason),
+                run_id=str(plan.context.run_id),
             )
         result = self._loop.run_step(
             context=plan.context,
@@ -123,6 +124,7 @@ class AgentLoopCaseRuntime:
             evidence_ids=decision.evidence_ids if decision else (),
             response=result.response or "",
             status=_trace_status(result.status),
+            run_id=str(plan.context.run_id),
         )
 
 
@@ -131,6 +133,13 @@ class DrivenCase:
     trace: NormalizedTrace
     hard_eval: HardEvalResult
     runtime_error: str | None = None
+    e2e_latency_ms: int | None = None
+    agent_invocation_count: int | None = None
+    agent_input_tokens: int | None = None
+    agent_output_tokens: int | None = None
+    agent_total_tokens: int | None = None
+    agent_cost_microusd: int | None = None
+    agent_usage_estimated_count: int | None = None
 
 
 class RunDriver:
@@ -198,7 +207,21 @@ class RunDriver:
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
         trace = self._traces.normalize(case_id=case.id, trace=runtime_trace)
-        return DrivenCase(trace=trace, hard_eval=evaluate(case, trace), runtime_error=error)
+        return DrivenCase(
+            trace=trace,
+            hard_eval=evaluate(case, trace),
+            runtime_error=error,
+            # The Runtime owns timing semantics.  Do not measure the driver's
+            # thread-pool overhead here: deterministic fixture reports must be
+            # reproducible, and a wrapper's wall clock is not model latency.
+            e2e_latency_ms=runtime_trace.e2e_latency_ms,
+            agent_invocation_count=runtime_trace.model_invocation_count,
+            agent_input_tokens=runtime_trace.input_tokens,
+            agent_output_tokens=runtime_trace.output_tokens,
+            agent_total_tokens=runtime_trace.total_tokens,
+            agent_cost_microusd=runtime_trace.cost_microusd,
+            agent_usage_estimated_count=runtime_trace.usage_estimated_count,
+        )
 
 
 def _trace_status(status: StepStatus) -> str:

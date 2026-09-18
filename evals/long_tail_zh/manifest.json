@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "long_tail_zh",
+  "version": "2026-09-17.v1",
+  "status": "frozen-candidate",
+  "track_counts": {"long_tail_response_v1": 6},
+  "case_count": 6,
+  "generator": "template-generator-v1",
+  "generator_config_hash": "sha256:long-tail-generator-v1",
+  "critic": "synthetic-critic-v1",
+  "critic_config_hash": "sha256:895582577e80423a2c233fd5a67ceebfc3daa7c9b434554264d42ee59c501f0d",
+  "license": "project-owned",
+  "requires_human_approval_before_skill": true,
+  "seed_family_splits": {
+    "development": ["low_risk_social", "greeting", "thanks"],
+    "test": ["capability", "mixed_social_capability"]
+  }
+}

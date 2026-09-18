@@ -13,7 +13,7 @@ import httpx
 
 from src.config import Settings
 from src.guardrails.trust import sanitize
-from src.protocols import Decision, IntentClassification, PromptView, RoutingPromptView
+from src.protocols import Decision, IntentClassification, PromptView, RoutingPromptView, TokenUsage
 
 
 class ModelGatewayError(RuntimeError):
@@ -26,13 +26,40 @@ class ModelDecision:
     latency_ms: int
     repaired: bool = False
     usage_tokens: int | None = None
+    token_usage: TokenUsage | None = None
+
+    @property
+    def normalized_token_usage(self) -> TokenUsage | None:
+        """Return the structured usage contract while preserving old callers."""
+
+        if self.token_usage is not None:
+            return self.token_usage
+        if self.usage_tokens is None:
+            return None
+        return TokenUsage(total_tokens=self.usage_tokens)
+
+
+@dataclass(frozen=True, slots=True)
+class ClassificationResult:
+    """One classifier request including provider accounting metadata."""
+
+    classification: IntentClassification
+    latency_ms: int
+    token_usage: TokenUsage | None = None
+    repaired: bool = False
+
+    @property
+    def intent(self) -> str:
+        """Compatibility accessor for direct gateway smoke tests."""
+
+        return self.classification.intent
 
 
 class ModelGateway:
     def decide(self, prompt: PromptView) -> ModelDecision:
         raise NotImplementedError
 
-    def classify(self, prompt: RoutingPromptView) -> IntentClassification:
+    def classify(self, prompt: RoutingPromptView) -> ClassificationResult:
         raise NotImplementedError
 
     def conservative_decision_token_charge(self) -> int:
@@ -136,15 +163,22 @@ class OpenAICompatibleGateway(ModelGateway):
         except httpx.HTTPError as error:
             raise ModelGatewayError("model provider request failed") from error
 
-    def classify(self, prompt: RoutingPromptView) -> IntentClassification:
+    def classify(self, prompt: RoutingPromptView) -> ClassificationResult:
         instruction = (
             "Return exactly one JSON object and no prose or markdown. "
-            "Required fields: intent, risk_hint, route_hint, confidence, required_slots. "
-            "risk_hint must be read_only, write, or unknown; confidence must be 0 through 1. "
+            "Required fields: intent, risk_hint, route_hint, confidence, domain_confidence, "
+            "risk_confidence, required_slots, domain, request_risk_level, alternatives. "
+            "All confidence fields must be 0 through 1. confidence is overall; "
+            "domain_confidence is only for domain and risk_confidence is only for content risk. "
+            "domain must be commerce, social, capability, unsupported, or unknown; "
+            "request_risk_level must be low, medium, high, or unknown; "
+            "alternatives must be a list of intent strings. "
             "Never return execution_mode, workflow_id, tool calls, identities, scopes, tokens, "
             "or policy values."
         )
         last_error: Exception | None = None
+        started = perf_counter()
+        observed_usage: list[TokenUsage | None] = []
         for repair in (False, True):
             payload = {
                 "model": self._classifier_model,
@@ -185,8 +219,25 @@ class OpenAICompatibleGateway(ModelGateway):
                     api_key=self._classifier_api_key,
                     payload=payload,
                 )
-                content = response.json()["choices"][0]["message"]["content"]
-                return IntentClassification.model_validate_json(content.strip())
+                body = response.json()
+                observed_usage.append(
+                    _normalize_token_usage(body.get("usage")) if isinstance(body, dict) else None
+                )
+                content = body["choices"][0]["message"]["content"]
+                classification = IntentClassification.model_validate_json(content.strip())
+                combined_usage = _combine_token_usage(observed_usage)
+                if combined_usage is None:
+                    combined_usage = TokenUsage(
+                        total_tokens=self._classifier_max_tokens,
+                        estimated=True,
+                        provider_usage_version="conservative-v1",
+                    )
+                return ClassificationResult(
+                    classification=classification,
+                    latency_ms=max(0, round((perf_counter() - started) * 1000)),
+                    token_usage=combined_usage,
+                    repaired=repair,
+                )
             except (KeyError, TypeError, ValueError, httpx.HTTPError) as error:
                 last_error = error
         raise ModelGatewayError("intent classification is invalid or unavailable") from last_error
@@ -231,16 +282,21 @@ class OpenAICompatibleGateway(ModelGateway):
             ],
         }
         response = self._post(payload)
-        content = response.json()["choices"][0]["message"]["content"]
-        usage = response.json().get("usage")
-        usage_tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
-        if not isinstance(usage_tokens, int) or usage_tokens < 0:
-            usage_tokens = None
+        body = response.json()
+        content = body["choices"][0]["message"]["content"]
+        usage = _normalize_token_usage(body.get("usage")) if isinstance(body, dict) else None
+        if usage is None:
+            usage = TokenUsage(
+                total_tokens=self.conservative_decision_token_charge(),
+                estimated=True,
+                provider_usage_version="conservative-v1",
+            )
         return ModelDecision(
             decision=self._parse_decision(content, prompt),
             latency_ms=round((perf_counter() - started) * 1000),
             repaired=repair,
-            usage_tokens=usage_tokens,
+            usage_tokens=usage.total_tokens if usage else None,
+            token_usage=usage,
         )
 
     def _post(self, payload: dict[str, object]) -> httpx.Response:
@@ -289,3 +345,78 @@ class OpenAICompatibleGateway(ModelGateway):
                 confidence=0,
                 response=rationale,
             )
+
+
+def _normalize_token_usage(raw: object) -> TokenUsage | None:
+    """Normalize common OpenAI-compatible usage payloads without inventing counts."""
+
+    if not isinstance(raw, Mapping):
+        return None
+
+    input_tokens = _non_negative_int(raw.get("input_tokens", raw.get("prompt_tokens")))
+    output_tokens = _non_negative_int(raw.get("output_tokens", raw.get("completion_tokens")))
+    total_tokens = _non_negative_int(raw.get("total_tokens"))
+    cached_input_tokens = _non_negative_int(raw.get("cached_input_tokens"))
+    reasoning_tokens = _non_negative_int(raw.get("reasoning_tokens"))
+
+    prompt_details = raw.get("prompt_tokens_details")
+    if cached_input_tokens is None and isinstance(prompt_details, Mapping):
+        cached_input_tokens = _non_negative_int(prompt_details.get("cached_tokens"))
+    completion_details = raw.get("completion_tokens_details")
+    if reasoning_tokens is None and isinstance(completion_details, Mapping):
+        reasoning_tokens = _non_negative_int(completion_details.get("reasoning_tokens"))
+
+    provider_usage_version = raw.get("provider_usage_version")
+    if not isinstance(provider_usage_version, str) or not provider_usage_version.strip():
+        provider_usage_version = None
+    if all(
+        value is None
+        for value in (
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            cached_input_tokens,
+            reasoning_tokens,
+        )
+    ):
+        return None
+    return TokenUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cached_input_tokens=cached_input_tokens,
+        reasoning_tokens=reasoning_tokens,
+        total_tokens=total_tokens,
+        estimated=any(value is None for value in (input_tokens, output_tokens, total_tokens)),
+        provider_usage_version=provider_usage_version,
+    )
+
+
+def _combine_token_usage(attempts: Sequence[TokenUsage | None]) -> TokenUsage | None:
+    """Combine billed repair attempts without turning missing fields into zero."""
+
+    if not attempts or any(item is None for item in attempts):
+        return None
+    usages = tuple(item for item in attempts if item is not None)
+
+    def combined(name: str) -> int | None:
+        values = [getattr(item, name) for item in usages]
+        if any(value is None for value in values):
+            return None
+        return sum(value or 0 for value in values)
+
+    versions = {item.provider_usage_version for item in usages}
+    return TokenUsage(
+        input_tokens=combined("input_tokens"),
+        output_tokens=combined("output_tokens"),
+        cached_input_tokens=combined("cached_input_tokens"),
+        reasoning_tokens=combined("reasoning_tokens"),
+        total_tokens=combined("total_tokens"),
+        estimated=any(item.estimated for item in usages),
+        provider_usage_version=(versions.pop() if len(versions) == 1 else "aggregate-v1"),
+    )
+
+
+def _non_negative_int(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value

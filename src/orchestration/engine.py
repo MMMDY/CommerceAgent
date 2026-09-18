@@ -145,9 +145,20 @@ class OrchestrationEngine:
             routes.select_route(context=context, decision=decision)
             state = dict(context.state)
             state["route_reason"] = decision.reason_code
+            state["response_policy"] = decision.response_policy.value
+            state["request_domain"] = decision.request_domain.value
+            state["request_risk_level"] = decision.request_risk_level.value
             return context.model_copy(
                 update={"status": RunStatus.WAITING_HUMAN, "state": state}
             )
+        if decision.outcome is RouteOutcome.ASK_USER:
+            routes.select_route(context=context, decision=decision)
+            state = dict(context.state)
+            state["route_reason"] = decision.reason_code
+            state["response_policy"] = decision.response_policy.value
+            state["request_domain"] = decision.request_domain.value
+            state["request_risk_level"] = decision.request_risk_level.value
+            return context.model_copy(update={"status": RunStatus.WAITING_USER, "state": state})
         assert decision.execution_mode is not None
         assert decision.workflow_id is not None
         assert decision.workflow_version is not None
@@ -158,6 +169,9 @@ class OrchestrationEngine:
         routes.select_route(context=context, decision=decision)
         state = dict(context.state)
         state["route_reason"] = decision.reason_code
+        state["response_policy"] = decision.response_policy.value
+        state["request_domain"] = decision.request_domain.value
+        state["request_risk_level"] = decision.request_risk_level.value
         status = (
             RunStatus.RUNNING_READONLY
             if decision.execution_mode.value == "readonly_loop"

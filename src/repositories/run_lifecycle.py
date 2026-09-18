@@ -63,7 +63,7 @@ class RunLifecycleRepository:
                         "(run_id, conversation_id, parent_run_id, tenant_id, actor_ref, status, "
                         "execution_mode, workflow_id, workflow_version, policy_version, "
                         "model_config_hash, prompt_version, current_step, step_count, max_steps, "
-                        "deadline_at, created_at, updated_at) "
+                        "deadline_at, accepted_at, created_at, updated_at) "
                         "SELECT CAST(:run_id AS uuid), conversation.id, "
                         "CAST(:parent_run_id AS uuid), "
                         "CAST(:tenant_id AS varchar(64)), CAST(:actor_ref AS varchar(128)), "
@@ -74,7 +74,8 @@ class RunLifecycleRepository:
                         "CAST(:model_config_hash AS varchar(80)), "
                         "CAST(:prompt_version AS varchar(64)), CAST(:current_step AS varchar(64)), "
                         "0, CAST(:max_steps AS integer), CAST(:deadline_at AS timestamptz), "
-                        "CAST(:now AS timestamptz), CAST(:now AS timestamptz) "
+                        "CAST(:now AS timestamptz), CAST(:now AS timestamptz), "
+                        "CAST(:now AS timestamptz) "
                         "FROM conversation.conversations AS conversation "
                         "WHERE conversation.id = CAST(:conversation_id AS uuid) "
                         "AND conversation.tenant_id = CAST(:tenant_id AS varchar(64)) "
@@ -147,6 +148,7 @@ class RunLifecycleRepository:
             connection.execute(
                 text(
                     "UPDATE runtime.agent_runs SET status = 'cancelled', "
+                    "terminal_at = COALESCE(terminal_at, now()), "
                     "current_step = 'terminal', terminal_reason = :reason, updated_at = now() "
                     "WHERE run_id = :run_id AND tenant_id = :tenant_id AND status = 'created'"
                 ),
@@ -188,6 +190,18 @@ class RunRoutingRepository:
                 "UPDATE runtime.agent_runs SET status = 'waiting_human', "
                 "current_step = 'terminal', "
                 "terminal_reason = :reason, updated_at = now() "
+                "WHERE run_id = :run_id AND tenant_id = :tenant_id "
+                "AND status IN ('created', 'routing') AND execution_mode IS NULL"
+            )
+            parameters = {
+                "run_id": context.run_id,
+                "tenant_id": context.tenant_id,
+                "reason": decision.reason_code,
+            }
+        elif decision.outcome is RouteOutcome.ASK_USER:
+            statement = text(
+                "UPDATE runtime.agent_runs SET status = 'waiting_user', "
+                "current_step = 'clarify', terminal_reason = :reason, updated_at = now() "
                 "WHERE run_id = :run_id AND tenant_id = :tenant_id "
                 "AND status IN ('created', 'routing') AND execution_mode IS NULL"
             )

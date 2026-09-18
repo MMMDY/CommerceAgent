@@ -38,3 +38,20 @@ def test_classifier_configuration_requires_equal_agent_connection_and_temperatur
 
 def test_classifier_configuration_accepts_explicit_matching_aliases() -> None:
     assert _settings().classifier_configuration_is_valid()
+
+
+def test_next_generation_feature_flags_are_disabled_by_default() -> None:
+    settings = _settings()
+    assert settings.enable_routing_v2 is False
+    assert settings.enable_conversational_fallback is False
+    assert settings.enable_safety_router_v2 is False
+    assert settings.enable_failure_attribution is False
+    assert settings.enable_experience_skills is False
+    assert settings.enable_skill_shadow is False
+    assert settings.enable_skill_canary is False
+
+
+def test_next_generation_feature_flags_can_be_enabled_explicitly() -> None:
+    settings = _settings(enable_routing_v2=True, enable_skill_shadow=True)
+    assert settings.enable_routing_v2 is True
+    assert settings.enable_skill_shadow is True

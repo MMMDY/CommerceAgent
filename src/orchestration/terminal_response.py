@@ -80,6 +80,15 @@ def publish_terminal_response(
             reason=stable_reason,
         )
     if published:
+        try:
+            runs.mark_response_published(
+                run_id=context.run_id,
+                tenant_id=context.tenant_id,
+            )
+        except Exception:
+            # The response itself is already durable; timing metadata must not
+            # turn a successful user-visible publication into a failed run.
+            pass
         runs.append_event(
             run_id=context.run_id,
             tenant_id=context.tenant_id,
@@ -185,7 +194,12 @@ def _order_partial_result(context: RunContext) -> str:
     status = order.get("status")
     eta = order.get("eta")
     tracking = order.get("tracking_id")
-    if not all(isinstance(value, str) and value for value in (order_id, status)):
+    if (
+        not isinstance(order_id, str)
+        or not order_id
+        or not isinstance(status, str)
+        or not status
+    ):
         return ""
     details = f"订单 {order_id} 已查询到：当前{_status_label(status)}"
     if isinstance(eta, str) and eta:

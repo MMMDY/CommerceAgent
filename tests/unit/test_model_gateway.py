@@ -67,6 +67,77 @@ def test_gateway_parses_decision_without_exposing_authorization() -> None:
     result = OpenAICompatibleGateway(settings, client).decide(_prompt())
     assert result.decision.response == "ok"
     assert seen["path"] == "/v1/chat/completions"
+    assert result.normalized_token_usage is not None
+    assert result.normalized_token_usage.estimated is True
+    assert result.normalized_token_usage.total_tokens == settings.model_max_tokens
+
+
+def test_gateway_normalizes_detailed_provider_usage() -> None:
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": (
+                                    '{"type":"respond","intent":"x","route":"r",'
+                                    '"confidence":1,"response":"ok"}'
+                                )
+                            }
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 100,
+                        "completion_tokens": 20,
+                        "total_tokens": 120,
+                        "prompt_tokens_details": {"cached_tokens": 10},
+                        "completion_tokens_details": {"reasoning_tokens": 5},
+                    },
+                },
+            )
+        )
+    )
+    result = OpenAICompatibleGateway(_settings(), client).decide(_prompt())
+    assert result.normalized_token_usage is not None
+    assert result.normalized_token_usage.model_dump(exclude={"schema_version"}) == {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "cached_input_tokens": 10,
+        "reasoning_tokens": 5,
+        "total_tokens": 120,
+        "estimated": False,
+        "provider_usage_version": None,
+    }
+
+
+@pytest.mark.parametrize("usage", (None, {}, {"prompt_tokens": "100"}, {"total_tokens": -1}))
+def test_gateway_marks_invalid_or_missing_usage_as_conservative_estimate(usage: object) -> None:
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": (
+                                    '{"type":"respond","intent":"x","route":"r",'
+                                    '"confidence":1,"response":"ok"}'
+                                )
+                            }
+                        }
+                    ],
+                    "usage": usage,
+                },
+            )
+        )
+    )
+    result = OpenAICompatibleGateway(_settings(), client).decide(_prompt())
+    assert result.normalized_token_usage is not None
+    assert result.normalized_token_usage.estimated is True
+    assert result.normalized_token_usage.total_tokens == _settings().model_max_tokens
 
 
 def test_gateway_config_hash_does_not_depend_on_api_key() -> None:

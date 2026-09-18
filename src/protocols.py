@@ -65,6 +65,48 @@ class RiskHint(StrEnum):
     UNKNOWN = "unknown"
 
 
+class RequestDomain(StrEnum):
+    """Coarse request domain used by the next-generation router."""
+
+    COMMERCE = "commerce"
+    SOCIAL = "social"
+    CAPABILITY = "capability"
+    UNSUPPORTED = "unsupported"
+    UNKNOWN = "unknown"
+
+
+class RequestRiskLevel(StrEnum):
+    """Content and user-safety risk, distinct from tool side-effect risk."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    UNKNOWN = "unknown"
+
+
+class ResponsePolicy(StrEnum):
+    """Code-owned response behavior selected after risk and intent triage."""
+
+    EXECUTE = "execute"
+    ASK_USER = "ask_user"
+    CONVERSATIONAL_RESPONSE = "conversational_response"
+    GRACEFUL_UNSUPPORTED = "graceful_unsupported"
+    SAFETY_DEESCALATION = "safety_deescalation"
+    HUMAN_HANDOFF = "human_handoff"
+
+
+class TokenUsage(Contract):
+    """Provider-normalized token usage; missing provider fields remain null."""
+
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    cached_input_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    estimated: bool = False
+    provider_usage_version: str | None = Field(default=None, min_length=1, max_length=32)
+
+
 class IntentClassification(Contract):
     """Model-produced candidate; it never carries an execution mode."""
 
@@ -72,7 +114,15 @@ class IntentClassification(Contract):
     risk_hint: RiskHint
     route_hint: str = Field(min_length=1, max_length=128)
     confidence: float = Field(ge=0, le=1)
+    # These dimensions are optional for backward-compatible providers.  The
+    # router derives conservative values from the legacy overall confidence
+    # when a provider has not yet emitted them.
+    domain_confidence: float | None = Field(default=None, ge=0, le=1)
+    risk_confidence: float | None = Field(default=None, ge=0, le=1)
     required_slots: tuple[str, ...] = ()
+    domain: RequestDomain = RequestDomain.UNKNOWN
+    request_risk_level: RequestRiskLevel = RequestRiskLevel.UNKNOWN
+    alternatives: tuple[str, ...] = ()
 
 
 class StatePatch(Contract):
@@ -174,6 +224,10 @@ class EventType(StrEnum):
     MUTATION_UNCERTAIN = "mutation_uncertain"
     HANDOFF_CREATED = "handoff_created"
     HANDOFF_RESOLVED = "handoff_resolved"
+    SAFETY_ROUTED = "safety_routed"
+    ROUTING_SHADOW_COMPARED = "routing_shadow_compared"
+    SKILL_MATCHED = "skill_matched"
+    RELEASE_ASSIGNED = "release_assigned"
 
 
 class DomainEvent(Contract):

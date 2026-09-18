@@ -69,6 +69,11 @@ class RunSnapshot:
     conversation_id: UUID | None = None
     step_count: int = 0
     terminal_reason: str | None = None
+    accepted_at: datetime | None = None
+    dispatch_started_at: datetime | None = None
+    terminal_at: datetime | None = None
+    response_published_at: datetime | None = None
+    total_cost_microusd: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +153,8 @@ class RunRepository:
         actor_clause = " AND actor_ref = :actor_id" if actor_id is not None else ""
         statement = text(
             "SELECT run_id, tenant_id, status, current_step, row_version, last_checkpoint_seq, "
-            "conversation_id, step_count, terminal_reason "
+            "conversation_id, step_count, terminal_reason, accepted_at, dispatch_started_at, "
+            "terminal_at, response_published_at, total_cost_microusd "
             "FROM runtime.agent_runs WHERE run_id = :run_id AND tenant_id = :tenant_id"
             + actor_clause
         )
@@ -158,6 +164,30 @@ class RunRepository:
                 {"run_id": run_id, "tenant_id": tenant_id, "actor_id": actor_id},
             ).one_or_none()
         return RunSnapshot(**dict(row._mapping)) if row is not None else None
+
+    def mark_dispatch_started(self, *, run_id: UUID, tenant_id: str) -> None:
+        """Record the first worker dispatch without changing lifecycle state."""
+
+        with self._engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE runtime.agent_runs SET dispatch_started_at = COALESCE(dispatch_started_at, now()), "
+                    "updated_at = now() WHERE run_id = :run_id AND tenant_id = :tenant_id"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id},
+            )
+
+    def mark_response_published(self, *, run_id: UUID, tenant_id: str) -> None:
+        """Record the first successful user-visible response publication."""
+
+        with self._engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE runtime.agent_runs SET response_published_at = COALESCE(response_published_at, now()), "
+                    "updated_at = now() WHERE run_id = :run_id AND tenant_id = :tenant_id"
+                ),
+                {"run_id": run_id, "tenant_id": tenant_id},
+            )
 
     def terminal_runs_without_response(
         self, *, tenant_id: str, limit: int = 100
@@ -218,14 +248,14 @@ class RunRepository:
             ).first()
             if owned is None:
                 raise ValueError("run_not_found")
-            row = connection.execute(
+            sequence_value = connection.execute(
                 text(
                     "SELECT COALESCE(MAX(event_seq), 0) + 1 FROM runtime.run_events "
                     "WHERE run_id = :run_id"
                 ),
                 {"run_id": run_id, "tenant_id": tenant_id},
-            ).first()
-            sequence = int(row[0])
+            ).scalar_one()
+            sequence = int(sequence_value)
             connection.execute(
                 text(
                     "INSERT INTO runtime.run_events "
@@ -255,6 +285,7 @@ class RunRepository:
             connection.execute(
                 text(
                     "UPDATE runtime.agent_runs SET terminal_reason = :reason, "
+                    "terminal_at = COALESCE(terminal_at, now()), "
                     "updated_at = now(), row_version = row_version + 1 "
                     "WHERE run_id = :run_id AND tenant_id = :tenant_id"
                 ),
@@ -387,6 +418,9 @@ class RunRepository:
                 text(
                     "UPDATE runtime.agent_runs SET status = :status, current_step = :step, "
                     "step_count = step_count + 1, last_checkpoint_seq = :seq, "
+                    "terminal_at = CASE WHEN CAST(:status AS varchar(32)) IN "
+                    "('completed', 'failed', 'cancelled', 'expired') "
+                    "THEN COALESCE(terminal_at, now()) ELSE terminal_at END, "
                     "row_version = row_version + 1, updated_at = now() "
                     "WHERE run_id = :run_id AND tenant_id = :tenant_id AND row_version = :version"
                 ),

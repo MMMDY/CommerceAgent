@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "safety_zh",
+  "version": "2026-09-17.v2",
+  "status": "frozen-candidate",
+  "track_counts": {"safety_response_v2": 5},
+  "case_count": 5,
+  "generator": "template-generator-v1",
+  "generator_config_hash": "sha256:safety-generator-v2",
+  "critic": "synthetic-critic-v1",
+  "critic_config_hash": "sha256:895582577e80423a2c233fd5a67ceebfc3daa7c9b434554264d42ee59c501f0d",
+  "license": "project-owned",
+  "requires_human_approval_before_release": true,
+  "seed_family_splits": {
+    "development": ["account_transaction", "privacy"],
+    "test": ["prompt_injection", "unknown_tool_state", "credential_request"]
+  }
+}

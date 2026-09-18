@@ -7,12 +7,14 @@ from collections.abc import Sequence
 from time import perf_counter
 from typing import Protocol
 
-from src.models.gateway import ModelGatewayError
-from src.protocols import IntentClassification, RoutingPromptView, RunContext
+from src.models.gateway import ClassificationResult, ModelGatewayError
+from src.protocols import IntentClassification, RoutingPromptView, RunContext, TokenUsage
 
 
 class IntentClassifierGateway(Protocol):
-    def classify(self, prompt: RoutingPromptView) -> IntentClassification: ...
+    def classify(
+        self, prompt: RoutingPromptView
+    ) -> IntentClassification | ClassificationResult: ...
 
 
 class ClassificationInvocationRecorder(Protocol):
@@ -26,6 +28,7 @@ class ClassificationInvocationRecorder(Protocol):
         model: str,
         config_hash: str,
         latency_ms: int,
+        token_usage: TokenUsage | None,
     ) -> None: ...
 
 
@@ -45,7 +48,15 @@ class IntentClassifier:
         self, *, context: RunContext, prompt: RoutingPromptView
     ) -> IntentClassification:
         started = perf_counter()
-        result = self._gateway.classify(prompt)
+        raw_result = self._gateway.classify(prompt)
+        if isinstance(raw_result, ClassificationResult):
+            result = raw_result.classification
+            latency_ms = raw_result.latency_ms
+            token_usage = raw_result.token_usage
+        else:
+            result = raw_result
+            latency_ms = max(0, round((perf_counter() - started) * 1000))
+            token_usage = None
         if self._invocations is not None:
             self._invocations.record_classification_success(
                 context=context,
@@ -58,7 +69,8 @@ class IntentClassifier:
                     "classifier_config_hash",
                     getattr(self._gateway, "config_hash", "unknown"),
                 ),
-                latency_ms=max(0, round((perf_counter() - started) * 1000)),
+                latency_ms=latency_ms,
+                token_usage=token_usage,
             )
         return result
 

@@ -22,6 +22,7 @@ from src.protocols import (
     RoutingPromptView,
     RunContext,
     RunStatus,
+    TokenUsage,
 )
 from src.repositories.model_invocations import ModelInvocationRepository
 from src.repositories.run_lifecycle import RunLifecycleRepository, RunRoutingRepository
@@ -302,6 +303,13 @@ def test_model_invocation_records_actual_gateway_and_prompt_fingerprints(
                 response="ok",
             ),
             latency_ms=3,
+            token_usage=TokenUsage(
+                input_tokens=10,
+                output_tokens=4,
+                cached_input_tokens=2,
+                reasoning_tokens=1,
+                total_tokens=14,
+            ),
         ),
         provider="fake-provider",
         model="fake-model",
@@ -310,7 +318,8 @@ def test_model_invocation_records_actual_gateway_and_prompt_fingerprints(
     with engine.connect() as connection:
         row = connection.execute(
             text(
-                "SELECT provider, model, model_config_hash, prompt_version, input_redacted_json "
+                "SELECT provider, model, model_config_hash, prompt_version, input_redacted_json, "
+                "input_tokens, output_tokens, cached_input_tokens, reasoning_tokens, total_tokens "
                 "FROM runtime.model_invocations WHERE run_id = :run_id"
             ),
             {"run_id": context.run_id},
@@ -322,6 +331,7 @@ def test_model_invocation_records_actual_gateway_and_prompt_fingerprints(
         "prompt-view-v7",
     )
     assert "conversation" not in row.input_redacted_json
+    assert tuple(row[5:]) == (10, 4, 2, 1, 14)
 
     ModelInvocationRepository(engine).record_classification_success(
         context=context,

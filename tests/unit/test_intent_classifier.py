@@ -65,6 +65,11 @@ def test_classifier_uses_explicit_profile_at_temperature_point_one() -> None:
         return httpx.Response(
             200,
             json={
+                "usage": {
+                    "prompt_tokens": 80,
+                    "completion_tokens": 20,
+                    "total_tokens": 100,
+                },
                 "choices": [
                     {
                         "message": {
@@ -84,6 +89,8 @@ def test_classifier_uses_explicit_profile_at_temperature_point_one() -> None:
     result = gateway.classify(_prompt())
 
     assert result.intent == "refund_request"
+    assert result.token_usage is not None
+    assert result.token_usage.total_tokens == 100
     assert seen["authorization"] == "Bearer secret"
     payload = seen["payload"]
     assert isinstance(payload, dict)
@@ -254,4 +261,5 @@ def test_intent_classifier_records_only_redacted_profile_metadata() -> None:
     assert result == expected
     assert records[0]["config_hash"] == "sha256:deterministic_fake_classifier"
     assert isinstance(records[0]["latency_ms"], int)
+    assert records[0]["token_usage"] is None
     assert "api_key" not in records[0]

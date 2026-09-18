@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     judge_api_key: SecretStr | None = None
     demo_mode: bool = True
     demo_actor_allowlist: str = Field(default="demo-user-001,demo-user-002")
+    internal_admin_token: SecretStr | None = None
+    internal_approver_token: SecretStr | None = None
+    enable_routing_v2: bool = False
+    enable_conversational_fallback: bool = False
+    enable_safety_router_v2: bool = False
+    enable_failure_attribution: bool = False
+    enable_experience_skills: bool = False
+    enable_skill_shadow: bool = False
+    enable_skill_canary: bool = False
+    enable_release_scheduler: bool = False
+    release_scheduler_interval_seconds: int = Field(default=60, ge=10, le=3600)
+    evaluation_case_cost_budget_microusd: int | None = Field(default=None, ge=0)
 
     @property
     def demo_actors(self) -> frozenset[str]:

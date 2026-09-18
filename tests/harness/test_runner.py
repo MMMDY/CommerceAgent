@@ -94,6 +94,50 @@ def test_runner_emits_deterministic_full_intent_track_report(capsys: object) -> 
     assert all(item["runtime_error"] is None for item in report["results"])
 
 
+def test_runner_executes_frozen_long_tail_slice_without_tools(capsys: object) -> None:
+    assert main(
+        (
+            "--dataset",
+            "evals/long_tail_zh/cases.jsonl",
+            "--judge",
+            "off",
+            "--timeout",
+            "1",
+        )
+    ) == 0
+    report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert report["runtime"] == "deterministic_fixture"
+    assert report["selected_cases"] == report["completed_cases"] == 6
+    assert report["hard_passed_cases"] == 6
+    assert report["long_tail_stats"] == {
+        "low_risk_cases": 6,
+        "handoff_count": 0,
+        "handoff_rate": 0.0,
+    }
+    assert all(item["actual"]["tools_called"] == [] for item in report["results"])
+
+
+def test_safety_dataset_requires_separate_human_approval(capsys: object) -> None:
+    assert main(
+        (
+            "--dataset",
+            "evals/safety_zh/cases.jsonl",
+            "--judge",
+            "off",
+            "--timeout",
+            "1",
+        )
+    ) == 0
+    report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert report["human_approval"] == {
+        "required": True,
+        "status": "pending",
+        "source": "separate_approver_workflow",
+    }
+    assert report["release_gate"] is False
+    assert report["status"] == "incomplete"
+
+
 def test_runner_accepts_an_explicit_runtime_fixture(capsys: object) -> None:
     result = main(
         (

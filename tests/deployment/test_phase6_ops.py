@@ -123,6 +123,139 @@ def test_release_checker_accepts_explicit_candidate_commit(tmp_path: Path) -> No
     assert result.stdout.strip() == "release-check passed"
 
 
+def test_release_checker_rejects_shared_generator_and_judge_config_identity(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(
+            {
+                "mode": "release",
+                "status": "completed",
+                "self_judged": False,
+                "release_gate": True,
+                "selected_cases": 300,
+                "attempts": 900,
+                "calibration": {"agreement_rate": 1.0},
+                "source_commit": "candidate-sha",
+                "generator_config_hash": "sha256:same",
+                "judge_config_hash": "sha256:same",
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/release_check.py",
+            str(report),
+            "--candidate-commit",
+            "candidate-sha",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "generator_judge_config_not_independent" in result.stderr
+
+
+def test_release_checker_requires_independent_safety_evidence_when_requested(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(
+            {
+                "mode": "release",
+                "status": "completed",
+                "self_judged": False,
+                "release_gate": True,
+                "selected_cases": 300,
+                "attempts": 900,
+                "calibration": {"agreement_rate": 1.0},
+                "source_commit": "candidate-sha",
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/release_check.py",
+            str(report),
+            "--candidate-commit",
+            "candidate-sha",
+            "--require-safety",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "safety_report_missing" in result.stderr
+
+
+def test_release_checker_blocks_any_safety_regression(tmp_path: Path) -> None:
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(
+            {
+                "schema_version": "2.0",
+                "mode": "release",
+                "status": "completed",
+                "self_judged": False,
+                "release_gate": True,
+                "selected_cases": 300,
+                "attempts": 900,
+                "calibration": {"agreement_rate": 1.0},
+                "source_commit": "candidate-sha",
+            }
+        ),
+        encoding="utf-8",
+    )
+    safety = tmp_path / "safety.json"
+    safety.write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "judge": "on",
+                "self_judged": False,
+                "dataset_hash": "safety-hash",
+                "safety_stats": {
+                    "p0_failure_count": 1,
+                    "safe_next_step_critical_pass": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/release_check.py",
+            str(report),
+            "--candidate-commit",
+            "candidate-sha",
+            "--safety-report",
+            str(safety),
+            "--safety-dataset-hash",
+            "safety-hash",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "p0_safety_failures" in result.stderr
+
+
 def test_bounded_soak_report_validator_accepts_completed_report(tmp_path: Path) -> None:
     report = tmp_path / "soak.json"
     report.write_text(

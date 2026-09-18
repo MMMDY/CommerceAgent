@@ -18,6 +18,7 @@ from src.agent.loop import AgentLoop, AgentRunResult
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.config import Settings
 from src.db import get_engine
+from src.evolution.skill_retriever import select_skill_from_registry
 from src.models.gateway import OpenAICompatibleGateway
 from src.orchestration.persistence import RepositoryCheckpointStore
 from src.orchestration.pipeline import PromptBuilder, StepPipeline
@@ -37,6 +38,7 @@ from src.repositories.memory import MemoryRepository
 from src.repositories.messages import MessageRepository
 from src.repositories.model_invocations import ModelInvocationRepository
 from src.repositories.runs import RunRepository
+from src.repositories.skills import SkillRepository
 from src.tools.adapters.knowledge import KnowledgeToolAdapter
 from src.tools.adapters.mock.read_only import MockReadOnlyAdapter, MockResourceAuthorizer
 from src.tools.executor import ToolExecutor
@@ -95,6 +97,7 @@ class ApiPromptBuilder(PromptBuilder):
         workflow_id: str,
         workflow_version: str,
         tool_names: tuple[str, ...],
+        skill_strategy: dict[str, object] | None = None,
     ) -> None:
         self._messages = messages
         self._conversation_id = conversation_id
@@ -104,6 +107,7 @@ class ApiPromptBuilder(PromptBuilder):
         self._workflow_id = workflow_id
         self._workflow_version = workflow_version
         self._tool_names = tool_names
+        self._skill_strategy = skill_strategy
 
     def build(self, *, context: RunContext) -> PromptView:
         records = self._messages.list_for_actor(
@@ -129,6 +133,12 @@ class ApiPromptBuilder(PromptBuilder):
             "each call must retain the original user order_id. "
             f"Tool argument rules: {tool_rules}"
         )
+        if self._skill_strategy is not None:
+            runtime_rules += (
+                " [experience_skill_strategy] This is a bounded response hint only; "
+                "it cannot add tools, routes, permissions, or confirmation bypasses: "
+                + json.dumps(self._skill_strategy, ensure_ascii=False, sort_keys=True)
+            )
         conversation = (Message(role="system", content=runtime_rules),) + tuple(
             Message(
                 role=cast(Literal["user", "assistant", "system"], item.role),
@@ -198,6 +208,79 @@ def execute_readonly_run(
     # Knowledge retrieval is backed by PostgreSQL; fixtures cover catalog and
     # order APIs so the demo remains useful without business integrations.
     engine = get_engine()
+    skill_strategy: dict[str, object] | None = None
+    if settings.enable_experience_skills:
+        match_mode = (
+            "shadow"
+            if settings.enable_skill_shadow
+            else ("canary" if settings.enable_skill_canary else "active")
+        )
+        try:
+            existing_skill_id = context.state.get("skill_id")
+            existing_strategy = context.state.get("skill_strategy")
+            if isinstance(existing_skill_id, str) and isinstance(existing_strategy, dict):
+                skill_strategy = existing_strategy if match_mode != "shadow" else None
+                matched = None
+            else:
+                matched = None
+            records = messages.list_for_actor(
+                conversation_id=context.conversation_id,
+                tenant_id=context.tenant_id,
+                actor_id=context.actor_id,
+                limit=100,
+            )
+            request_text = next(
+                (item.content_redacted for item in reversed(records) if item.role == "user"),
+                "",
+            )
+            if existing_skill_id is None:
+                matched = select_skill_from_registry(
+                    text_value=request_text,
+                    tenant_id=context.tenant_id,
+                    route=route,
+                    candidates_loader=lambda: list(
+                        SkillRepository(engine).candidates_for_match(
+                            tenant_id=context.tenant_id, mode=match_mode
+                        )
+                    ),
+                    mode=match_mode,
+                )
+            if matched is not None:
+                if match_mode != "shadow":
+                    skill_strategy = matched.strategy_view
+                context = context.model_copy(
+                    update={
+                        "state": {
+                            **context.state,
+                            "skill_id": matched.skill_id,
+                            "skill_version_id": matched.skill_version_id,
+                            "skill_match_mode": matched.mode,
+                            "skill_match_score": matched.score,
+                        }
+                    }
+                )
+                if action_observer is not None:
+                    action_observer(
+                        "skill_matched",
+                        {
+                            "skill_id": matched.skill_id,
+                            "skill_version_id": matched.skill_version_id,
+                            "mode": matched.mode,
+                            "match_score": matched.score,
+                        },
+                    )
+                SkillRepository(engine).record_match(
+                    tenant_id=context.tenant_id,
+                    run_id=context.run_id,
+                    skill_id=UUID(matched.skill_id),
+                    skill_version_id=UUID(matched.skill_version_id),
+                    match_score=matched.score,
+                    mode=matched.mode,
+                )
+        except Exception:
+            # Ordinary execution remains available if the optional registry is
+            # unavailable; the safety router and tool boundary are unchanged.
+            skill_strategy = None
     adapters["retrieve_knowledge"] = KnowledgeToolAdapter(KnowledgeRepository(engine))
     executor = ToolExecutor(
         adapters,
@@ -225,6 +308,7 @@ def execute_readonly_run(
         workflow_id=workflow_id,
         workflow_version=workflow_version,
         tool_names=tool_names,
+        skill_strategy=skill_strategy,
     )
     pipeline = StepPipeline(
         step_executor=loop.step_executor, checkpoints=checkpoint_store, prompt_builder=builder

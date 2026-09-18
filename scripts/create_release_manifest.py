@@ -18,6 +18,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+
 ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_PARTS = {".env", ".env.example"}
 
@@ -61,22 +64,26 @@ def build_manifest(*, require_clean: bool) -> dict[str, Any]:
         path = ROOT / name
         if path.is_file():
             files[name] = _sha256(path)
-    migration_names = sorted(
-        name
-        for name in files
-        if name.startswith("infra/migrations/versions/") and name.endswith(".py")
+    # Include migration files present in a dirty workspace as well.  This
+    # keeps ``--allow-dirty`` useful during development and, more importantly,
+    # prevents a lexicographic filename from masquerading as Alembic's graph
+    # head when revisions are branched or renamed.
+    migration_root = ROOT / "infra" / "migrations" / "versions"
+    for path in migration_root.glob("*.py"):
+        name = path.relative_to(ROOT).as_posix()
+        files.setdefault(name, _sha256(path))
+    script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
+    migration_head = script.get_current_head()
+    head_script = script.get_revision(migration_head) if migration_head else None
+    migration_head_filename = (
+        Path(head_script.path).relative_to(ROOT).as_posix() if head_script is not None else None
     )
-    migration_head = None
-    if migration_names:
-        stem = Path(migration_names[-1]).stem
-        parts = stem.split("_")
-        migration_head = "_".join(parts[:2]) if len(parts) >= 2 else stem
     return {
         "schema_version": "1.0",
         "generated_at": datetime.now(UTC).isoformat(),
         "source_commit": _git("rev-parse", "HEAD"),
         "worktree_clean_at_generation": clean,
-        "migration_head_filename": migration_names[-1] if migration_names else None,
+        "migration_head_filename": migration_head_filename,
         "migration_head": migration_head,
         "files": files,
         "secret_policy": "credentials and .env values are excluded; only content hashes are stored",

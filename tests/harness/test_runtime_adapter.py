@@ -29,7 +29,11 @@ def test_fixture_manager_deep_copies_case_context() -> None:
 
 def test_trace_adapter_outputs_normalized_trace() -> None:
     trace = TraceAdapter().normalize(
-        case_id="intent_xxx", trace=RuntimeTrace("r", "x", "respond", {}, (), (), "ok", "complete")
+        case_id="intent_xxx",
+        trace=RuntimeTrace(
+            "r", "x", "respond", {}, (), (), "ok", "complete", "run-001"
+        ),
     )
     assert trace.case_id == "intent_xxx"
     assert trace.status == "complete"
+    assert trace.run_id == "run-001"

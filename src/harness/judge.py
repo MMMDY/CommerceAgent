@@ -21,7 +21,10 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.config import Settings
+from src.cost.calculator import CostCalculator
+from src.cost.models import ModelPricing
 from src.harness.schema import EvalCase, HardEvalResult, NormalizedTrace
+from src.protocols import TokenUsage
 
 
 class JudgeUnavailable(RuntimeError):
@@ -54,6 +57,8 @@ class JudgeResult:
     latency_ms: int | None = None
     usage_tokens: int | None = None
     rationale: str = ""
+    judge_cost_microusd: int | None = None
+    evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +69,24 @@ class JudgeConfig:
     self_judged: bool = False
     temperature: float = 0.0
     max_tokens: int = 1200
+
+    @property
+    def config_hash(self) -> str:
+        """Stable, secret-free identity for the Judge configuration."""
+
+        fingerprint = json.dumps(
+            {
+                "api_base": self.api_base,
+                "model": self.model,
+                "self_judged": self.self_judged,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "purpose": "rubric_judge",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return "sha256:" + hashlib.sha256(fingerprint.encode()).hexdigest()
 
     @classmethod
     def from_settings(cls, settings: Settings, *, mode: str) -> JudgeConfig:
@@ -108,6 +131,7 @@ class RubricJudge:
         rubric_path: Path | str = "evals/commerce_bench_zh/rubrics.json",
         client: httpx.Client | None = None,
         request: Callable[[dict[str, Any]], Mapping[str, Any]] | None = None,
+        pricing: ModelPricing | None = None,
     ) -> None:
         self.config = config
         self._rubrics = json.loads(Path(rubric_path).read_text(encoding="utf-8"))
@@ -115,6 +139,7 @@ class RubricJudge:
         self.prompt_hash = hashlib.sha256(self._system_prompt().encode()).hexdigest()
         self._client = client or httpx.Client(timeout=30)
         self._request = request
+        self._pricing = pricing
 
     def evaluate(
         self,
@@ -148,9 +173,21 @@ class RubricJudge:
                 input_hash,
             )
         started = perf_counter()
+        observed_usage: list[int | None] = []
+        observed_costs: list[int | None] = []
         for attempt in range(2):
             try:
-                raw = self._call(input_obj, repair=attempt == 1)
+                raw = dict(self._call(input_obj, repair=attempt == 1))
+                provider_usage = raw.pop("__commerce_agent_provider_usage__", None)
+                observed_usage.append(_usage({"usage": provider_usage}))
+                normalized_usage = _normalize_usage(provider_usage)
+                observed_costs.append(
+                    CostCalculator().total_microusd(
+                        usage=normalized_usage, pricing=self._pricing
+                    )
+                    if normalized_usage is not None
+                    else None
+                )
                 parsed = JudgeOutput.model_validate(raw)
                 result = self._normalize(parsed, case.id, rubric)
                 return JudgeResult(
@@ -165,8 +202,10 @@ class RubricJudge:
                     self.config.model,
                     input_hash,
                     round((perf_counter() - started) * 1000),
-                    _usage(raw),
+                    _complete_usage_sum(observed_usage),
                     result[4],
+                    judge_cost_microusd=_complete_optional_sum(observed_costs),
+                    evidence=result[5],
                 )
             except (ValidationError, ValueError, KeyError, TypeError, httpx.HTTPError):
                 continue
@@ -211,14 +250,17 @@ class RubricJudge:
         content = body["choices"][0]["message"]["content"]
         if not isinstance(content, str):
             raise ValueError("invalid judge content")
-        return cast(
-            Mapping[str, Any],
-            json.loads(content.strip().removeprefix("```json").removesuffix("```").strip()),
+        parsed = json.loads(
+            content.strip().removeprefix("```json").removesuffix("```").strip()
         )
+        if not isinstance(parsed, dict):
+            raise ValueError("judge output must be an object")
+        parsed["__commerce_agent_provider_usage__"] = body.get("usage")
+        return cast(Mapping[str, Any], parsed)
 
     def _normalize(
         self, output: JudgeOutput, case_id: str, rubric: Mapping[str, Any]
-    ) -> tuple[dict[str, int], float, tuple[str, ...], bool, str]:
+    ) -> tuple[dict[str, int], float, tuple[str, ...], bool, str, tuple[str, ...]]:
         if output.case_id != case_id or output.rubric_id != rubric["id"]:
             raise ValueError("judge identity mismatch")
         dimensions = {str(d["name"]): d for d in rubric.get("dimensions", [])}
@@ -236,7 +278,8 @@ class RubricJudge:
             and not critical_low
             and not violations
         )
-        return scores, round(weighted, 4), violations, passed, output.rationale[:120]
+        evidence = tuple(str(item)[:160] for item in output.evidence[:8])
+        return scores, round(weighted, 4), violations, passed, output.rationale[:120], evidence
 
     def _build_input(
         self,
@@ -361,3 +404,35 @@ def _usage(raw: Mapping[str, Any]) -> int | None:
         if isinstance(usage, Mapping) and isinstance(usage.get("total_tokens"), int)
         else None
     )
+
+
+def _complete_usage_sum(values: list[int | None]) -> int | None:
+    if not values or any(value is None for value in values):
+        return None
+    return sum(value or 0 for value in values)
+
+
+def _complete_optional_sum(values: list[int | None]) -> int | None:
+    if not values or any(value is None for value in values):
+        return None
+    return sum(value or 0 for value in values)
+
+
+def _normalize_usage(raw: Any) -> TokenUsage | None:
+    if not isinstance(raw, Mapping):
+        return None
+    values: dict[str, Any] = {}
+    aliases = {
+        "input_tokens": "prompt_tokens",
+        "output_tokens": "completion_tokens",
+        "total_tokens": "total_tokens",
+        "cached_input_tokens": "cached_tokens",
+        "reasoning_tokens": "reasoning_tokens",
+    }
+    for target, source in aliases.items():
+        value = raw.get(source)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            values[target] = value
+    if not values:
+        return None
+    return TokenUsage(**values)
