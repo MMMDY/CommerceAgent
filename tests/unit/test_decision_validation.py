@@ -71,6 +71,22 @@ def test_validator_rejects_system_fields_unknown_tools_and_non_tool_payloads() -
         )
 
 
+def test_validator_reports_missing_tool_arguments_separately_from_allowlist() -> None:
+    with pytest.raises(DecisionValidationError) as error:
+        DecisionValidator().validate(
+            decision=_decision(args={}),
+            boundary=DecisionBoundary(
+                route="order",
+                allowed_types=frozenset({DecisionType.CALL_TOOL}),
+                allowed_tools=frozenset({"get_order"}),
+                trusted_evidence_ids=frozenset(),
+            ),
+            tool_spec=_spec(),
+        )
+
+    assert error.value.error_code == "INVALID_TOOL_ARGUMENT"
+
+
 def test_registry_is_frozen_by_name_and_version() -> None:
     registry = ToolRegistry((_spec(),))
     assert registry.get(name="get_order", version="1") == _spec()

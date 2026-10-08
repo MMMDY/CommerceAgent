@@ -24,6 +24,7 @@ from src.harness.live_runtime import LiveCaseRuntime, LiveConfigurationError
 from src.harness.loader import CaseLoader
 from src.harness.report import build_report, write_report
 from src.harness.run_driver import RunDriver
+from src.harness.runner import _load_human_review_inputs
 from src.harness.schema import EvalCase
 from src.repositories.evaluations import EvaluationRepository
 
@@ -46,6 +47,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--actor-id", default="demo-user-001")
     parser.add_argument("--cost-budget-microusd", type=int)
     parser.add_argument(
+        "--human-safety-labels",
+        type=Path,
+        help="JSONL human review labels for reviewed safety error metrics",
+    )
+    parser.add_argument("--low-risk-false-rejection-threshold", type=float)
+    parser.add_argument("--high-risk-false-negative-threshold", type=float)
+    parser.add_argument(
         "--allow-live",
         action="store_true",
         help="required acknowledgement that this command may call external models and PostgreSQL",
@@ -61,6 +69,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--timeout must be positive")
     if args.mode == "release" and args.judge != "on":
         raise SystemExit("release mode requires --judge on")
+    human_safety_labels, review_thresholds = _load_human_review_inputs(args)
     loader = CaseLoader(args.dataset)
     cases = loader.load(track=args.track, case_id=args.case_id)
     eval_run_id = _parse_eval_id(args.eval_run_id)
@@ -271,6 +280,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode=args.mode,
             repetitions=args.repetitions,
             cancelled=cancelled,
+            human_safety_labels=human_safety_labels,
+            review_thresholds=review_thresholds,
         )
         report.update(
             {

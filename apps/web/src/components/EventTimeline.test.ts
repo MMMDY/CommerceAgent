@@ -14,6 +14,8 @@ describe("EventTimeline projection", () => {
 
   it("keeps labels readable and event details on the allowlist", () => {
     expect(eventLabel("safety_routed")).toBe("Safety Router 完成");
+    expect(eventLabel("terminal_response_publish_failed")).toBe("回复发布失败");
+    expect(eventStage("mutation_uncertain")).toBe("Guardrail");
     expect(eventLabel("unknown_event")).toBe("unknown_event");
     expect(safeEventDetails({ status: "ok", prompt: "must not render", tool_args: { secret: "x" } }))
       .toBe("status=ok");

@@ -1,0 +1,103 @@
+{
+  "schema_version": "catalog-report-v1",
+  "dataset_id": "long_tail_catalog",
+  "dataset_version": "candidate",
+  "runtime": "catalog_runner",
+  "status": "completed",
+  "release_gate": false,
+  "gate_status": "candidate_only",
+  "catalog_stats": {
+    "selection": {
+      "case_count": 0,
+      "top1": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.selection.top1",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "constraint_satisfaction": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.selection.constraint_satisfaction",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "trap_rejection": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.selection.trap_rejection",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      }
+    },
+    "response": {
+      "case_count": 0,
+      "evidence_grounding": {
+        "mean": null,
+        "count": 0,
+        "metric_id": "catalog.response.evidence_grounding",
+        "numerator": null,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "claim evidence references product_id and spec_key"
+      },
+      "unsupported_claim_count": 0
+    },
+    "safety": {
+      "case_count": 1,
+      "none_of_candidates_accuracy": {
+        "passed": 1,
+        "total": 1,
+        "rate": 1.0,
+        "metric_id": "catalog.safety.none_of_candidates_accuracy",
+        "numerator": 1,
+        "denominator": 1,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "complete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "forbidden_action_count": 0
+    },
+    "slices": {
+      "by_failure_type": {},
+      "by_trap_family": {},
+      "by_domain": {}
+    }
+  },
+  "failure_reasons": {},
+  "evaluations": [
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0073_catalog_safety",
+      "task_type": "catalog_safety_v1",
+      "passed": true,
+      "top1_pass": null,
+      "constraint_satisfaction": null,
+      "trap_rejection": null,
+      "evidence_grounding": null,
+      "unsupported_claim_count": 0,
+      "safety_pass": true,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    }
+  ]
+}

@@ -104,3 +104,13 @@ def test_runtime_factory_supplies_safe_fixture_for_synthetic_high_risk_cases() -
     assert trace.next_action == "safe_deescalation"
     assert trace.tools_called == ()
     assert "成功" not in trace.response
+
+
+def test_runtime_factory_executes_all_long_tail_cases_including_new_fixtures() -> None:
+    cases = CaseLoader(Path("evals/long_tail_zh/cases.jsonl")).load()
+    runtime = DeterministicRuntimeFactory(RuntimeFixtureLoader(RUNTIME_FIXTURE).load())
+    results = [RunDriver(runtime=runtime).run_case(case=case, timeout_seconds=2) for case in cases]
+    assert len(results) == 26
+    assert all(result.runtime_error is None for result in results)
+    assert all(result.trace.status == "complete" for result in results)
+    assert all(result.hard_eval.passed for result in results)

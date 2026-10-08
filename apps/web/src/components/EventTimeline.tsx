@@ -9,14 +9,14 @@ const eventLabels: Record<string, string> = {
   recovery_attempt_started: "恢复尝试开始", recovery_attempt_succeeded: "恢复尝试完成", recovery_attempt_failed: "恢复尝试失败",
   tool_request_started: "工具调用开始", tool_request_succeeded: "工具调用完成", tool_request_failed: "工具调用失败",
   tool_called: "工具已调用", tool_observed: "工具结果已观测", assistant_response: "Agent 生成回复",
-  terminal_response_published: "回复已发布", step_completed: "编排步骤完成", waiting_for_user: "等待用户补充",
+  terminal_response_published: "回复已发布", terminal_response_publish_failed: "回复发布失败", step_completed: "编排步骤完成", waiting_for_user: "等待用户补充",
   handoff_resolved: "人工处理完成", handoff_created: "已创建人工工单", skill_matched: "经验 Skill 命中",
   release_assigned: "发布版本已分配", routing_completed: "路由识别完成", routing_shadow_compared: "Router Shadow 对比完成",
   intent_classified: "意图识别完成", policy_selected: "响应策略已选择", rag_retrieval_started: "RAG 检索开始",
-  rag_retrieval_succeeded: "RAG 检索完成", guardrail_passed: "Guardrail 校验通过", guardrail_blocked: "Guardrail 已阻断",
+  rag_retrieval_succeeded: "RAG 检索完成", rag_retrieval_failed: "RAG 检索失败", guardrail_passed: "Guardrail 校验通过", guardrail_blocked: "Guardrail 已阻断",
   fallback_activated: "安全兜底已启用", mutation_prepared: "操作预览已生成", user_confirmed: "用户已确认",
-  commit_started: "业务提交开始", commit_observed: "业务提交结果已观测", state_verified: "状态校验完成",
-  mutation_uncertain: "业务状态不确定", terminal_response_publish_failed: "回复发布失败", failed: "Run 失败",
+  commit_started: "业务提交开始", commit_observed: "业务提交结果已观测", state_verified: "状态校验完成", mutation_uncertain: "业务状态不确定",
+  failed: "Run 失败",
 };
 
 const processStages = ["受理", "识别与路由", "Agent 执行", "Guardrail", "上线与成本", "回复发布"] as const;
@@ -46,7 +46,7 @@ export function safeEventDetails(payload: Record<string, unknown>): string {
 }
 
 function eventTone(type: string): "success" | "warning" | "danger" | "neutral" {
-  if (type.includes("failed") || type === "failed" || type === "decision_validation_failed") return "danger";
+  if (type.includes("failed") || type === "failed" || type === "decision_validation_failed" || type === "mutation_uncertain") return "danger";
   if (type === "safety_routed" || type === "waiting_for_user" || type === "handoff_created") return "warning";
   if (type.includes("succeeded") || type.includes("completed") || type.includes("published") || type.includes("observed")) return "success";
   return "neutral";

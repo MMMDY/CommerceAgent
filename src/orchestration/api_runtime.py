@@ -130,7 +130,9 @@ class ApiPromptBuilder(PromptBuilder):
             "evidence_ids list; when that list is empty, return an empty evidence_ids list. "
             "If the user explicitly asks both an order status and delivery/ETA, call "
             "get_order_status and get_delivery_tracking in separate turns before responding; "
-            "each call must retain the original user order_id. "
+            "each call must retain the original user order_id. The get_delivery_tracking "
+            "input has exactly one field: order_id. tracking_id is output-only; never put it "
+            "in tool args, even when it appears in a prior trusted observation. "
             f"Tool argument rules: {tool_rules}"
         )
         if self._skill_strategy is not None:

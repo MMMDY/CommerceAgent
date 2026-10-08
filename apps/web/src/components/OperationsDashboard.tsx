@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import styles from "../styles/App.module.css";
 import { api, ApiError } from "../api/client";
 import { PageState } from "./PageState";
+import { StatusTag } from "./StatusTag";
+import { SafetyCategoryChart } from "./SafetyCategoryChart";
+import { SafetyTrendChart } from "./SafetyTrendChart";
 import { TrafficTrendChart } from "./TrafficTrendChart";
 import { RELEASE_STATUS_REFRESH_MS } from "../ui/refresh";
 
@@ -215,10 +218,16 @@ export function OperationsDashboard() {
   const [loading, setLoading] = useState(true);
   const [safetyEvents, setSafetyEvents] = useState<SafetyAuditEvent[]>([]);
   const [safetyAuditError, setSafetyAuditError] = useState<string | null>(null);
+  const [safetyAuditForbidden, setSafetyAuditForbidden] = useState(false);
+  const [safetyAuditLoading, setSafetyAuditLoading] = useState(true);
   const [releases, setReleases] = useState<ReleaseRecord[]>([]);
   const [releaseError, setReleaseError] = useState<string | null>(null);
+  const [releaseForbidden, setReleaseForbidden] = useState(false);
+  const [releaseLoading, setReleaseLoading] = useState(true);
   const [learning, setLearning] = useState<LearningSummary | null>(null);
   const [learningError, setLearningError] = useState<string | null>(null);
+  const [learningForbidden, setLearningForbidden] = useState(false);
+  const [learningLoading, setLearningLoading] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
@@ -237,28 +246,33 @@ export function OperationsDashboard() {
       .catch((reason: unknown) => { if (!(reason instanceof Error && reason.name === "AbortError")) { setError(operationError(reason, "运营指标加载失败")); setForbidden(reason instanceof ApiError && reason.status === 403); } })
       .finally(() => setLoading(false));
     const learningWindowDays = Math.max(1, Math.ceil(windowHours / 24));
-    setLearningError(null);
+    setLearningError(null); setLearningForbidden(false); setLearningLoading(true);
     internalApi<LearningSummary>(`/internal/v1/operations/learning-summary?window_days=${learningWindowDays}`, { signal: controller.signal })
       .then(setLearning)
-      .catch((reason: unknown) => { if (!(reason instanceof Error && reason.name === "AbortError")) setLearningError(operationError(reason, "失败学习链路加载失败")); });
-    setSafetyAuditError(null);
+      .catch((reason: unknown) => { if (!(reason instanceof Error && reason.name === "AbortError")) { setLearningError(operationError(reason, "失败学习链路加载失败")); setLearningForbidden(reason instanceof ApiError && reason.status === 403); } })
+      .finally(() => setLearningLoading(false));
+    setSafetyAuditError(null); setSafetyAuditForbidden(false); setSafetyAuditLoading(true);
     internalApi<{ items: SafetyAuditEvent[] }>("/internal/v1/safety/events?limit=50", { signal: controller.signal })
       .then((result) => setSafetyEvents(result.items))
-      .catch((reason: unknown) => { if (!(reason instanceof Error && reason.name === "AbortError")) setSafetyAuditError(operationError(reason, "P0 审计下钻不可用")); });
-    setReleaseError(null);
+      .catch((reason: unknown) => { if (!(reason instanceof Error && reason.name === "AbortError")) { setSafetyAuditError(operationError(reason, "P0 审计下钻不可用")); setSafetyAuditForbidden(reason instanceof ApiError && reason.status === 403); } })
+      .finally(() => setSafetyAuditLoading(false));
+    setReleaseError(null); setReleaseForbidden(false); setReleaseLoading(true);
     internalApi<{ items: ReleaseRecord[] }>("/internal/v1/releases", { signal: controller.signal })
       .then((result) => setReleases(result.items))
-      .catch((reason: unknown) => { if (!(reason instanceof Error && reason.name === "AbortError")) setReleaseError(operationError(reason, "发布状态加载失败")); });
+      .catch((reason: unknown) => { if (!(reason instanceof Error && reason.name === "AbortError")) { setReleaseError(operationError(reason, "发布状态加载失败")); setReleaseForbidden(reason instanceof ApiError && reason.status === 403); } })
+      .finally(() => setReleaseLoading(false));
     return () => controller.abort();
   }, [windowHours, routeFilter, modelFilter, tenantFilter, refreshTick]);
 
-  if (loading) return <PageState kind="loading" title="正在聚合运营指标…" />;
-  if (error) return <PageState kind={forbidden ? "forbidden" : "error"} title="运营指标加载失败" detail={error} />;
+  if (loading && !data) return <PageState kind="loading" title="正在聚合运营指标…" />;
+  if (error && !data) return <PageState kind={forbidden ? "forbidden" : "error"} title="运营指标加载失败" detail={error} />;
   if (!data) return <PageState kind="empty" title="暂无运营数据" detail="当前时间范围没有可展示的 Run 数据。" />;
   const latestRelease = releases[0] ?? null;
   const versionBreakdown = data.version_breakdown ?? [];
 
   return <div className={styles.insightPage}>
+    {loading ? <PageState kind="partial" title="正在刷新运营指标…" detail="页面保留最近一次成功快照，刷新完成前不把旧值当作当前筛选结果。" /> : null}
+    {error ? <PageState kind={forbidden ? "forbidden" : "partial"} title="运营指标刷新失败" detail={`${error}；当前仍展示最近一次成功快照。`} /> : null}
     <section className={styles.toolbar}><div><strong>真实运行指标</strong><span>生成于 {new Date(data.generated_at).toLocaleString()} · 只展示授权范围内的脱敏聚合</span></div><div className={styles.toolbarActions}><label>租户<select value={tenantFilter} onChange={(event) => setTenantFilter(event.target.value)}><option value="demo-tenant">demo-tenant</option></select></label><label>时间范围<select value={windowHours} onChange={(event) => setWindowHours(Number(event.target.value))}><option value={24}>最近 24 小时</option><option value={168}>最近 7 天</option><option value={720}>最近 30 天</option></select></label><label>Route<select value={routeFilter} onChange={(event) => setRouteFilter(event.target.value)}><option value="">全部 Route</option>{data.available_routes.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>模型<select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}><option value="">全部模型</option>{data.available_models.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></div></section>
     <section className={styles.metricGrid} aria-label="运营指标摘要">
       <article><span>请求量</span><strong>{data.request_count}</strong><small>{data.completed_count} 完成 · {data.failed_count} 失败</small></article>
@@ -269,10 +283,10 @@ export function OperationsDashboard() {
     <section className={styles.observabilityCard}>
       <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Safety posture</p><h3>高危类别命中与人工接管</h3></div><span>漏判/误拒绝需人工标注</span></div>
       <div className={styles.metricGrid}><article><span>Safety triage</span><strong>{data.safety_summary?.triaged_risk_count ?? "N/A"}</strong><small>中高风险事件</small></article><article><span>高危命中</span><strong>{data.safety_summary?.high_risk_count ?? "N/A"}</strong><small>确定性/语义风险</small></article><article><span>人工接管</span><strong>{data.safety_handoff_count ?? "N/A"}</strong><small>事件统计</small></article><article><span>漏判 / 误拒绝</span><strong>{data.safety_false_negative_count == null || data.safety_false_rejection_count == null ? "N/A" : `${data.safety_false_negative_count} / ${data.safety_false_rejection_count}`}</strong><small>无复核标签不推断</small></article></div>
-      <div className={styles.scoreGrid}>{(data.safety_category_breakdown ?? []).length === 0 ? <p className={styles.empty}>所选时间范围内没有 Safety Router 分类数据。</p> : (data.safety_category_breakdown ?? []).map((item) => <article key={item.category}><div><span>{item.category}</span><strong>{item.hit_count}</strong></div><small>命中 {item.handoff_count} 次人工接管 · 漏判/误拒绝 {item.false_negative_count == null || item.false_rejection_count == null ? "N/A" : `${item.false_negative_count}/${item.false_rejection_count}`}</small></article>)}</div>
-      {(data.safety_trend ?? []).length === 0 ? <p className={styles.empty}>暂无 Safety 趋势数据。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>Safety Router 小时趋势</caption><thead><tr><th>时间</th><th>Triaged</th><th>Blocked</th><th>Handoff</th></tr></thead><tbody>{data.safety_trend?.map((item) => <tr key={item.bucket}><td>{new Date(item.bucket).toLocaleString()}</td><td>{item.triaged_count}</td><td>{item.blocked_count}</td><td>{item.handoff_count}</td></tr>)}</tbody></table></div>}
+      {(data.safety_category_breakdown ?? []).length === 0 ? <p className={styles.empty}>所选时间范围内没有 Safety Router 分类数据。</p> : <><SafetyCategoryChart points={(data.safety_category_breakdown ?? []).map((item) => ({ category: item.category, hit_count: item.hit_count, handoff_count: item.handoff_count }))} /><div className={styles.scoreGrid}>{(data.safety_category_breakdown ?? []).map((item) => <article key={item.category}><div><span>{item.category}</span><strong>{item.hit_count}</strong></div><small>命中 {item.handoff_count} 次人工接管 · 漏判/误拒绝 {item.false_negative_count == null || item.false_rejection_count == null ? "N/A" : `${item.false_negative_count}/${item.false_rejection_count}`}</small></article>)}</div></>}
+      {(data.safety_trend ?? []).length === 0 ? <p className={styles.empty}>暂无 Safety 趋势数据。</p> : <><SafetyTrendChart points={data.safety_trend ?? []} /><div className={styles.tableScroller}><table className={styles.dataTable}><caption>Safety Router 小时趋势语义化数据表</caption><thead><tr><th>时间</th><th>Triaged</th><th>Blocked</th><th>Handoff</th></tr></thead><tbody>{data.safety_trend?.map((item) => <tr key={item.bucket}><td>{new Date(item.bucket).toLocaleString()}</td><td>{item.triaged_count}</td><td>{item.blocked_count}</td><td>{item.handoff_count}</td></tr>)}</tbody></table></div></>}
       <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Admin drill-down</p><h3>P0 Safety 审计事件</h3></div><span>仅管理员 · 脱敏字段</span></div>
-      {safetyAuditError ? <p className={styles.flowNote}>审计下钻不可用：{safetyAuditError}；聚合指标仍可查看。</p> : safetyEvents.length === 0 ? <p className={styles.empty}>当前没有可下钻的 P0 审计事件。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>仅返回安全分类、原因码、检测器版本和 Run 引用</caption><thead><tr><th>时间</th><th>Run</th><th>类别</th><th>原因</th><th>检测器</th><th>处置</th></tr></thead><tbody>{safetyEvents.map((event) => <tr key={event.audit_event_id}><td>{new Date(event.created_at).toLocaleString()}</td><td>{event.payload.run_id ? <a href={`/runs/${encodeURIComponent(event.payload.run_id)}`}>{event.payload.run_id.slice(0, 8)}…</a> : "N/A"}</td><td>{event.payload.category ?? "N/A"}</td><td>{event.payload.reason_code ?? "N/A"}</td><td>{event.payload.detector_version ?? "N/A"}</td><td>{event.payload.disposition ?? "N/A"}</td></tr>)}</tbody></table></div>}
+      {safetyAuditLoading && safetyEvents.length === 0 ? <PageState kind="loading" title="正在读取 P0 审计下钻…" /> : safetyAuditError && safetyEvents.length === 0 ? <PageState kind={safetyAuditForbidden ? "forbidden" : "partial"} title="P0 审计下钻不可用" detail={`${safetyAuditError}；聚合指标仍可查看。`} /> : safetyAuditError ? <PageState kind="partial" title="P0 审计下钻部分刷新失败" detail={`${safetyAuditError}；仍展示最近一次成功快照。`} /> : safetyEvents.length === 0 ? <p className={styles.empty}>当前没有可下钻的 P0 审计事件。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>仅返回安全分类、原因码、检测器版本和 Run 引用</caption><thead><tr><th>时间</th><th>Run</th><th>类别</th><th>原因</th><th>检测器</th><th>处置</th></tr></thead><tbody>{safetyEvents.map((event) => <tr key={event.audit_event_id}><td>{new Date(event.created_at).toLocaleString()}</td><td>{event.payload.run_id ? <a href={`/runs/${encodeURIComponent(event.payload.run_id)}`}>{event.payload.run_id.slice(0, 8)}…</a> : "N/A"}</td><td>{event.payload.category ?? "N/A"}</td><td>{event.payload.reason_code ?? "N/A"}</td><td>{event.payload.detector_version ?? "N/A"}</td><td>{event.payload.disposition ?? "N/A"}</td></tr>)}</tbody></table></div>}
     </section>
     <section className={styles.observabilityCard}>
       <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Agent runtime map</p><h3>线上 Agent 流程总览</h3></div><span>总览不替代单 Run Trace</span></div>
@@ -287,19 +301,19 @@ export function OperationsDashboard() {
       <div className={styles.flowStatusLegend} aria-label="运行流程图例"><span><i className={styles.legendDotDone} />聚合已测量</span><span><i className={styles.legendDotActive} />逐 Run 可追踪</span><span><i className={styles.legendDotWarning} />存在关注项</span></div>
       <p className={styles.flowNote}>“逐 Run 可追踪”表示该阶段有事件或决策证据，但当前聚合接口没有单独统计量。下方 Run 列表可进入真实路径、分支、事件和证据；当前筛选会同时作用于聚合和列表。</p>
     </section>
-    <LearningPipeline data={learning} error={learningError} />
+    <LearningPipeline data={learning} error={learningError} forbidden={learningForbidden} loading={learningLoading} />
     <section className={styles.observabilityCard} id="operations-runs">
       <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Run drill-down</p><h3>最近 Run 与 Agent 流程入口</h3></div><span>{data.recent_runs.length} 条脱敏记录</span></div>
-      {data.recent_runs.length === 0 ? <p className={styles.empty}>当前筛选没有可下钻的 Run。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>不展示 Prompt、工具参数、模型输入输出或纠错原文</caption><thead><tr><th>Run</th><th>Route / Workflow</th><th>状态</th><th>模型</th><th>端到端</th><th>成本</th><th>流程</th></tr></thead><tbody>{data.recent_runs.map((item) => <tr key={item.run_id}><td><a href={`/runs/${encodeURIComponent(item.run_id)}`}>{item.run_id.slice(0, 8)}…</a><small>{item.accepted_at ? new Date(item.accepted_at).toLocaleString() : "N/A"}</small></td><td>{item.route}<small>{item.execution_mode} · {item.workflow_id}</small></td><td>{item.status}</td><td>{item.models ?? "N/A"}</td><td>{duration(item.latency_ms)}</td><td>{cost(item.total_cost_microusd)}</td><td><a href={`/runs/${encodeURIComponent(item.run_id)}`}>查看 Trace →</a></td></tr>)}</tbody></table></div>}
+      {data.recent_runs.length === 0 ? <p className={styles.empty}>当前筛选没有可下钻的 Run。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>不展示 Prompt、工具参数、模型输入输出或纠错原文</caption><thead><tr><th>Run</th><th>Route / Workflow</th><th>状态</th><th>模型</th><th>端到端</th><th>成本</th><th>流程</th></tr></thead><tbody>{data.recent_runs.map((item) => <tr key={item.run_id}><td><a href={`/runs/${encodeURIComponent(item.run_id)}`}>{item.run_id.slice(0, 8)}…</a><small>{item.accepted_at ? new Date(item.accepted_at).toLocaleString() : "N/A"}</small></td><td>{item.route}<small>{item.execution_mode} · {item.workflow_id}</small></td><td><StatusTag value={item.status} /></td><td>{item.models ?? "N/A"}</td><td>{duration(item.latency_ms)}</td><td>{cost(item.total_cost_microusd)}</td><td><a href={`/runs/${encodeURIComponent(item.run_id)}`}>查看 Trace →</a></td></tr>)}</tbody></table></div>}
     </section>
     <section className={styles.observabilityCard}>
-      <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Release comparison</p><h3>Current / Candidate 分流证据</h3></div><span>{data.release_summary ? data.release_summary.stage : "暂无 Active Release"}</span></div>
-      {data.release_summary ? <><div className={styles.metricGrid}><article><span>Current</span><strong>{data.release_summary.current_version}</strong><small>{data.release_summary.current_count} 个 Run</small></article><article><span>Candidate</span><strong>{data.release_summary.candidate_version}</strong><small>{data.release_summary.canary_count} 个 Canary · {data.release_summary.shadow_count} 个 Shadow</small></article><article><span>实际候选运行时</span><strong>{latestRelease?.status === "ACTIVE" ? "已登记" : "未确认"}</strong><small>以发布详情和 Runtime 注册为准</small></article><article><span>状态</span><strong>{data.release_summary.status}</strong><small>发布控制面状态</small></article></div><p className={styles.flowNote}>assignment 只说明分桶与观测证据；Candidate 是否改变用户可见结果，必须同时满足 Runtime 注册、风险边界和发布 Gate。</p></> : <p className={styles.empty}>暂无发布控制面记录，无法进行版本对比。</p>}
+      <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Release comparison</p><h3>Current / Candidate 分流证据</h3></div>{data.release_summary ? <StatusTag value={data.release_summary.stage} /> : <span>暂无 Active Release</span>}</div>
+      {data.release_summary ? <><div className={styles.metricGrid}><article><span>Current</span><strong>{data.release_summary.current_version}</strong><small>{data.release_summary.current_count} 个 Run</small></article><article><span>Candidate</span><strong>{data.release_summary.candidate_version}</strong><small>{data.release_summary.canary_count} 个 Canary · {data.release_summary.shadow_count} 个 Shadow</small></article><article><span>实际候选运行时</span><strong>{latestRelease?.status === "ACTIVE" ? "已登记" : "未确认"}</strong><small>以发布详情和 Runtime 注册为准</small></article><article><span>状态</span><strong><StatusTag value={data.release_summary.status} /></strong><small>发布控制面状态</small></article></div><p className={styles.flowNote}>assignment 只说明分桶与观测证据；Candidate 是否改变用户可见结果，必须同时满足 Runtime 注册、风险边界和发布 Gate。</p></> : <p className={styles.empty}>暂无发布控制面记录，无法进行版本对比。</p>}
     </section>
     <section className={styles.observabilityCard}>
       <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Version comparison</p><h3>Current / Candidate 路由与资源差异</h3></div><span>{latestRelease ? `每 15 秒刷新 · ${new Date(latestRelease.updated_at ?? Date.now()).toLocaleTimeString()}` : "暂无发布"}</span></div>
-      {releaseError ? <p className={styles.flowNote}>发布详情暂不可用：{releaseError}；运营聚合仍可查看。</p> : latestRelease ? <>
-        <div className={styles.releaseMeta}><span>负责人：<strong>{latestRelease.owner_ref ?? "N/A"}</strong></span><span>阶段：<strong>{latestRelease.stage}</strong></span><span>候选流量：<strong>{latestRelease.traffic_percent}%</strong></span><span>观察结束：<strong>{latestRelease.observation_ends_at ? new Date(latestRelease.observation_ends_at).toLocaleString() : "N/A"}</strong></span></div>
+      {releaseLoading && releases.length === 0 ? <PageState kind="loading" title="正在读取发布对比…" /> : releaseError && releases.length === 0 ? <PageState kind={releaseForbidden ? "forbidden" : "partial"} title="发布对比暂不可用" detail={`${releaseError}；运营聚合仍可查看。`} /> : releaseError ? <PageState kind="partial" title="发布对比部分刷新失败" detail={`${releaseError}；仍展示最近一次成功快照。`} /> : latestRelease ? <>
+        <div className={styles.releaseMeta}><span>负责人：<strong>{latestRelease.owner_ref ?? "N/A"}</strong></span><span>阶段：<StatusTag value={latestRelease.stage} /></span><span>候选流量：<strong>{latestRelease.traffic_percent}%</strong></span><span>观察结束：<strong>{latestRelease.observation_ends_at ? new Date(latestRelease.observation_ends_at).toLocaleString() : "N/A"}</strong></span></div>
         <div className={styles.comparisonTable}><div className={styles.comparisonHeader}><span>指标</span><strong>{latestRelease.current_version}</strong><strong>{latestRelease.candidate_version}</strong><b>Delta / 证据</b></div>{releaseComparisons.map((item) => <div className={styles.comparisonRow} key={item.key}><span>{item.label}</span><strong>{releaseValue(latestRelease.baseline, item.key)}{item.suffix && releaseValue(latestRelease.baseline, item.key) !== "N/A" ? item.suffix : ""}</strong><strong>{releaseValue(latestRelease.candidate, item.key)}{item.suffix && releaseValue(latestRelease.candidate, item.key) !== "N/A" ? item.suffix : ""}</strong><b>{releaseDelta(latestRelease.baseline, latestRelease.candidate, item.key, item.suffix)}</b></div>)}</div>
         {latestRelease.stop_reason ? <p className={styles.flowWarningBox}>已停止：{latestRelease.stop_reason} · 回滚版本：{latestRelease.rollback_version ?? "N/A"}</p> : <p className={styles.flowNote}>缺失的线上聚合指标保持 N/A；只有真实记录同时具备 Current 与 Candidate 时才显示差异。</p>}
       </> : <p className={styles.empty}>暂无发布记录，无法进行版本对比。</p>}
@@ -324,13 +338,11 @@ export function OperationsDashboard() {
   </div>;
 }
 
-function LearningPipeline({ data, error }: { data: LearningSummary | null; error: string | null }) {
-  if (error) {
-    return <section className={styles.observabilityCard} aria-label="失败学习链路"><div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Failure learning</p><h3>异常指标 → 失败簇 → 归因 → Skill → 发布</h3></div><span>状态不可用</span></div><p className={styles.flowNote}>后端审计链路加载失败：{error}。页面不使用其它页面数据拼接替代。</p></section>;
-  }
-  if (!data) {
+function LearningPipeline({ data, error, forbidden, loading }: { data: LearningSummary | null; error: string | null; forbidden: boolean; loading: boolean }) {
+  if (loading && !data) {
     return <section className={styles.observabilityCard} aria-label="失败学习链路"><PageState kind="loading" title="正在读取失败学习链路…" /></section>;
   }
+  if (!data) return <section className={styles.observabilityCard} aria-label="失败学习链路"><PageState kind="empty" title="暂无失败学习链路" detail="当前窗口没有可证明的服务端学习投影。" /></section>;
   const stages = [
     { label: "异常指标", detail: `${data.stages.signals.case_count} 个失败信号`, href: "/failures", state: data.stages.signals.case_count > 0 ? styles.flowActive : styles.flowPendingBox },
     { label: "失败簇", detail: `${data.stages.clusters.cluster_count} 个 · ${data.stages.clusters.eligible_count} 个达来源门槛`, href: "/failures", state: data.stages.clusters.eligible_count > 0 ? styles.flowPassed : styles.flowPendingBox },
@@ -341,8 +353,10 @@ function LearningPipeline({ data, error }: { data: LearningSummary | null; error
   ];
   return <section className={styles.observabilityCard} aria-label="失败学习链路">
     <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Audited failure learning</p><h3>异常指标 → 失败簇 → 归因 → Skill → Canary / 回滚</h3></div><span>窗口 {data.window_days} 天 · 后端审计投影</span></div>
+    {loading ? <PageState kind="partial" title="正在刷新失败学习链路…" detail="仍展示最近一次成功的服务端审计投影。" /> : null}
+    {error ? <PageState kind={forbidden ? "forbidden" : "partial"} title="失败学习链路刷新失败" detail={`${error}；仍展示最近一次成功快照。`} /> : null}
     <div className={styles.approvalFlow}>{stages.map((stage, index) => <div className={styles.approvalFlowFragment} key={stage.label}><a className={stage.state} href={stage.href}><span>{index + 1}</span><strong>{stage.label}</strong><small>{stage.detail}</small></a>{index < stages.length - 1 ? <i aria-hidden="true">→</i> : null}</div>)}</div>
     <p className={styles.flowNote}>连线只表示服务端存在对应阶段数据；具体关联只在下表展示。没有 assignment 或发布审计关联时显示“暂无可证明关联”，不会把 Skill 页面存在误认为已 Canary。</p>
-    {data.clusters.length === 0 ? <p className={styles.empty}>窗口内没有失败簇，链路暂无可下钻数据。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>每个 cluster 的后端可证明关联；不展示原始 Prompt、回复或纠错文本</caption><thead><tr><th>失败簇</th><th>信号 / 归因</th><th>Skill</th><th>Canary / 停止</th></tr></thead><tbody>{data.clusters.map((cluster) => <tr key={cluster.cluster_key}><td>{cluster.representative_failure_id ? <a href={`/failures/${encodeURIComponent(cluster.representative_failure_id)}`}>{cluster.cluster_key}</a> : cluster.cluster_key}<small>{cluster.case_count} 个案例 · 独立证据 {cluster.evidence_count}</small></td><td>{cluster.latest_category ?? "未归因"}<small>归因 {cluster.attributed_case_count} · 人工复核 {cluster.reviewed_case_count}</small></td><td>{cluster.skills.length === 0 ? <span className={styles.muted}>暂无候选</span> : cluster.skills.map((skill) => <div key={skill.skill_id}><a href={`/skills/${encodeURIComponent(skill.skill_id)}`}>{skill.status}</a><small>来源 {skill.source_count} · {skill.offline_gate_pass && skill.safety_gate_pass ? "Gate 通过" : "Gate 未通过"}</small></div>)}</td><td>{cluster.skills.flatMap((skill) => skill.releases).length === 0 ? <span className={styles.muted}>暂无可证明关联</span> : cluster.skills.flatMap((skill) => skill.releases).map((release) => <div key={release.release_id}><a href={`/releases/${encodeURIComponent(release.release_id)}`}>{release.stage} / {release.status}</a><small>{release.stop_reason ?? (release.rollback_version ? `回滚 ${release.rollback_version}` : `${release.traffic_percent}% 流量`)}</small></div>)}</td></tr>)}</tbody></table></div>}
+    {data.clusters.length === 0 ? <p className={styles.empty}>窗口内没有失败簇，链路暂无可下钻数据。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>每个 cluster 的后端可证明关联；不展示原始 Prompt、回复或纠错文本</caption><thead><tr><th>失败簇</th><th>信号 / 归因</th><th>Skill</th><th>Canary / 停止</th></tr></thead><tbody>{data.clusters.map((cluster) => <tr key={cluster.cluster_key}><td>{cluster.representative_failure_id ? <a href={`/failures/${encodeURIComponent(cluster.representative_failure_id)}`}>{cluster.cluster_key}</a> : cluster.cluster_key}<small>{cluster.case_count} 个案例 · 独立证据 {cluster.evidence_count}</small></td><td>{cluster.latest_category ?? "未归因"}<small>归因 {cluster.attributed_case_count} · 人工复核 {cluster.reviewed_case_count}</small></td><td>{cluster.skills.length === 0 ? <span className={styles.muted}>暂无候选</span> : cluster.skills.map((skill) => <div key={skill.skill_id}><a href={`/skills/${encodeURIComponent(skill.skill_id)}`}><StatusTag value={skill.status} /></a><small>来源 {skill.source_count} · {skill.offline_gate_pass && skill.safety_gate_pass ? "Gate 通过" : "Gate 未通过"}</small></div>)}</td><td>{cluster.skills.flatMap((skill) => skill.releases).length === 0 ? <span className={styles.muted}>暂无可证明关联</span> : cluster.skills.flatMap((skill) => skill.releases).map((release) => <div key={release.release_id}><a href={`/releases/${encodeURIComponent(release.release_id)}`}><StatusTag value={release.stage} /> <StatusTag value={release.status} /></a><small>{release.stop_reason ?? (release.rollback_version ? `回滚 ${release.rollback_version}` : `${release.traffic_percent}% 流量`)}</small></div>)}</td></tr>)}</tbody></table></div>}
   </section>;
 }

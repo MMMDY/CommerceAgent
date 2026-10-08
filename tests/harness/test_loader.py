@@ -27,7 +27,7 @@ def test_loader_filters_by_identifier_and_fails_closed_for_unknown_identifier() 
 @pytest.mark.parametrize(
     ("dataset", "track", "expected_count"),
     (
-        (Path("evals/long_tail_zh/cases.jsonl"), "long_tail_response_v1", 6),
+        (Path("evals/long_tail_zh/cases.jsonl"), "long_tail_response_v1", 26),
         (Path("evals/safety_zh/cases.jsonl"), "safety_response_v2", 5),
     ),
 )

@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import styles from "../styles/App.module.css";
 import { api, ApiError } from "../api/client";
 import { PageState } from "./PageState";
+import { StatusTag } from "./StatusTag";
+import { MultiTurnExplorer } from "./MultiTurnExplorer";
 
 type EvalSummary = { eval_run_id: string; status: string; selected_cases: number; completed_cases: number; passed_cases: number; failed_cases: number; judge: string; mode: string; repetitions: number; runtime?: string | null; dataset_id?: string | null; dataset_version?: string | null; dataset_hash?: string | null; manifest_hash?: string | null };
 type EvalCase = { case_id: string; track: string; hard_pass: boolean; judge_pass: boolean | null; final_pass: boolean | null; judge_score: number | null; hard_fail_reasons: string[]; judge_error: string | null; dimensions?: Record<string, boolean>; judge_dimensions?: Record<string, number> | null };
@@ -16,10 +18,26 @@ type EvalCaseDetail = {
   runtime_error: string | null;
   trace: { run_id?: string | null; route: string | null; intent: string | null; next_action: string | null; tools_called: string[]; evidence_ids: string[]; status: string; response_present: boolean | null };
   flow: { id: string; label: string; status: string; detail: string }[];
+  failure_ids?: string[];
 };
 type Metric = { mean: number; count: number };
+type HardMetric = { passed: number; total: number; rate: number | null };
+type HardDimensionStats = Record<string, Record<string, HardMetric>>;
+type MultiTurnMetric = { mean: number | null; count: number };
 type Distribution = { mean: number | null; count: number; p50: number | null; p95: number | null; p99: number | null };
 type Track = { selected: number; attempts?: number; hard_pass: number; judge_pass: number; final_pass: number };
+type ReviewedSafetyStats = {
+  status: string;
+  reviewed_case_count: number;
+  low_risk_case_count: number;
+  high_risk_case_count: number;
+  missing_label_count: number;
+  false_negative_count: number | null;
+  false_rejection_count: number | null;
+  false_negative_rate: number | null;
+  false_rejection_rate: number | null;
+  gate_pass: boolean | null;
+};
 type EvalReport = EvalSummary & {
   schema_version?: string;
   first_pass_rate?: number;
@@ -40,7 +58,31 @@ type EvalReport = EvalSummary & {
   persistence?: string;
   human_approval?: { required?: boolean; status?: string; source?: string };
   performance_stats?: Record<string, Record<string, Distribution>>;
-  safety_stats?: { high_risk_cases: number; p0_failure_count: number; safe_next_step_failure_count: number; safe_next_step_critical_pass: boolean; safe_next_step_pass_rate: number; handoff_count?: number };
+  hard_dimension_stats?: HardDimensionStats;
+  failure_reason_stats?: Record<string, number>;
+  multiturn_stats?: {
+    scenario_count: number;
+    dialogue_count: number;
+    evaluation_noise_count: number;
+    intent_coverage?: MultiTurnMetric;
+    agenda_progress?: MultiTurnMetric;
+    exposed_intent_accuracy?: MultiTurnMetric;
+    task_success_rate?: MultiTurnMetric;
+    status?: string;
+  };
+  catalog_stats?: {
+    selection?: Record<string, unknown>;
+    response?: Record<string, unknown>;
+    safety?: Record<string, unknown>;
+  };
+  rag_stats?: {
+    status?: string;
+    case_count?: number;
+    recall_at_k?: Record<string, unknown>;
+    precision_at_k?: Record<string, unknown>;
+    grounding_rate?: Record<string, unknown>;
+  };
+  safety_stats?: { high_risk_cases: number; p0_failure_count: number; safe_next_step_failure_count: number; safe_next_step_critical_pass: boolean; safe_next_step_pass_rate: number; handoff_count?: number; reviewed?: ReviewedSafetyStats };
   results?: EvalCase[];
 };
 type DashboardFunnelStage = { id: string; label: string; count: number | null; available: boolean };
@@ -124,6 +166,24 @@ function EvaluationFunnel({ dashboard }: { dashboard: EvalDashboardDto }) {
   </div>;
 }
 
+function LayeredMetrics({ report }: { report: EvalReport }) {
+  const hard = report.hard_dimension_stats ?? {};
+  const hardRows = Object.entries(hard).flatMap(([track, dimensions]) =>
+    Object.entries(dimensions).map(([name, value]) => ({ track, name, value })),
+  );
+  const multi = report.multiturn_stats;
+  const multiMetric = (value: MultiTurnMetric | undefined) => value?.mean == null ? "N/A" : percent(value.mean);
+  const catalog = report.catalog_stats;
+  return <section className={styles.observabilityCard} aria-label="分层评测指标">
+    <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Layered evaluation</p><h3>分层指标与独立分母</h3></div><span>Hard / Multi-turn / Catalog</span></div>
+    {hardRows.length === 0 ? <p className={styles.empty}>没有 Hard Dimension 聚合证据，显示 N/A。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><caption>Hard Dimension（按 Track 独立统计）</caption><thead><tr><th>Track</th><th>维度</th><th>分子</th><th>分母</th><th>通过率</th></tr></thead><tbody>{hardRows.map(({ track, name, value }) => <tr key={`${track}-${name}`}><td>{track}</td><td>{name}</td><td>{value.passed}</td><td>{value.total}</td><td>{percent(value.rate)}</td></tr>)}</tbody></table></div>}
+    {multi ? <div className={styles.metricGrid}><article><span>多轮场景</span><strong>{multi.scenario_count}</strong><small>报告状态：{multi.status ?? "N/A"}</small></article><article><span>Intent Coverage</span><strong>{multiMetric(multi.intent_coverage)}</strong><small>{multi.intent_coverage?.count ?? 0} 条有效轨迹</small></article><article><span>暴露意图准确率</span><strong>{multiMetric(multi.exposed_intent_accuracy)}</strong><small>排除 evaluation noise</small></article><article><span>Task Success</span><strong>{multiMetric(multi.task_success_rate)}</strong><small>噪声轨迹不进入 Agent 分母</small></article><article><span>Evaluation Noise</span><strong>{multi.evaluation_noise_count}</strong><small>单独修订模拟器/场景</small></article></div> : <p className={styles.flowNote}>当前批次没有多轮报告，指标保持 N/A。</p>}
+    {catalog ? <div className={styles.tableScroller}><table className={styles.dataTable}><caption>商品长尾 Track（不并入总体通过率）</caption><thead><tr><th>Track</th><th>样本数</th><th>指标</th><th>分子</th><th>分母</th><th>比率</th></tr></thead><tbody>{Object.entries(catalog).map(([track, values]) => { const record = values as Record<string, unknown>; return Object.entries(record).filter(([, value]) => typeof value === "object" && value !== null).map(([name, value]) => { const metricValue = value as Record<string, unknown>; return <tr key={`${track}-${name}`}><td>{track}</td><td>{typeof record.case_count === "number" ? record.case_count : "N/A"}</td><td>{name}</td><td>{typeof metricValue.passed === "number" ? metricValue.passed : "N/A"}</td><td>{typeof metricValue.total === "number" ? metricValue.total : "N/A"}</td><td>{typeof metricValue.rate === "number" ? percent(metricValue.rate) : "N/A"}</td></tr>; }); }).flat()}</tbody></table></div> : <p className={styles.flowNote}>当前批次没有商品长尾报告，指标保持 N/A。</p>}
+    {report.rag_stats ? <div className={styles.tableScroller}><table className={styles.dataTable}><caption>RAG Evidence（按证据 ID 聚合）</caption><thead><tr><th>指标</th><th>分子</th><th>分母</th><th>比率</th><th>状态</th></tr></thead><tbody>{(["recall_at_k", "precision_at_k", "grounding_rate"] as const).map((name) => { const value = report.rag_stats?.[name]; return <tr key={name}><td>{name}</td><td>{typeof value?.numerator === "number" ? value.numerator : "N/A"}</td><td>{typeof value?.denominator === "number" ? value.denominator : "N/A"}</td><td>{typeof value?.rate === "number" ? percent(value.rate) : "N/A"}</td><td>{typeof value?.evidence_status === "string" ? value.evidence_status : "N/A"}</td></tr>; })}</tbody></table></div> : <p className={styles.flowNote}>当前批次没有 RAG Evidence 聚合，指标保持 N/A。</p>}
+    {report.failure_reason_stats ? <p className={styles.flowNote}>失败原因维度已落盘：{Object.entries(report.failure_reason_stats).map(([name, count]) => `${name} ${count}`).join(" · ") || "N/A"}</p> : null}
+  </section>;
+}
+
 export function EvalDashboard() {
   const [summaries, setSummaries] = useState<EvalSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -140,6 +200,7 @@ export function EvalDashboard() {
   const [casesError, setCasesError] = useState<string | null>(null);
   const [approval, setApproval] = useState<EvaluationApproval | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [approvalForbidden, setApprovalForbidden] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -184,12 +245,14 @@ export function EvalDashboard() {
     if (!selected || report?.human_approval?.required !== true) {
       setApproval(null);
       setApprovalError(null);
+      setApprovalForbidden(false);
       return;
     }
     setApprovalError(null);
+    setApprovalForbidden(false);
     void api<EvaluationApproval>(`/v1/evals/${selected}/approval`)
       .then(setApproval)
-      .catch((reason: Error) => setApprovalError(reason.message));
+      .catch((reason: unknown) => { setApprovalError(reason instanceof Error ? reason.message : "审批记录加载失败"); setApprovalForbidden(reason instanceof ApiError && reason.status === 403); });
   }, [selected, report?.human_approval?.required]);
 
   useEffect(() => {
@@ -202,8 +265,8 @@ export function EvalDashboard() {
   }, [selected, detailSelection]);
 
   if (loading && !report && summaries.length === 0) return <PageState kind="loading" title="正在读取评测报告…" />;
-  if (error && !report) return <PageState kind={forbidden ? "forbidden" : "error"} title="评测报告加载失败" detail={error} />;
-  if (summaries.length === 0) return <PageState kind="empty" title="暂无评测批次" detail="运行评测后，这里会展示真实分数、稳定通过率与失败 Case。" />;
+  if (error && !report && summaries.length === 0) return <div className={styles.insightPage}><PageState kind={forbidden ? "forbidden" : "error"} title="评测报告加载失败" detail={error} /><MultiTurnExplorer /></div>;
+  if (summaries.length === 0) return <div className={styles.insightPage}><PageState kind="empty" title="暂无静态评测批次" detail="当前仍可查看独立的多轮评测报告。" /><MultiTurnExplorer /></div>;
 
   const overallDimensions = dashboard?.judge_dimensions?.overall ?? {};
   const tracks = Object.keys(report?.tracks ?? {});
@@ -235,6 +298,20 @@ export function EvalDashboard() {
     });
     downloadText(`commerce-agent-${report?.eval_run_id ?? "eval"}-cases.csv`, [headers.join(","), ...rows].join("\n"), "text/csv;charset=utf-8");
   };
+  const handleExportMarkdown = async () => {
+    if (!selected) return;
+    try {
+      const response = await fetch(`/v1/evals/${encodeURIComponent(selected)}/markdown`);
+      if (!response.ok) throw new Error(`Markdown 报告下载失败（${response.status}）`);
+      downloadText(
+        `commerce-agent-${selected}.md`,
+        await response.text(),
+        "text/markdown;charset=utf-8",
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Markdown 报告下载失败");
+    }
+  };
   const humanApproval = approval ?? dashboard?.human_approval ?? (report?.human_approval ? {
     required: report.human_approval.required === true,
     status: report.human_approval.status ?? "unknown",
@@ -249,7 +326,7 @@ export function EvalDashboard() {
       <div className={styles.scoreGrid}>{evaluationGroups.map(([group, groupItems]) => <article key={group}><div><span>{group}</span><strong>{groupItems.length} 批</strong></div><small>{groupItems.map((item) => `${item.dataset_version ?? "unknown"} · ${item.eval_run_id.slice(0, 8)}`).join(" / ")}</small><small>Hash：{groupItems[0]?.dataset_hash ?? "N/A"}</small></article>)}</div>
       <p className={styles.flowNote}>deterministic、live、synthetic、Shadow 和 Canary 只按服务端报告元数据分组；缺失元数据显示 unknown，不推断运行类型。</p>
     </section>
-    <section className={styles.toolbar}><div><strong>评测批次</strong><span>自动化评测提供发布证据，不代替 Skill 真人审批</span></div><div className={styles.toolbarActions}><label>选择批次<select value={selected ?? ""} onChange={(event) => setSelected(event.target.value)}>{summaries.map((item) => <option key={item.eval_run_id} value={item.eval_run_id}>{item.eval_run_id.slice(0, 8)} · {item.status}</option>)}</select></label><button type="button" className={styles.secondaryButton} onClick={handleExportJson} disabled={!report}>导出 JSON</button><button type="button" className={styles.secondaryButton} onClick={handleExportCsv} disabled={!report}>导出 Case CSV</button></div></section>
+    <section className={styles.toolbar}><div><strong>评测批次</strong><span>自动化评测提供发布证据，不代替 Skill 真人审批</span></div><div className={styles.toolbarActions}><label>选择批次<select value={selected ?? ""} onChange={(event) => setSelected(event.target.value)}>{summaries.map((item) => <option key={item.eval_run_id} value={item.eval_run_id}>{item.eval_run_id.slice(0, 8)} · {item.status}</option>)}</select></label>{report ? <StatusTag value={report.status} /> : null}<button type="button" className={styles.secondaryButton} onClick={handleExportJson} disabled={!report}>导出 JSON</button><button type="button" className={styles.secondaryButton} onClick={handleExportCsv} disabled={!report}>导出 Case CSV</button><button type="button" className={styles.secondaryButton} onClick={() => void handleExportMarkdown()} disabled={!selected}>导出 Markdown</button></div></section>
     {error ? <p className={styles.error} role="alert">{error}</p> : null}
     {dashboardError ? <PageState kind="partial" title="评测 Dashboard 不可用" detail={`${dashboardError}；报告原始聚合仍可查看。`} /> : null}
     {casesError ? <PageState kind="partial" title="Case 下钻不完整" detail={`${casesError}；当前批次的汇总指标仍可查看。`} /> : null}
@@ -263,9 +340,11 @@ export function EvalDashboard() {
       <section className={styles.observabilityCard}>
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Evaluation flow</p><h3>评测与发布证据链</h3></div><span>{report.mode}</span></div>
         <div className={styles.approvalFlow}><article className={dashboard?.gate.hard_gate === "pass" ? styles.flowPassed : styles.flowBlocked}><span>1</span><strong>Hard Gate</strong><small>规则与安全断言</small></article><i>→</i><article className={report.judge === "on" ? styles.flowPassed : styles.flowPendingBox}><span>2</span><strong>LLM as Judge</strong><small>Rubric 多维评分</small></article><i>→</i><article className={dashboard?.gate.release_gate ? styles.flowPassed : styles.flowBlocked}><span>3</span><strong>Release Gate</strong><small>{dashboard?.gate.status === "incomplete" ? "证据不完整" : "独立性与完整性"}</small></article><i>→</i><article className={approvalState}><span>4</span><strong>{approvalLabel}</strong><small>{humanApproval.required ? `状态：${humanApproval.status}` : "该批次未声明审批要求"}</small></article></div>
-        <div className={styles.reviewPanel} aria-label="自动评测与真人审批边界"><h3>自动评测没有真人在线时</h3><p>本批次仍可产出 Hard Gate、Judge 和 Release Gate 报告，但这些结果只代表评测证据，不代表已获上线授权。</p>{approvalError ? <PageState kind="partial" title="审批记录暂不可用" detail={`${approvalError}；报告仍保持原有 pending 边界。`} /> : null}<div className={styles.reviewDetails}><div><span>审批要求</span><strong>{humanApproval.required ? "需要" : "未声明"}</strong></div><div><span>当前状态</span><strong>{humanApproval.status}</strong></div><div><span>审批来源</span><strong>{humanApproval.source}</strong></div><div><span>已记录</span><strong>{"recorded" in humanApproval ? (humanApproval.recorded ? "是" : "否") : "N/A"}</strong></div><div><span>线上命中</span><strong>{humanApproval.required && !approvalGranted ? "不进入 Active / Canary" : "以发布 Gate 为准"}</strong></div><div><span>超时处置</span><strong>{humanApproval.required && !approvalGranted ? "到期投影为 EXPIRED" : "N/A"}</strong></div></div><p className={styles.flowNote}>恢复人工审批后，审批人仍需重新核对安全、质量、成本和时延 Gate；系统不会用“无人审批”自动批准。</p></div>
+        <div className={styles.reviewPanel} aria-label="自动评测与真人审批边界"><h3>自动评测没有真人在线时</h3><p>本批次仍可产出 Hard Gate、Judge 和 Release Gate 报告，但这些结果只代表评测证据，不代表已获上线授权。</p>{approvalError ? <PageState kind={approvalForbidden ? "forbidden" : "partial"} title="审批记录暂不可用" detail={`${approvalError}；报告仍保持原有 pending 边界。`} /> : null}<div className={styles.reviewDetails}><div><span>审批要求</span><strong>{humanApproval.required ? "需要" : "未声明"}</strong></div><div><span>当前状态</span><strong><StatusTag value={humanApproval.status} /></strong></div><div><span>审批来源</span><strong>{humanApproval.source}</strong></div><div><span>已记录</span><strong>{"recorded" in humanApproval ? (humanApproval.recorded ? "是" : "否") : "N/A"}</strong></div><div><span>线上命中</span><strong>{humanApproval.required && !approvalGranted ? "不进入 Active / Canary" : "以发布 Gate 为准"}</strong></div><div><span>超时处置</span><strong>{humanApproval.required && !approvalGranted ? "到期投影为 EXPIRED" : "N/A"}</strong></div></div><p className={styles.flowNote}>恢复人工审批后，审批人仍需重新核对安全、质量、成本和时延 Gate；系统不会用“无人审批”自动批准。</p></div>
         <dl className={styles.decisionFacts}><div><dt>Runtime</dt><dd>{report.runtime ?? "unknown"}</dd></div><div><dt>Dataset</dt><dd>{report.dataset_id ? `${report.dataset_id} / ${report.dataset_version ?? "unknown"}` : "unknown"}</dd></div><div><dt>Dataset hash</dt><dd>{report.dataset_hash ?? "unknown"}</dd></div><div><dt>Manifest hash</dt><dd>{report.manifest_hash ?? "unknown"}</dd></div><div><dt>Runtime hash</dt><dd>{report.runtime_hash ?? "unknown"}</dd></div><div><dt>报告协议</dt><dd>{report.schema_version ?? "unknown"}</dd></div><div><dt>持久化</dt><dd>{report.persistence ?? "unknown"}</dd></div><div><dt>临时结果</dt><dd>{report.provisional == null ? "unknown" : report.provisional ? "是" : "否"}</dd></div></dl>
       </section>
+      <LayeredMetrics report={report} />
+      <MultiTurnExplorer />
       <section className={styles.observabilityCard}>
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Quality funnel</p><h3>样本经过各道门禁的数量</h3></div><span>防止只看一个总通过率</span></div>
         {dashboard ? <EvaluationFunnel dashboard={dashboard} /> : <PageState kind="partial" title="Dashboard DTO 暂不可用" detail="不在浏览器端重新推断漏斗或 Gate。" />}
@@ -289,8 +368,9 @@ export function EvalDashboard() {
         <div className={styles.distributionLayout}><div><h4 className={styles.miniHeading}>加权总分分布</h4><ScoreDistribution rows={filteredRows} /></div><div className={styles.distributionNote}><strong>{filteredRows.filter((row) => row.judge_score != null).length} 次 Judge 评分</strong><span>按 attempt 统计，不把重复运行折叠成一个高分。</span><span>分数区间用于发现离散度，不能单独替代 Hard Gate 或安全门禁。</span></div></div>
       </section>
       {report.safety_stats ? <section className={styles.observabilityCard}>
-        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Safety Gate</p><h3>高危样本安全指标</h3></div><span className={report.safety_stats.p0_failure_count === 0 && report.safety_stats.safe_next_step_critical_pass ? styles.flowPassed : styles.flowBlocked}>{report.safety_stats.p0_failure_count === 0 && report.safety_stats.safe_next_step_critical_pass ? "可继续评估" : "阻断"}</span></div>
+        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Safety Gate</p><h3>高危样本安全指标</h3></div><span className={report.safety_stats.p0_failure_count === 0 && report.safety_stats.safe_next_step_critical_pass && report.safety_stats.reviewed?.gate_pass !== false ? styles.flowPassed : styles.flowBlocked}>{report.safety_stats.reviewed?.status === "incomplete" ? "人工标签不完整" : report.safety_stats.p0_failure_count === 0 && report.safety_stats.safe_next_step_critical_pass && report.safety_stats.reviewed?.gate_pass !== false ? "可继续评估" : "阻断"}</span></div>
         <div className={styles.metricGrid}><article><span>高危样本</span><strong>{report.safety_stats.high_risk_cases}</strong><small>Safety hard gate</small></article><article><span>P0 hard fail</span><strong>{report.safety_stats.p0_failure_count}</strong><small>必须为 0</small></article><article><span>safe_next_step</span><strong>{percent(report.safety_stats.safe_next_step_pass_rate)}</strong><small>{report.safety_stats.safe_next_step_failure_count} 个失败</small></article></div>
+        {report.safety_stats.reviewed ? <div className={styles.reviewDetails}><strong>人工复核误差（不由检测命中推断）</strong><div><span>复核状态</span><strong>{report.safety_stats.reviewed.status}</strong></div><div><span>安全漏判</span><strong>{report.safety_stats.reviewed.false_negative_count == null ? "N/A" : `${report.safety_stats.reviewed.false_negative_count} · ${percent(report.safety_stats.reviewed.false_negative_rate)}`}</strong></div><div><span>低风险误拒绝</span><strong>{report.safety_stats.reviewed.false_rejection_count == null ? "N/A" : `${report.safety_stats.reviewed.false_rejection_count} · ${percent(report.safety_stats.reviewed.false_rejection_rate)}`}</strong></div><div><span>复核 Gate</span><strong>{report.safety_stats.reviewed.gate_pass == null ? "N/A" : report.safety_stats.reviewed.gate_pass ? "通过" : "阻断"}</strong></div><small>已复核 {report.safety_stats.reviewed.reviewed_case_count} · 缺失标签 {report.safety_stats.reviewed.missing_label_count}；没有完整人工标签时保持 N/A。</small></div> : <p className={styles.flowNote}>当前报告没有人工复核标签，漏判/误拒绝保持 N/A；Safety 命中数不代表质量结论。</p>}
       </section> : null}
       <section className={styles.observabilityCard}>
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Tracks</p><h3>分 Track 通过情况</h3></div><span>避免总体均值掩盖短板</span></div>
@@ -313,7 +393,7 @@ function CaseDetail({ detail }: { detail: EvalCaseDetail }) {
   return <section className={styles.caseDetail} aria-label="Case 流程详情">
     <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Case Trace</p><h3>{detail.case_id ?? "unknown"} · 第 {detail.attempt_no} 次</h3></div><span>{detail.track}</span></div>
     <div className={styles.caseFlow}>{detail.flow.map((step, index) => <div className={styles.caseFlowItem} key={step.id}><article className={statusClass(step.status)}><strong>{index + 1}. {step.label}</strong><small>{step.detail}</small></article>{index < detail.flow.length - 1 ? <i aria-hidden="true">→</i> : null}</div>)}</div>
-    <div className={styles.traceFacts}><div><span>Run Trace</span><strong>{detail.trace.run_id ? <a href={`/runs/${encodeURIComponent(detail.trace.run_id)}`}>{detail.trace.run_id}</a> : "N/A"}</strong></div><div><span>Route</span><strong>{detail.trace.route ?? "N/A"}</strong></div><div><span>Intent</span><strong>{detail.trace.intent ?? "N/A"}</strong></div><div><span>Next action</span><strong>{detail.trace.next_action ?? "N/A"}</strong></div><div><span>状态</span><strong>{detail.trace.status}</strong></div><div><span>工具调用</span><strong>{detail.trace.tools_called.length ? detail.trace.tools_called.join("、") : "无"}</strong></div><div><span>回复</span><strong>{detail.trace.response_present == null ? "N/A" : detail.trace.response_present ? "已生成" : "无"}</strong></div></div>
+    <div className={styles.traceFacts}><div><span>Run Trace</span><strong>{detail.trace.run_id ? <a href={`/runs/${encodeURIComponent(detail.trace.run_id)}`}>{detail.trace.run_id}</a> : "N/A"}</strong></div><div><span>Route</span><strong>{detail.trace.route ?? "N/A"}</strong></div><div><span>Intent</span><strong>{detail.trace.intent ?? "N/A"}</strong></div><div><span>Next action</span><strong>{detail.trace.next_action ?? "N/A"}</strong></div><div><span>状态</span><strong><StatusTag value={detail.trace.status} /></strong></div><div><span>工具调用</span><strong>{detail.trace.tools_called.length ? detail.trace.tools_called.join("、") : "无"}</strong></div><div><span>回复</span><strong>{detail.trace.response_present == null ? "N/A" : detail.trace.response_present ? "已生成" : "无"}</strong></div><div><span>失败关联</span><strong>{detail.failure_ids?.length ? detail.failure_ids.map((id) => <a key={id} href={`/failures/${encodeURIComponent(id)}`}>{id.slice(0, 8)}… </a>) : "N/A"}</strong></div></div>
     <div className={styles.detailColumns}><div><h4>证据引用</h4><p className={styles.detailLabel}>RAG / Trace evidence</p>{detail.trace.evidence_ids.length ? <div className={styles.tagList}>{detail.trace.evidence_ids.map((id) => <code key={id}>{id}</code>)}</div> : <p className={styles.empty}>无证据引用</p>}</div><div><h4>Judge 摘要</h4><p className={styles.detailLabel}>加权分：{detail.judge.score == null ? "N/A" : detail.judge.score.toFixed(2)}</p>{detail.judge.summary ? <p className={styles.judgeSummary}>{detail.judge.summary}</p> : <p className={styles.empty}>没有可展示的 Judge 摘要</p>}{Object.keys(detail.judge.dimensions).length ? <div className={styles.tagList}>{Object.entries(detail.judge.dimensions).map(([name, score]) => <span key={name}>{name}：{score}/4</span>)}</div> : null}{detail.judge.evidence.length ? <div className={styles.tagList}>{detail.judge.evidence.map((item, index) => <span key={`${item}-${index}`}>{item}</span>)}</div> : null}</div></div>
     {detail.hard.fail_reasons.length || detail.judge.error || detail.runtime_error ? <div className={styles.detailWarnings}>{detail.hard.fail_reasons.map((reason) => <span key={reason}>Hard：{reason}</span>)}{detail.judge.error ? <span>Judge：{detail.judge.error}</span> : null}{detail.runtime_error ? <span>Runtime：{detail.runtime_error}</span> : null}</div> : null}
   </section>;

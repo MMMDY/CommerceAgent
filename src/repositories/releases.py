@@ -70,6 +70,33 @@ class ReleaseRepository:
             item.pop("comparison_json", None)
         return result
 
+    def release_ids_for_skill(self, *, tenant_id: str, skill_id: UUID) -> tuple[str, ...]:
+        """Return only releases with an explicit immutable Skill relation."""
+
+        with self._engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT DISTINCT r.release_id::text AS release_id "
+                    "FROM release.releases r "
+                    "JOIN release.release_assignments assignment "
+                    "ON assignment.release_id = r.release_id "
+                    "LEFT JOIN experience.skill_versions version "
+                    "ON version.skill_id = :skill_id "
+                    "WHERE r.tenant_id = :tenant_id "
+                    "AND (assignment.comparison_json->>'current_skill' = :skill_id_text "
+                    "OR assignment.comparison_json->>'candidate_skill' = :skill_id_text "
+                    "OR r.candidate_version = :skill_id_text "
+                    "OR r.candidate_version = version.skill_version_id::text) "
+                    "ORDER BY r.release_id"
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "skill_id": skill_id,
+                    "skill_id_text": str(skill_id),
+                },
+            ).mappings().all()
+        return tuple(str(row["release_id"]) for row in rows)
+
     def latest_active(self, *, tenant_id: str) -> dict[str, Any] | None:
         """Return the newest active release without exposing another tenant."""
 

@@ -1,0 +1,28 @@
+{
+  "schema_version": "layered-evaluation-evidence-audit-v1",
+  "status": "incomplete",
+  "release_gate": false,
+  "automated_gate": false,
+  "human_review_policy": {
+    "status": "waived",
+    "evidence_collected": false,
+    "waiver_reason": "项目负责人明确要求跳过本轮人工复核"
+  },
+  "checks": {
+    "human_review_complete": false,
+    "baseline_status": true,
+    "baseline_reports_complete": true,
+    "hard_checks_complete": true,
+    "baseline_shape": true,
+    "judge_dependent_comparable": true,
+    "final_pass_unchanged": false
+  },
+  "blocking_reasons": [
+    "final_pass_unchanged"
+  ],
+  "requirements": {
+    "minimum_reviewed": 20,
+    "expected_cases": 300,
+    "expected_attempts": 900
+  }
+}

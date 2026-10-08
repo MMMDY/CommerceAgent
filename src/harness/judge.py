@@ -2,8 +2,9 @@
 
 The judge is deliberately isolated from the candidate runtime.  Inputs are
 treated as untrusted data, aggressively bounded/redacted and wrapped in a
-fixed system prompt.  A malformed model response is retried once and then
-reported as incomplete (never as a pass).
+fixed system prompt.  A malformed model response is retried up to the
+configured bounded attempt count and then reported as incomplete (never as a
+pass).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
+from time import sleep as sleep_fn
 from typing import Any, cast
 
 import httpx
@@ -69,6 +71,14 @@ class JudgeConfig:
     self_judged: bool = False
     temperature: float = 0.0
     max_tokens: int = 1200
+    max_attempts: int = 3
+    retry_backoff_seconds: float = 0.25
+
+    def __post_init__(self) -> None:
+        if self.max_attempts < 1 or self.max_attempts > 5:
+            raise ValueError("max_attempts must be between 1 and 5")
+        if self.retry_backoff_seconds < 0 or self.retry_backoff_seconds > 10:
+            raise ValueError("retry_backoff_seconds must be between 0 and 10")
 
     @property
     def config_hash(self) -> str:
@@ -81,6 +91,8 @@ class JudgeConfig:
                 "self_judged": self.self_judged,
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
+                "max_attempts": self.max_attempts,
+                "retry_backoff_seconds": self.retry_backoff_seconds,
                 "purpose": "rubric_judge",
             },
             sort_keys=True,
@@ -132,6 +144,7 @@ class RubricJudge:
         client: httpx.Client | None = None,
         request: Callable[[dict[str, Any]], Mapping[str, Any]] | None = None,
         pricing: ModelPricing | None = None,
+        sleep: Callable[[float], None] | None = None,
     ) -> None:
         self.config = config
         self._rubrics = json.loads(Path(rubric_path).read_text(encoding="utf-8"))
@@ -140,6 +153,7 @@ class RubricJudge:
         self._client = client or httpx.Client(timeout=30)
         self._request = request
         self._pricing = pricing
+        self._sleep = sleep or sleep_fn
 
     def evaluate(
         self,
@@ -175,9 +189,9 @@ class RubricJudge:
         started = perf_counter()
         observed_usage: list[int | None] = []
         observed_costs: list[int | None] = []
-        for attempt in range(2):
+        for attempt in range(self.config.max_attempts):
             try:
-                raw = dict(self._call(input_obj, repair=attempt == 1))
+                raw = dict(self._call(input_obj, repair=attempt > 0))
                 provider_usage = raw.pop("__commerce_agent_provider_usage__", None)
                 observed_usage.append(_usage({"usage": provider_usage}))
                 normalized_usage = _normalize_usage(provider_usage)
@@ -208,6 +222,8 @@ class RubricJudge:
                     evidence=result[5],
                 )
             except (ValidationError, ValueError, KeyError, TypeError, httpx.HTTPError):
+                if self._request is None and attempt + 1 < self.config.max_attempts:
+                    self._sleep(self.config.retry_backoff_seconds * (2**attempt))
                 continue
         return JudgeResult(
             case.id,
@@ -250,11 +266,8 @@ class RubricJudge:
         content = body["choices"][0]["message"]["content"]
         if not isinstance(content, str):
             raise ValueError("invalid judge content")
-        parsed = json.loads(
-            content.strip().removeprefix("```json").removesuffix("```").strip()
-        )
-        if not isinstance(parsed, dict):
-            raise ValueError("judge output must be an object")
+        parsed = _parse_json_object(content)
+        parsed = _coerce_dimension_only_output(parsed, input_obj)
         parsed["__commerce_agent_provider_usage__"] = body.get("usage")
         return cast(Mapping[str, Any], parsed)
 
@@ -309,7 +322,11 @@ class RubricJudge:
             },
             "hard_result": _sanitize(hard.model_dump()),
             "retrieved_evidence": _sanitize(evidence),
-            "tool_trace": _sanitize(trace.model_dump()),
+            # Keep the Judge input contract stable when observability fields
+            # are added to NormalizedTrace.  Run IDs, response-presence
+            # flags, and multi-turn metadata are not business behavior and
+            # must not perturb static baseline scoring.
+            "tool_trace": _sanitize(_stable_trace_projection(trace)),
             "agent_response": _sanitize(trace.response),
             "judge_output_schema": {
                 "case_id": "string",
@@ -404,6 +421,99 @@ def _usage(raw: Mapping[str, Any]) -> int | None:
         if isinstance(usage, Mapping) and isinstance(usage.get("total_tokens"), int)
         else None
     )
+
+
+def _parse_json_object(content: str) -> dict[str, Any]:
+    """Parse an object while tolerating harmless prose or markdown fences."""
+
+    text = content.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        parsed = None
+        for index, character in enumerate(text):
+            if character != "{":
+                continue
+            try:
+                candidate, _ = decoder.raw_decode(text[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict):
+                parsed = candidate
+                break
+        if parsed is None:
+            raise ValueError("judge output must be a JSON object") from None
+    if not isinstance(parsed, dict):
+        raise ValueError("judge output must be an object")
+    return parsed
+
+
+def _coerce_dimension_only_output(
+    parsed: dict[str, Any], input_obj: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Accept the provider's safe shorthand for rubric dimension scores.
+
+    Some OpenAI-compatible providers return the exact dimension map while
+    omitting the surrounding Judge envelope.  Coercion is deliberately
+    narrow: the keys must exactly match the active rubric dimensions and all
+    values must be integer scores in the rubric range.  Any other malformed
+    output remains rejected by ``JudgeOutput`` validation.
+    """
+
+    if {"case_id", "rubric_id", "dimension_scores"} & parsed.keys():
+        return parsed
+    rubric = input_obj.get("rubric")
+    case = input_obj.get("case")
+    if not isinstance(rubric, Mapping) or not isinstance(case, Mapping):
+        return parsed
+    dimensions = rubric.get("dimensions")
+    if not isinstance(dimensions, list):
+        return parsed
+    names = {
+        str(item.get("name"))
+        for item in dimensions
+        if isinstance(item, Mapping) and isinstance(item.get("name"), str)
+    }
+    if not names or set(parsed) != names:
+        return parsed
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 4
+        for value in parsed.values()
+    ):
+        return parsed
+    case_id = case.get("case_id")
+    rubric_id = rubric.get("id")
+    if not isinstance(case_id, str) or not isinstance(rubric_id, str):
+        return parsed
+    return {
+        "case_id": case_id,
+        "rubric_id": rubric_id,
+        "dimension_scores": parsed,
+        "critical_violations": [],
+        "evidence": [],
+        "rationale": "provider_dimension_shorthand",
+        "judge_pass": False,
+    }
+
+
+def _stable_trace_projection(trace: NormalizedTrace) -> dict[str, Any]:
+    """Return only the pre-observability static Judge trace contract."""
+
+    return {
+        "schema_version": trace.schema_version,
+        "case_id": trace.case_id,
+        "route": trace.route,
+        "intent": trace.intent,
+        "next_action": trace.next_action,
+        "args": trace.args,
+        "tools_called": trace.tools_called,
+        "evidence_ids": trace.evidence_ids,
+        "response": trace.response,
+        "status": trace.status,
+    }
 
 
 def _complete_usage_sum(values: list[int | None]) -> int | None:

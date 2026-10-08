@@ -25,6 +25,11 @@ from src.harness.deterministic_runtime import (
     RuntimeFixtureError,
     RuntimeFixtureLoader,
 )
+from src.harness.human_review import (
+    HumanSafetyLabel,
+    ReviewThresholds,
+    load_human_safety_labels,
+)
 from src.harness.judge import JudgeConfig, JudgeUnavailable, RubricJudge
 from src.harness.loader import CaseLoader, DatasetContractError
 from src.harness.report import build_report, write_report
@@ -46,6 +51,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--tenant-id", default="demo-tenant")
     parser.add_argument("--cost-budget-microusd", type=int)
     parser.add_argument(
+        "--human-safety-labels",
+        type=Path,
+        help="JSONL human review labels for reviewed safety error metrics",
+    )
+    parser.add_argument("--low-risk-false-rejection-threshold", type=float)
+    parser.add_argument("--high-risk-false-negative-threshold", type=float)
+    parser.add_argument(
         "--runtime-fixture",
         type=Path,
         help="strict JSONL runtime fixture (default: <dataset-stem>.runtime.jsonl)",
@@ -61,6 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--repetitions must be between 1 and 3")
     if args.mode == "release" and args.judge != "on":
         raise SystemExit("release mode requires --judge on")
+    human_safety_labels, review_thresholds = _load_human_review_inputs(args)
     cancelled = False
 
     def on_interrupt(_signum: int, _frame: object) -> None:
@@ -244,6 +257,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode=args.mode,
             repetitions=args.repetitions,
             cancelled=cancelled,
+            human_safety_labels=human_safety_labels,
+            review_thresholds=review_thresholds,
         )
         report["runtime_fixture_hash"] = runtime_hash
         report["eval_run_id"] = eval_run_id
@@ -355,6 +370,36 @@ def _mapping_hash(value: dict[str, object]) -> str | None:
         return None
     serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return f"sha256:{hashlib.sha256(serialized.encode()).hexdigest()}"
+
+
+def _load_human_review_inputs(
+    args: argparse.Namespace,
+) -> tuple[dict[str, HumanSafetyLabel] | None, ReviewThresholds | None]:
+    threshold_values = (
+        args.low_risk_false_rejection_threshold,
+        args.high_risk_false_negative_threshold,
+    )
+    if any(value is not None for value in threshold_values) and not all(
+        value is not None for value in threshold_values
+    ):
+        raise SystemExit(
+            "human review thresholds must specify both low-risk and high-risk values"
+        )
+    if args.human_safety_labels is None:
+        if any(value is not None for value in threshold_values):
+            raise SystemExit("review thresholds require --human-safety-labels")
+        return None, None
+    try:
+        labels = load_human_safety_labels(args.human_safety_labels)
+        thresholds = None
+        if all(value is not None for value in threshold_values):
+            thresholds = ReviewThresholds(
+                low_risk_false_rejection_rate=float(threshold_values[0]),
+                high_risk_false_negative_rate=float(threshold_values[1]),
+            )
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"human safety review input error: {error}") from error
+    return labels, thresholds
 
 
 if __name__ == "__main__":

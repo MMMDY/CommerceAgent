@@ -1204,6 +1204,71 @@
   padding: 1.15rem;
 }
 
+.multiTurnTrace {
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid #dfe5ef;
+  padding-top: 1rem;
+}
+
+.multiTurnTimeline {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.multiTurnTimeline > li {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e8edf5;
+}
+
+.multiTurnTurnHeader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.multiTurnTurnHeader > span {
+  flex: 1;
+  color: #60718c;
+  font-size: 0.76rem;
+}
+
+.multiTurnTurnBody {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.multiTurnTurnBody > div {
+  min-width: 0;
+  padding: 0.8rem;
+  border-left: 3px solid #bfd5ff;
+  background: #f8faff;
+}
+
+.multiTurnTurnBody > div + div {
+  border-left-color: #b9dfcf;
+  background: #f5fbf8;
+}
+
+.multiTurnTurnBody small,
+.multiTurnTurnBody span {
+  color: #60718c;
+  font-size: 0.72rem;
+}
+
+.multiTurnTurnBody p {
+  min-height: 1.4rem;
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+}
+
 .sectionHeading {
   display: flex;
   align-items: flex-start;
@@ -2485,7 +2550,8 @@
   }
 
   .traceFacts,
-  .detailColumns {
+  .detailColumns,
+  .multiTurnTurnBody {
     grid-template-columns: 1fr;
   }
 

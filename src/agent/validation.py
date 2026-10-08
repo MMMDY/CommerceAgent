@@ -29,10 +29,10 @@ class DecisionValidationError(ValueError):
             return "UNTRUSTED_EVIDENCE"
         if "route" in message:
             return "ROUTE_MISMATCH"
-        if "tool" in message:
-            return "TOOL_NOT_ALLOWED"
         if "argument" in message:
             return "INVALID_TOOL_ARGUMENT"
+        if "tool" in message:
+            return "TOOL_NOT_ALLOWED"
         return "DECISION_REJECTED"
 
 

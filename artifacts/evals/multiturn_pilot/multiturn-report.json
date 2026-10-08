@@ -1,0 +1,2974 @@
+{
+  "schema_version": "multiturn-report-v1",
+  "dataset_id": "pilot-30",
+  "dataset_version": "pilot-v1",
+  "runtime": "deterministic",
+  "status": "completed",
+  "scenario_count": 30,
+  "dialogue_count": 30,
+  "completed_count": 30,
+  "incomplete_count": 0,
+  "evaluation_noise_count": 0,
+  "intent_coverage": {
+    "mean": 1.0,
+    "count": 30
+  },
+  "agenda_progress": {
+    "mean": 1.0,
+    "count": 30
+  },
+  "exposed_intent_accuracy": {
+    "mean": 1.0,
+    "count": 30
+  },
+  "task_success_rate": {
+    "mean": 1.0,
+    "count": 30
+  },
+  "termination_reasons": {
+    "all_key_intents_addressed": 30
+  },
+  "feedback_categories": {},
+  "reports": [
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_001_v1",
+      "dialogue_id": "85a9efa8-7c33-5622-979a-952e208865d5",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_001_v1",
+          "dialogue_id": "85a9efa8-7c33-5622-979a-952e208865d5",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_001_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_002_v1",
+      "dialogue_id": "ab22dc5a-94a6-559a-954d-0d875ffe351f",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_002_v1",
+          "dialogue_id": "ab22dc5a-94a6-559a-954d-0d875ffe351f",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_002_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_003_v1",
+      "dialogue_id": "540f3343-c695-54ee-96bd-65b893dfc9eb",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_003_v1",
+          "dialogue_id": "540f3343-c695-54ee-96bd-65b893dfc9eb",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_003_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_004_v1",
+      "dialogue_id": "fe3f2e33-1407-5b63-9e10-29b71fe56dc1",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_004_v1",
+          "dialogue_id": "fe3f2e33-1407-5b63-9e10-29b71fe56dc1",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_004_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_005_v1",
+      "dialogue_id": "0bcf683f-38ea-5df7-8319-81c60db05f1d",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_005_v1",
+          "dialogue_id": "0bcf683f-38ea-5df7-8319-81c60db05f1d",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_005_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_006_v1",
+      "dialogue_id": "2ae45a25-b446-5976-b028-03b5bf4853ec",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_006_v1",
+          "dialogue_id": "2ae45a25-b446-5976-b028-03b5bf4853ec",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_006_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_007_v1",
+      "dialogue_id": "d75aa385-aa85-550f-b921-0a826aa249a7",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_007_v1",
+          "dialogue_id": "d75aa385-aa85-550f-b921-0a826aa249a7",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_007_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_008_v1",
+      "dialogue_id": "01eac473-b2ff-5835-bfdc-be4647549c93",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_008_v1",
+          "dialogue_id": "01eac473-b2ff-5835-bfdc-be4647549c93",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_008_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_009_v1",
+      "dialogue_id": "3d98aea2-8f18-5751-8d3a-4e11c70d5b6b",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_009_v1",
+          "dialogue_id": "3d98aea2-8f18-5751-8d3a-4e11c70d5b6b",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_009_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_010_v1",
+      "dialogue_id": "a08d3669-0077-5ed4-9458-e3de3dfe4b41",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_010_v1",
+          "dialogue_id": "a08d3669-0077-5ed4-9458-e3de3dfe4b41",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_010_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_011_v1",
+      "dialogue_id": "19a5c083-497e-58f5-9128-2e3f7a755d60",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_011_v1",
+          "dialogue_id": "19a5c083-497e-58f5-9128-2e3f7a755d60",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_011_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_012_v1",
+      "dialogue_id": "d8c12662-83a7-59fd-b8ee-f1d14533e778",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_012_v1",
+          "dialogue_id": "d8c12662-83a7-59fd-b8ee-f1d14533e778",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_012_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_013_v1",
+      "dialogue_id": "192135af-1ea6-519b-a9c5-459716edb73e",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_013_v1",
+          "dialogue_id": "192135af-1ea6-519b-a9c5-459716edb73e",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_013_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_014_v1",
+      "dialogue_id": "c8c87ee[PAYMENT_REDACTED]c18feea5c2",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_014_v1",
+          "dialogue_id": "c8c87ee[PAYMENT_REDACTED]c18feea5c2",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_014_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_015_v1",
+      "dialogue_id": "8cce1e7c-4558-58a5-83ed-6e393f795034",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_015_v1",
+          "dialogue_id": "8cce1e7c-4558-58a5-83ed-6e393f795034",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_015_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_016_v1",
+      "dialogue_id": "a33ecfeb-5395-58f9-9002-3cf3166baf4a",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_016_v1",
+          "dialogue_id": "a33ecfeb-5395-58f9-9002-3cf3166baf4a",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_016_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_017_v1",
+      "dialogue_id": "b979e39e-5e5a-5a14-8f57-6d54092a24e0",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_017_v1",
+          "dialogue_id": "b979e39e-5e5a-5a14-8f57-6d54092a24e0",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_017_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_018_v1",
+      "dialogue_id": "5da10641-ad64-56db-993c-ee8458aaccc7",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_018_v1",
+          "dialogue_id": "5da10641-ad64-56db-993c-ee8458aaccc7",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_018_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_019_v1",
+      "dialogue_id": "1cad7698-941d-5e36-a0cf-d1ef92dbc4e0",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_019_v1",
+          "dialogue_id": "1cad7698-941d-5e36-a0cf-d1ef92dbc4e0",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_019_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_020_v1",
+      "dialogue_id": "612a822d-ce01-59af-ad0a-6e05eca0b93b",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_020_v1",
+          "dialogue_id": "612a822d-ce01-59af-ad0a-6e05eca0b93b",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_020_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_021_v1",
+      "dialogue_id": "841df5cc-2b88-59f8-bb92-60209909cf59",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_021_v1",
+          "dialogue_id": "841df5cc-2b88-59f8-bb92-60209909cf59",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_021_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_022_v1",
+      "dialogue_id": "f922f32c-1866-5bc8-8940-411057cf9ade",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_022_v1",
+          "dialogue_id": "f922f32c-1866-5bc8-8940-411057cf9ade",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_022_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_023_v1",
+      "dialogue_id": "a57272b9-4dd1-5dc2-aa88-48ff5de77b9e",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_023_v1",
+          "dialogue_id": "a57272b9-4dd1-5dc2-aa88-48ff5de77b9e",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_023_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_024_v1",
+      "dialogue_id": "b3173aab-e9f3-5c62-be56-7e94b5f4642c",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_024_v1",
+          "dialogue_id": "b3173aab-e9f3-5c62-be56-7e94b5f4642c",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_024_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_025_v1",
+      "dialogue_id": "c1881fe8-656e-5d46-9b09-e552d1b09ba6",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_025_v1",
+          "dialogue_id": "c1881fe8-656e-5d46-9b09-e552d1b09ba6",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_025_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_026_v1",
+      "dialogue_id": "8a145a8f-d3fe-521b-95f7-77c14dd4b42c",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_026_v1",
+          "dialogue_id": "8a145a8f-d3fe-521b-95f7-77c14dd4b42c",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_026_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_027_v1",
+      "dialogue_id": "af30b397-f810-50fe-b331-bef9af7314e5",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_027_v1",
+          "dialogue_id": "af30b397-f810-50fe-b331-bef9af7314e5",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_027_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_028_v1",
+      "dialogue_id": "9169cfaa-785c-50c3-ab7b-7526d4d19458",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_028_v1",
+          "dialogue_id": "9169cfaa-785c-50c3-ab7b-7526d4d19458",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_028_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_029_v1",
+      "dialogue_id": "fb17abf8-732e-5739-8acf-27c7f44156a5",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_029_v1",
+          "dialogue_id": "fb17abf8-732e-5739-8acf-27c7f44156a5",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_029_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "pilot_030_v1",
+      "dialogue_id": "2912f89c-b5e0-5d58-97f7-17a4636f2a62",
+      "status": "completed",
+      "termination_reason": "all_key_intents_addressed",
+      "turns": [
+        {
+          "schema_version": "1.0",
+          "scenario_id": "pilot_030_v1",
+          "dialogue_id": "2912f89c-b5e0-5d58-97f7-17a4636f2a62",
+          "turn_id": 1,
+          "user_action": {
+            "schema_version": "1.0",
+            "action": "initial_request",
+            "message": "我想咨询一个问题。",
+            "target_intents": [
+              "查询物流状态"
+            ],
+            "revealed_facts": [],
+            "emotion": "neutral",
+            "should_continue": true,
+            "reason_code": "initial_request"
+          },
+          "agent_trace": {
+            "schema_version": "1.0",
+            "case_id": "pilot_030_v1",
+            "run_id": null,
+            "route": null,
+            "intent": "查询物流状态",
+            "next_action": "respond",
+            "args": {},
+            "tools_called": [],
+            "evidence_ids": [],
+            "response": "已说明物流状态。",
+            "status": "complete",
+            "turn_id": null,
+            "dialogue_id": null,
+            "retrieved_evidence_ids": [],
+            "slot_values": {},
+            "tool_attempts": [],
+            "workflow_steps": [],
+            "memory_reads": [],
+            "memory_writes": [],
+            "termination_reason": null
+          },
+          "raised_intents": [
+            "查询物流状态"
+          ],
+          "addressed_intents": [
+            "查询物流状态"
+          ],
+          "intent_states": {
+            "查询物流状态": "ADDRESSED"
+          },
+          "transitions": [
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "NOT_RAISED",
+              "to_state": "RAISED",
+              "turn_id": 1,
+              "evidence": [
+                "user:turn_1"
+              ]
+            },
+            {
+              "schema_version": "1.0",
+              "intent": "查询物流状态",
+              "from_state": "RAISED",
+              "to_state": "ADDRESSED",
+              "turn_id": 1,
+              "evidence": [
+                "response:turn_1"
+              ]
+            }
+          ],
+          "verifier_pass": true
+        }
+      ],
+      "intent_coverage": 1.0,
+      "agenda_progress": 1.0,
+      "exposed_intent_accuracy": 1.0,
+      "task_success": true,
+      "evaluation_noise": false,
+      "feedback": [],
+      "metadata": {
+        "key_intents": [
+          "查询物流状态"
+        ],
+        "raised_key_intents": [
+          "查询物流状态"
+        ],
+        "addressed_key_intents": [
+          "查询物流状态"
+        ]
+      }
+    }
+  ]
+}

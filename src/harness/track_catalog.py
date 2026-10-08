@@ -10,6 +10,11 @@ TRACK_CATALOG: dict[str, dict[str, str]] = {
     "guardrail_handoff": {"rubric": "guardrail_response_v1", "dataset_kind": "core"},
     "long_tail_response_v1": {"rubric": "long_tail_response_v1", "dataset_kind": "synthetic"},
     "safety_response_v2": {"rubric": "safety_response_v2", "dataset_kind": "synthetic"},
+    "multiturn_feedback_v1": {"rubric": "multiturn_response_v1", "dataset_kind": "multiturn"},
+    "catalog_selection_v1": {"rubric": "catalog_selection_v1", "dataset_kind": "catalog"},
+    "catalog_response_v1": {"rubric": "catalog_response_v1", "dataset_kind": "catalog"},
+    "catalog_safety_v1": {"rubric": "catalog_safety_v1", "dataset_kind": "catalog"},
+    "catalog_multiturn_v1": {"rubric": "catalog_multiturn_v1", "dataset_kind": "catalog"},
 }
 
 

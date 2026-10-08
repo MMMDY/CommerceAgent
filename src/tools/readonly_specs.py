@@ -38,7 +38,11 @@ def readonly_tool_specs() -> tuple[ToolSpec, ...]:
         ),
         _spec("list_my_orders", {"status": _STRING, "time_range": _STRING, "limit": {"type": "integer"}}, [], ["orders"], "order:read"),
         _spec("get_order_status", {"order_id": _STRING}, ["order_id"], ["order"], "order:read", resource="order_id"),
-        _spec("get_delivery_tracking", {"order_id": _STRING, "tracking_id": _STRING}, ["order_id"], ["tracking_id", "status", "eta"], "delivery:read", resource="order_id"),
+        # tracking_id is an output of this lookup, not an input. Keeping it
+        # out of the model-visible schema prevents the agent from feeding the
+        # observed tracking number back into an order-scoped lookup on the
+        # next turn and losing the original ownership binding.
+        _spec("get_delivery_tracking", {"order_id": _STRING}, ["order_id"], ["tracking_id", "status", "eta"], "delivery:read", resource="order_id"),
         _spec("get_payment_status", {"order_id": _STRING}, ["order_id"], ["order_id", "status"], "payment:read", resource="order_id"),
         _spec("get_refund_status", {"order_id": _STRING, "refund_id": _STRING}, [], ["order_id", "status"], "refund:read", resource="order_id"),
     )

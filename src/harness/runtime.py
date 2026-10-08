@@ -49,4 +49,6 @@ class TraceAdapter:
             response=trace.response,
             status=trace.status,  # type: ignore[arg-type]
             run_id=trace.run_id,
+            retrieved_evidence_ids=trace.evidence_ids,
+            tool_attempts=trace.tools_called,
         )

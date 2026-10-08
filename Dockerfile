@@ -8,7 +8,10 @@ RUN npm run build
 
 FROM python:3.12-slim AS runtime
 
-ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+# Keep the index configurable for deployments, but use the public PyPI endpoint
+# as the portable default. The previous mirror was not reachable from all
+# builder networks and could leave the runtime image at an old migration head.
+ARG PIP_INDEX_URL=https://pypi.org/simple
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

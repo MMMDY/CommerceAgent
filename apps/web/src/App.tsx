@@ -7,6 +7,8 @@ import { EvolutionLifecycle } from "./components/EvolutionLifecycle";
 import { EventTimeline, eventLabel, eventStage, safeEventDetails } from "./components/EventTimeline";
 import { OperationsDashboard } from "./components/OperationsDashboard";
 import { RunInsight } from "./components/RunInsight";
+import { PageState } from "./components/PageState";
+import { StatusTag } from "./components/StatusTag";
 import { api, ApiError } from "./api/client";
 import type { Conversation, Evidence, EventItem, HumanReview, Message, Preview, Run, Scenario, StateNode } from "./contracts";
 import { buildFeedbackRequest } from "./ui/feedback";
@@ -46,6 +48,8 @@ export function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationLoading, setConversationLoading] = useState(true);
+  const [conversationError, setConversationError] = useState<ApiError | null>(null);
   const [sseConnected, setSseConnected] = useState(false);
   const [stateMachine, setStateMachine] = useState<StateNode[]>([]);
   const [humanReview, setHumanReview] = useState<HumanReview | null>(null);
@@ -96,6 +100,8 @@ export function App() {
   };
 
   useEffect(() => {
+    setConversationLoading(true);
+    setConversationError(null);
     const restoreOrCreate = async () => {
       const conversations = await api<Conversation[]>("/v1/conversations");
       const savedId = window.localStorage.getItem("commerce-agent-conversation-id");
@@ -110,7 +116,10 @@ export function App() {
       });
       setConversation(created);
     };
-    void restoreOrCreate().catch((reason: Error) => setError(reason.message));
+    void restoreOrCreate().catch((reason: unknown) => {
+      setConversationError(reason instanceof ApiError ? reason : null);
+      setError(reason instanceof Error ? reason.message : "会话连接失败");
+    }).finally(() => setConversationLoading(false));
   }, []);
 
   useEffect(() => {
@@ -170,7 +179,7 @@ export function App() {
           : [...current, { id, type: event.type, step_id: "stream", payload }]);
       } catch { /* malformed events never become UI state */ }
     };
-    ["run_created", "safety_routed", "routing_shadow_compared", "routing_completed", "intent_classified", "policy_selected", "model_request_started", "model_request_succeeded", "model_request_failed", "decision_validation_failed", "recovery_attempt_started", "recovery_attempt_succeeded", "recovery_attempt_failed", "rag_retrieval_started", "rag_retrieval_succeeded", "tool_called", "tool_observed", "tool_request_started", "tool_request_succeeded", "tool_request_failed", "skill_matched", "release_assigned", "guardrail_passed", "guardrail_blocked", "fallback_activated", "assistant_response", "terminal_response_published", "step_completed", "waiting_for_user", "handoff_resolved", "failed"].forEach((name) => {
+    ["run_created", "safety_routed", "routing_shadow_compared", "routing_completed", "intent_classified", "policy_selected", "model_request_started", "model_request_succeeded", "model_request_failed", "decision_validation_failed", "recovery_attempt_started", "recovery_attempt_succeeded", "recovery_attempt_failed", "rag_retrieval_started", "rag_retrieval_succeeded", "rag_retrieval_failed", "tool_called", "tool_observed", "tool_request_started", "tool_request_succeeded", "tool_request_failed", "skill_matched", "release_assigned", "guardrail_passed", "guardrail_blocked", "fallback_activated", "assistant_response", "terminal_response_published", "terminal_response_publish_failed", "step_completed", "waiting_for_user", "handoff_created", "handoff_resolved", "mutation_prepared", "user_confirmed", "commit_started", "commit_observed", "state_verified", "mutation_uncertain", "failed"].forEach((name) => {
       stream.addEventListener(name, appendEvent as EventListener);
     });
     return () => stream.close();
@@ -356,7 +365,8 @@ export function App() {
       <section className={`${styles.workspace} ${route === "chat" ? "" : styles.workspaceWide}`} aria-live="polite">
         <p className={styles.eyebrow}>{route === "chat" ? "只读演示" : "Agent Control Plane"}</p><h2>{routeLabels[route]}</h2>
         {route === "evals" ? <EvalDashboard /> : route === "run" && runPageId ? <RunInsight runId={decodeURIComponent(runPageId)} /> : route === "operations" ? <OperationsDashboard /> : lifecyclePage ? <EvolutionLifecycle page={lifecyclePage} /> : route === "not_found" ? <section className={styles.placeholderPanel} aria-label="页面不存在"><span className={styles.statusBadge}>404</span><h3>找不到这个页面</h3><p>请从左侧选择一个有效页面。</p></section> : <>
-          <div className={styles.statusBar}><span>{conversation ? "会话已连接" : "正在连接…"}{sseConnected ? " · SSE 已连接" : run && !terminalRun ? " · SSE 断流 · 轮询回退" : ""}</span>{run ? <span>Run · {run.status}</span> : null}</div>
+          {conversationLoading ? <PageState kind="loading" title="正在连接会话…" /> : conversationError ? <PageState kind={conversationError.status === 403 ? "forbidden" : "error"} title="无法连接会话" detail={conversationError.message} action={{ label: "重新连接", onClick: () => window.location.reload() }} /> : null}
+          <div className={styles.statusBar}><span>{conversation ? "会话已连接" : "正在连接…"}{sseConnected ? " · SSE 已连接" : run && !terminalRun ? " · SSE 断流 · 轮询回退" : ""}</span>{run ? <span>Run · <StatusTag value={run.status} label={run.status_label ?? currentState?.label} /></span> : null}</div>
           {run ? <div className={styles.activityInline}><strong>{run.status_label ?? currentState?.label ?? run.status}</strong><span>{run.status_description ?? currentState?.description ?? "正在同步服务端状态"}</span></div> : null}
           <AgentFlow run={run} events={events} evidenceCount={evidence.length} />
           <EventTimeline events={events} />

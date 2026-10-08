@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Iterator, Mapping
@@ -29,10 +30,17 @@ from sqlalchemy import text
 from apps.api.bootstrap import ReadinessDependencies
 from src.config import Settings, get_settings
 from src.db import get_engine
-from src.evolution.contracts import AttributionCategory, FailureSignal
+from src.evolution.contracts import AttributionCategory, FailureCaseView, FailureSignal
 from src.evolution.failure_attribution import FailureAttributionService
 from src.evolution.skill_registry import SkillRegistry
 from src.harness.dashboard import build_eval_case_detail, build_eval_dashboard
+from src.harness.multiturn_dashboard import (
+    build_multiturn_dashboard,
+    build_multiturn_report_detail,
+    build_multiturn_review_status,
+    build_multiturn_summary,
+    build_multiturn_trace,
+)
 from src.harness.resources import InsufficientDiskError, ensure_disk_budget
 from src.memory.session import build_session_memory
 from src.orchestration.demo_run_executor import execute_message_run
@@ -82,8 +90,10 @@ from src.workflows.mutations import hash_secret
 
 DEMO_TENANT_ID = "demo-tenant"
 EVAL_REPORT_ROOT = Path(__file__).resolve().parents[2] / "evals" / "reports"
+MULTITURN_REPORT_ROOT = Path(__file__).resolve().parents[2] / "artifacts" / "evals"
 _EVAL_PROCESSES: dict[str, subprocess.Popen[str]] = {}
 _EVAL_PROCESS_LOCK = Lock()
+_SAFE_EVAL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class EvalRunCreateRequest(BaseModel):
@@ -244,11 +254,11 @@ class SkillEvaluationCreateRequest(BaseModel):
 
 
 def _eval_report_paths(eval_run_id: str) -> tuple[Path, Path]:
-    # IDs are generated UUIDs; reject path traversal before touching disk.
-    try:
-        UUID(eval_run_id)
-    except ValueError as error:
-        raise HTTPException(status_code=404, detail="evaluation not found") from error
+    # New reports use UUIDs, while historical local reports use stable names
+    # such as ``baseline-20260918``.  Accept both through a strict basename
+    # allowlist; never pass arbitrary user input into the report path.
+    if not _SAFE_EVAL_ID.fullmatch(eval_run_id):
+        raise HTTPException(status_code=404, detail="evaluation not found")
     directory = EVAL_REPORT_ROOT / eval_run_id
     return directory / "report.json", directory / "report.md"
 
@@ -267,8 +277,93 @@ def _read_eval_report(eval_run_id: str) -> dict[str, Any]:
     return payload
 
 
+def _multiturn_report_path(report_id: str) -> Path:
+    """Resolve a report ID under the fixed multi-turn artifact root."""
+
+    if not _SAFE_EVAL_ID.fullmatch(report_id):
+        raise HTTPException(status_code=404, detail="multi-turn report not found")
+    return MULTITURN_REPORT_ROOT / report_id / "multiturn-report.json"
+
+
+def _read_multiturn_report(report_id: str) -> dict[str, Any]:
+    report_path = _multiturn_report_path(report_id)
+    if not report_path.is_file():
+        raise HTTPException(status_code=404, detail="multi-turn report not found")
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=500, detail="multi-turn report unavailable") from error
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=500, detail="multi-turn report unavailable")
+    payload["human_review"] = _read_multiturn_review_status(report_id)
+    return payload
+
+
+def _read_multiturn_review_status(report_id: str) -> dict[str, Any]:
+    """Read the adjacent review sidecar through a browser-safe projection."""
+
+    review_path = _multiturn_report_path(report_id).parent / "human-review-stats.json"
+    try:
+        value = json.loads(review_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return build_multiturn_review_status(None)
+    return build_multiturn_review_status(value if isinstance(value, Mapping) else None)
+
+
+def _evaluation_relations_for_run(run_id: UUID) -> list[dict[str, object]]:
+    """Find report-owned Case references for a durable runtime Run.
+
+    Evaluation reports already contain a redacted ``actual.run_id``. This
+    projection returns only immutable identifiers and outcome metadata; it
+    never exposes the report row, prompt, response, or expected answer.
+    """
+
+    if not EVAL_REPORT_ROOT.is_dir():
+        return []
+    target = str(run_id)
+    relations: list[dict[str, object]] = []
+    for report_path in EVAL_REPORT_ROOT.glob("*/report.json"):
+        eval_run_id = report_path.parent.name
+        try:
+            UUID(eval_run_id)
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+            continue
+        attempts: dict[str, int] = {}
+        for row in payload["results"]:
+            if not isinstance(row, dict):
+                continue
+            case_id = row.get("case_id")
+            if not isinstance(case_id, str) or not case_id:
+                continue
+            attempts[case_id] = attempts.get(case_id, 0) + 1
+            actual = row.get("actual")
+            if not isinstance(actual, dict) or actual.get("run_id") != target:
+                continue
+            final_pass = row.get("final_pass")
+            relations.append(
+                {
+                    "eval_run_id": eval_run_id,
+                    "case_id": case_id,
+                    "attempt_no": attempts[case_id],
+                    "track": row.get("track") if isinstance(row.get("track"), str) else "unknown",
+                    "final_pass": final_pass if isinstance(final_pass, bool) else None,
+                }
+            )
+    return sorted(
+        relations,
+        key=lambda item: (
+            str(item["eval_run_id"]),
+            str(item["case_id"]),
+            cast(int, item["attempt_no"]),
+        ),
+    )
+
+
 def _evaluation_approval_projection(
-    *, eval_run_id: str, report: Mapping[str, Any], record: dict[str, object] | None
+    *, eval_run_id: str, report: Mapping[str, Any], record: Mapping[str, object] | None
 ) -> dict[str, object]:
     raw = report.get("human_approval")
     required = isinstance(raw, dict) and raw.get("required") is True
@@ -1032,24 +1127,34 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
     def list_failures(
         limit: int = 100,
         status_filter: str | None = None,
+        cluster_key: str | None = None,
         admin: str = Depends(require_admin),
     ) -> dict[str, object]:
         del admin
+        if cluster_key is not None and (not cluster_key.strip() or len(cluster_key) > 128):
+            raise HTTPException(status_code=422, detail="invalid_cluster_key")
         failures = FailureRepository(get_engine()).list(
-            tenant_id=DEMO_TENANT_ID, limit=limit, status=status_filter
+            tenant_id=DEMO_TENANT_ID,
+            limit=limit,
+            status=status_filter,
+            cluster_key=cluster_key.strip() if cluster_key else None,
         )
         return {"items": [_failure_json(item) for item in failures], "total": len(failures)}
 
     @app.get("/internal/v1/failures/summary")
     def failure_summary(
         window_days: int = 30,
+        cluster_key: str | None = None,
         admin: str = Depends(require_admin),
     ) -> dict[str, object]:
         del admin
+        if cluster_key is not None and (not cluster_key.strip() or len(cluster_key) > 128):
+            raise HTTPException(status_code=422, detail="invalid_cluster_key")
         try:
             return FailureRepository(get_engine()).summary(
                 tenant_id=DEMO_TENANT_ID,
                 window_days=window_days,
+                cluster_key=cluster_key.strip() if cluster_key else None,
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -1081,7 +1186,22 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         failure = FailureRepository(get_engine()).get(tenant_id=DEMO_TENANT_ID, failure_id=failure_id)
         if failure is None:
             raise HTTPException(status_code=404, detail="failure_not_found")
-        return _failure_json(failure)
+        result = _failure_json(failure)
+        result["skill_ids"] = []
+        try:
+            result["skill_ids"] = [
+                str(item["skill_id"])
+                for item in SkillRepository(get_engine()).list(
+                    tenant_id=DEMO_TENANT_ID,
+                    cluster_key=failure.cluster_key,
+                    limit=100,
+                )
+            ]
+        except Exception:
+            # Failure evidence remains readable when the optional Skill
+            # relation projection is temporarily unavailable.
+            pass
+        return result
 
     @app.post("/internal/v1/failures/{failure_id}/reanalyze")
     def reanalyze_failure(
@@ -1392,6 +1512,18 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         skill = SkillRepository(get_engine()).get(tenant_id=DEMO_TENANT_ID, skill_id=skill_id)
         if skill is None:
             raise HTTPException(status_code=404, detail="skill_not_found")
+        skill["release_ids"] = []
+        try:
+            skill["release_ids"] = list(
+                ReleaseRepository(get_engine()).release_ids_for_skill(
+                    tenant_id=DEMO_TENANT_ID,
+                    skill_id=skill_id,
+                )
+            )
+        except Exception:
+            # The Skill evidence and approval boundary remain available even
+            # when the optional Release relation is temporarily unavailable.
+            pass
         return skill
 
     @app.post("/internal/v1/skills/{skill_id}/evaluations", status_code=status.HTTP_201_CREATED)
@@ -1723,6 +1855,61 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         idempotency.complete(tenant_id=DEMO_TENANT_ID, record_id=claim.record_id, response=encoded)
         return result
 
+    @app.get("/v1/multiturn-reports")
+    def list_multiturn_reports(
+        limit: int = 20,
+        offset: int = 0,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> list[dict[str, Any]]:
+        del actor_id
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+        if not MULTITURN_REPORT_ROOT.is_dir():
+            return []
+        summaries: list[dict[str, Any]] = []
+        for report_path in sorted(MULTITURN_REPORT_ROOT.glob("*/multiturn-report.json"), reverse=True):
+            report_id = report_path.parent.name
+            if not _SAFE_EVAL_ID.fullmatch(report_id):
+                continue
+            try:
+                payload = json.loads(report_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                payload["human_review"] = _read_multiturn_review_status(report_id)
+                summaries.append(build_multiturn_summary(payload, report_id=report_id))
+        return summaries[offset : offset + limit]
+
+    @app.get("/v1/multiturn-reports/{report_id}/dashboard")
+    def get_multiturn_dashboard(
+        report_id: str, actor_id: str = Depends(get_demo_actor)
+    ) -> dict[str, Any]:
+        del actor_id
+        return build_multiturn_dashboard(_read_multiturn_report(report_id), report_id=report_id)
+
+    @app.get("/v1/multiturn-reports/{report_id}/traces/{scenario_id}")
+    def get_multiturn_trace(
+        report_id: str,
+        scenario_id: str,
+        actor_id: str = Depends(get_demo_actor),
+    ) -> dict[str, Any]:
+        del actor_id
+        try:
+            return build_multiturn_trace(
+                _read_multiturn_report(report_id), report_id=report_id, scenario_id=scenario_id
+            )
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail="multi-turn scenario not found") from error
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail="multi-turn scenario is ambiguous") from error
+
+    @app.get("/v1/multiturn-reports/{report_id}")
+    def get_multiturn_report(
+        report_id: str, actor_id: str = Depends(get_demo_actor)
+    ) -> dict[str, Any]:
+        del actor_id
+        return build_multiturn_report_detail(_read_multiturn_report(report_id), report_id=report_id)
+
     @app.get("/v1/evals", response_model=list[EvalRunSummary])
     def list_evaluations(
         limit: int = 20,
@@ -1907,6 +2094,30 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         del actor_id
         return build_eval_dashboard(_read_eval_report(eval_run_id))
 
+    @app.get("/v1/evals/{eval_run_id}/markdown")
+    def get_evaluation_markdown(
+        eval_run_id: str, actor_id: str = Depends(get_demo_actor)
+    ) -> Response:
+        """Download the generated Markdown report for a visible evaluation."""
+
+        del actor_id
+        _, markdown_path = _eval_report_paths(eval_run_id)
+        if not markdown_path.is_file():
+            raise HTTPException(status_code=404, detail="evaluation markdown not found")
+        try:
+            markdown = markdown_path.read_text(encoding="utf-8")
+        except OSError as error:
+            raise HTTPException(status_code=503, detail="evaluation markdown unavailable") from error
+        return Response(
+            content=markdown,
+            media_type="text/markdown",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="commerce-agent-{eval_run_id}.md"'
+                )
+            },
+        )
+
     @app.get("/internal/v1/evals/{eval_run_id}/dashboard")
     def get_internal_evaluation_dashboard(
         eval_run_id: str, admin: str = Depends(require_admin)
@@ -1956,7 +2167,23 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
         rows = [row for row in payload.get("results", []) if row.get("case_id") == case_id]
         if attempt_no > len(rows):
             raise HTTPException(status_code=404, detail="evaluation case not found")
-        return build_eval_case_detail(rows[attempt_no - 1], attempt_no=attempt_no)
+        detail = build_eval_case_detail(rows[attempt_no - 1], attempt_no=attempt_no)
+        related_failures: tuple[FailureCaseView, ...] = ()
+        try:
+            eval_uuid = UUID(eval_run_id)
+        except ValueError:
+            # Historical named reports predate durable evaluation UUIDs. They
+            # remain readable, but cannot have database-backed failure links.
+            pass
+        else:
+            related_failures = FailureRepository(get_engine()).list(
+                tenant_id=DEMO_TENANT_ID,
+                eval_run_id=eval_uuid,
+                case_id=case_id,
+                limit=100,
+            )
+        detail["failure_ids"] = [str(item.failure_id) for item in related_failures]
+        return detail
 
     @app.post("/v1/evals/{eval_run_id}/cancel")
     def cancel_evaluation(
@@ -2738,6 +2965,33 @@ def create_app(*, readiness: ReadinessDependencies | None = None) -> FastAPI:
             ),
             evidence_count=len(evidence_ids),
         )
+
+    @app.get("/v1/runs/{run_id}/relations")
+    def get_run_relations(
+        run_id: UUID,
+        actor_id: str = Depends(get_demo_actor),
+        runs: RunRepository = Depends(_run_repository),
+    ) -> dict[str, object]:
+        """Return owner-safe, explicit cross-resource links for a Run."""
+
+        snapshot = runs.load_run(
+            run_id=run_id,
+            tenant_id=DEMO_TENANT_ID,
+            actor_id=actor_id,
+        )
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="run_not_found")
+        failures = FailureRepository(get_engine()).list(
+            tenant_id=DEMO_TENANT_ID,
+            run_id=run_id,
+            limit=100,
+        )
+        return {
+            "schema_version": "1.0",
+            "run_id": str(run_id),
+            "failures": [_failure_json(item) for item in failures],
+            "evaluations": _evaluation_relations_for_run(run_id),
+        }
 
     @app.get("/internal/v1/runs/{run_id}/insight")
     def get_internal_run_insight(

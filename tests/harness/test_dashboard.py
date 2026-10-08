@@ -78,6 +78,38 @@ def test_dashboard_projects_server_aggregated_rubric_dimensions() -> None:
     assert result["judge_dimensions"]["long_tail_response_v1"]["clarity"]["mean"] == 3.0
 
 
+def test_dashboard_projects_layered_metric_families_without_recomputing_them() -> None:
+    layered = {
+        "catalog_selection_v1": {
+            "top1": {
+                "metric_id": "catalog.selection.top1",
+                "numerator": 31,
+                "denominator": 99,
+                "rate": 0.3131,
+                "evidence_status": "complete",
+            }
+        }
+    }
+    multiturn = {"scenario_count": 30, "evaluation_noise_count": 0}
+    result = build_eval_dashboard(
+        {
+            "status": "completed",
+            "hard_dimension_stats": layered,
+            "multiturn_stats": multiturn,
+            "catalog_stats": layered,
+        }
+    )
+    assert result["hard_dimensions"] == layered
+    assert result["multiturn"] == multiturn
+    assert result["catalog"] == layered
+
+
+def test_dashboard_projects_rag_evidence_metrics() -> None:
+    rag = {"status": "completed", "case_count": 2, "recall_at_k": {"rate": 1.0}}
+    result = build_eval_dashboard({"status": "completed", "rag_stats": rag})
+    assert result["rag"] == rag
+
+
 def test_case_detail_is_allowlisted_and_exposes_trace_flow() -> None:
     result = build_eval_case_detail(
         {

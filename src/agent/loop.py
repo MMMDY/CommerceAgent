@@ -201,7 +201,7 @@ class AgentStepExecutor:
                     decision_type=None,
                     reason="model_audit_failed",
                 )
-        decision = model_result.decision
+        decision = _bind_compound_delivery_order(model_result.decision, context)
         if _is_cancelled(cancelled):
             _record_skipped_action_after_model(stage_observer)
             return LoopResult(
@@ -596,6 +596,33 @@ def _record_skipped_action_after_model(observer: StageObserver | None) -> None:
 
 def _is_cancelled(value: bool | Callable[[], bool]) -> bool:
     return value() if callable(value) else value
+
+
+def _bind_compound_delivery_order(decision: Decision, context: RunContext) -> Decision:
+    """Bind delivery lookup arguments to the trusted order observation.
+
+    The delivery tool is order-scoped and exposes ``tracking_id`` only as an
+    output. Models sometimes copy that output into the next tool call. When a
+    prior trusted order lookup is present, repair that harmless shape error in
+    code and retain the original order ownership boundary. Without a trusted
+    order id, the decision remains unchanged and fails closed in validation.
+    """
+
+    if decision.type is not DecisionType.CALL_TOOL or decision.tool != "get_delivery_tracking":
+        return decision
+
+    arguments = dict(decision.args)
+    arguments.pop("tracking_id", None)
+    if "order_id" not in arguments:
+        by_tool = context.state.get("tool_data_by_name")
+        order_data = by_tool.get("get_order_status") if isinstance(by_tool, dict) else None
+        order = order_data.get("order") if isinstance(order_data, dict) else None
+        order_id = order.get("order_id") if isinstance(order, dict) else None
+        if isinstance(order_id, str) and order_id:
+            arguments["order_id"] = order_id
+    if arguments == decision.args:
+        return decision
+    return decision.model_copy(update={"args": arguments})
 
 
 def _record_post_request_failure(observer: StageObserver | None) -> None:

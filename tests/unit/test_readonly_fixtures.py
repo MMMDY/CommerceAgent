@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from src.protocols import ToolContext
 from src.tools.adapters.mock.read_only import MockReadOnlyAdapter, MockResourceAuthorizer
+from src.tools.readonly_specs import readonly_tool_specs
 
 
 def context(actor: str = "demo-user-001") -> ToolContext:
@@ -47,6 +48,13 @@ def test_delivery_read_is_owner_scoped_even_when_order_and_tracking_are_combined
     denied = adapter.get_delivery_tracking(context("demo-user-001"), {"order_id": "ORD-DEMO-003"})
     assert allowed.error is None
     assert denied.error is not None
+
+
+def test_delivery_tracking_schema_uses_original_order_id_only() -> None:
+    spec = next(item for item in readonly_tool_specs() if item.name == "get_delivery_tracking")
+
+    assert spec.input_schema["required"] == ["order_id"]
+    assert spec.input_schema["properties"] == {"order_id": {"type": "string"}}
 
 
 def test_list_orders_never_leaks_orders_from_other_actor() -> None:

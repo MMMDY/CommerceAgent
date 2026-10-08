@@ -13,6 +13,7 @@ type FlowEvent = {
   type: string;
   step_id?: string;
   payload?: Record<string, unknown>;
+  occurred_at?: string;
 };
 
 type AgentFlowProps = {
@@ -57,38 +58,53 @@ function hasEvent(events: FlowEvent[], ...types: string[]): boolean {
   return events.some((event) => types.includes(event.type));
 }
 
-function nodeState(run: RunSnapshot | null, events: FlowEvent[], node: StageId): FlowState {
+export function flowNodeState(run: RunSnapshot | null, events: FlowEvent[], node: StageId): FlowState {
   if (!run) return "pending";
   const status = run.status;
   const hasSafety = hasEvent(events, "safety_routed");
+  const hasIntake = hasEvent(events, "run_created");
   const hasIntent = events.some((event) => event.type === "model_request_succeeded" && event.payload?.purpose === "routing");
   const route = latestPayload(events, "step_completed");
-  const hasPolicy = typeof route.response_policy === "string" || ["waiting_user", "waiting_confirmation", "waiting_human", ...TERMINAL_STATUSES].includes(status);
+  const hasPolicy = typeof route.response_policy === "string" || hasEvent(events, "policy_selected", "waiting_for_user");
+  const hasExecution = events.some((event) => (
+    ["model_request_started", "model_request_succeeded", "model_request_failed", "tool_request_started", "tool_request_succeeded", "tool_request_failed", "rag_retrieval_started", "rag_retrieval_succeeded", "rag_retrieval_failed", "skill_matched"].includes(event.type)
+    && event.payload?.purpose !== "routing"
+    && event.payload?.purpose !== "intent_classification"
+  ));
+  const hasGuard = events.some((event) => event.type.startsWith("guardrail_") || event.type.includes("handoff") || event.type.includes("mutation") || event.type.includes("commit") || event.type.includes("verified") || event.type.includes("decision") || event.type === "waiting_for_user");
   const hasResponse = hasEvent(events, "assistant_response", "terminal_response_published");
 
-  if (status === "failed") return node === "response" ? "failed" : "done";
-  if (status === "waiting_human") return node === "safety" || node === "guard" ? "warning" : "done";
-  if (TERMINAL_STATUSES.has(status)) return status === "expired" && node === "response" ? "warning" : "done";
-  if (status === "created") return node === "intake" ? "active" : "pending";
-  if (status === "routing") {
-    if (node === "safety") return hasSafety ? "done" : "active";
-    if (node === "domain") return hasIntent ? "done" : "active";
-    if (node === "intent") return hasIntent ? "done" : "active";
-    if (node === "policy") return hasPolicy ? "active" : "pending";
-    return "pending";
+  if (node === "intake") {
+    if (hasIntake) return "done";
+    return status === "created" ? "active" : "na";
   }
-  if (WAITING_STATUSES.has(status)) {
-    if (node === "guard") return "warning";
-    if (node === "response") return hasResponse ? "done" : "active";
-    return "done";
+  if (node === "safety") {
+    if (hasSafety) return ["high", "unknown"].includes(textValue(latestPayload(events, "safety_routed").risk_level)) ? "warning" : "done";
+    return status === "routing" ? "active" : "na";
   }
-  if (status === "committing" || status === "verifying") {
-    if (node === "guard") return "active";
-    return node === "response" ? "pending" : "done";
+  if (node === "domain" || node === "intent") {
+    if (hasIntent) return "done";
+    return status === "routing" ? "active" : "na";
   }
-  if (node === "executor") return "active";
-  if (node === "guard" || node === "response") return "pending";
-  return "done";
+  if (node === "policy") {
+    if (hasPolicy) return ["waiting_user", "waiting_confirmation", "waiting_human"].includes(status) ? "warning" : "done";
+    return status === "routing" ? "active" : "na";
+  }
+  if (node === "executor") {
+    if (hasExecution) return TERMINAL_STATUSES.has(status) || WAITING_STATUSES.has(status) ? "done" : "active";
+    return ["running_readonly", "running_workflow"].includes(status) ? "active" : "na";
+  }
+  if (node === "guard") {
+    if (status === "waiting_human" || status === "waiting_confirmation" || status === "waiting_user") return "warning";
+    if (status === "committing" || status === "verifying") return "active";
+    if (status === "failed" && hasGuard) return "failed";
+    return hasGuard ? "done" : "na";
+  }
+  if (hasResponse) return "done";
+  if (status === "failed") return "failed";
+  if (status === "expired") return "warning";
+  if (status === "waiting_human" || status === "waiting_confirmation" || status === "waiting_user") return "pending";
+  return "pending";
 }
 
 function branchState(run: RunSnapshot | null, events: FlowEvent[], kind: "rag" | "tool" | "skill" | "fallback", evidenceCount: number): FlowState {
@@ -117,7 +133,7 @@ function branchState(run: RunSnapshot | null, events: FlowEvent[], kind: "rag" |
 }
 
 function stateText(state: FlowState): string {
-  return { pending: "未开始", active: "进行中", done: "已完成", warning: "需关注", failed: "失败", na: "未使用" }[state];
+  return { pending: "未开始", active: "进行中", done: "已完成", warning: "需关注", failed: "失败", na: "未使用 / 无事件证据" }[state];
 }
 
 function classFor(state: FlowState): string {
@@ -126,6 +142,39 @@ function classFor(state: FlowState): string {
 
 function decisionValue(value: unknown, fallback = "N/A"): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+type FlowStage = "受理" | "识别与路由" | "策略" | "Agent 执行" | "Guardrail" | "回复发布";
+
+function flowStage(type: string, payload: Record<string, unknown> = {}): FlowStage {
+  if (type === "run_created") return "受理";
+  if (type === "guardrail_passed" || type === "guardrail_blocked" || type === "fallback_activated") return "Guardrail";
+  if (type.includes("safety") || type.includes("routing") || type === "intent_classified" || (type.startsWith("model_request") && payload.purpose === "routing")) return "识别与路由";
+  if (type === "policy_selected") return "策略";
+  if (type.includes("response") || type === "assistant_response" || type === "terminal_response_published") return "回复发布";
+  if (type.includes("mutation") || type.includes("commit") || type.includes("verified") || type.includes("handoff") || type.includes("decision")) return "Guardrail";
+  return "Agent 执行";
+}
+
+function measuredDuration(events: FlowEvent[]): number | null {
+  const timestamps = events
+    .map((event) => event.occurred_at ? new Date(event.occurred_at).getTime() : Number.NaN)
+    .filter((value) => Number.isFinite(value));
+  if (timestamps.length < 2) return null;
+  const duration = Math.max(...timestamps) - Math.min(...timestamps);
+  return duration >= 0 ? duration : null;
+}
+
+export function flowDurationLabel(events: FlowEvent[]): string {
+  const duration = measuredDuration(events);
+  if (duration === null) return "N/A";
+  return duration < 1000 ? `${duration} ms` : `${(duration / 1000).toFixed(2)} s`;
+}
+
+function stageMetric(events: FlowEvent[], stage: FlowStage): string {
+  const stageEvents = events.filter((event) => flowStage(event.type, event.payload) === stage);
+  if (stageEvents.length === 0) return "0 条事件 · N/A";
+  return `${stageEvents.length} 条事件 · ${flowDurationLabel(stageEvents)}`;
 }
 
 function stageEvidence(events: FlowEvent[], node: StageId): string {
@@ -188,15 +237,15 @@ export function AgentFlow({ run, events, evidenceCount }: AgentFlowProps) {
     <section className={styles.flowCard} aria-label="Agent 流程可视化">
       <div className={styles.flowHeader}>
         <div><p className={styles.eyebrow}>Agent Flow · 可审计链路</p><h3>{run ? "本次 Run 的决策与执行路径" : "等待请求启动"}</h3></div>
-        <div className={styles.flowHeaderMeta}><span className={styles.flowLegend}>不展示 Prompt、思维链与工具参数</span>{run?.run_id ? <a className={styles.flowHeaderLink} href={`/runs/${encodeURIComponent(run.run_id)}`}>查看完整 Trace ↗</a> : null}</div>
+        <div className={styles.flowHeaderMeta}><span className={styles.flowLegend}>可测链路：{flowDurationLabel(events)} · 不展示 Prompt、思维链与工具参数</span>{run?.run_id ? <a className={styles.flowHeaderLink} href={`/runs/${encodeURIComponent(run.run_id)}`}>查看完整 Trace ↗</a> : null}</div>
       </div>
       <div className={styles.flowNodes} role="list">
         {mainNodes.map((node, index) => {
-          const state = nodeState(run, events, node.id);
+          const state = flowNodeState(run, events, node.id);
           return <div className={styles.flowNodeWrap} key={node.id} role="listitem">
             <div className={`${styles.flowNode} ${classFor(state)}`}>
               <span className={styles.flowNodeMarker} aria-hidden="true">{state === "done" ? "✓" : state === "na" ? "–" : index + 1}</span>
-              <strong>{node.label}</strong><span>{node.description}</span><small>{stateText(state)}</small><em className={styles.flowNodeEvidence}>{stageEvidence(events, node.id)}</em>
+              <strong>{node.label}</strong><span>{node.description}</span><small>{stateText(state)} · {stageMetric(events, node.id === "intake" ? "受理" : node.id === "safety" || node.id === "domain" || node.id === "intent" ? "识别与路由" : node.id === "policy" ? "策略" : node.id === "executor" ? "Agent 执行" : node.id === "guard" ? "Guardrail" : "回复发布")}</small><em className={styles.flowNodeEvidence}>{stageEvidence(events, node.id)}</em>
             </div>
             {index < mainNodes.length - 1 ? <span className={styles.flowArrow} aria-hidden="true">→</span> : null}
           </div>;
@@ -210,7 +259,7 @@ export function AgentFlow({ run, events, evidenceCount }: AgentFlowProps) {
             {index < branches.length - 1 ? <span className={styles.flowBranchArrow} aria-hidden="true">＋</span> : null}
           </div>)}
         </div>
-        <div className={styles.flowStatusLegend} aria-label="流程状态图例"><span><i className={styles.legendDotDone} />已完成</span><span><i className={styles.legendDotActive} />进行中</span><span><i className={styles.legendDotWarning} />需关注</span><span><i className={styles.legendDotNa} />未使用</span></div>
+        <div className={styles.flowStatusLegend} aria-label="流程状态图例"><span><i className={styles.legendDotDone} />已完成</span><span><i className={styles.legendDotActive} />进行中</span><span><i className={styles.legendDotWarning} />需关注</span><span><i className={styles.legendDotNa} />未使用 / 无事件证据</span></div>
       </div>
       <div className={styles.flowDecisionGrid} aria-label="路由决策证据">
         {decisionCards.map((card) => <article className={`${styles.flowDecisionCard} ${classFor(card.state as FlowState)}`} key={card.label}><div><strong>{card.label}</strong><small>{card.ref}</small></div><b>{card.value}</b><span>{card.detail}</span></article>)}

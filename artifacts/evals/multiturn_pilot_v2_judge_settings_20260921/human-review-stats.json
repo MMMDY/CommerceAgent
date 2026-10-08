@@ -1,0 +1,10 @@
+{
+  "schema_version": "multiturn-human-review-stats-v1",
+  "source_queue": "artifacts/evals/multiturn_pilot_v2_judge_settings_20260921/human-review-queue.json",
+  "source_labels": "artifacts/evals/multiturn_pilot_v2_judge_settings_20260921/human-review-labels.jsonl",
+  "stats": {
+    "status": "incomplete",
+    "error": "human_review_labels_unavailable",
+    "error_type": "FileNotFoundError"
+  }
+}

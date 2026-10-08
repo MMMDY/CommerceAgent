@@ -1,0 +1,152 @@
+{
+  "schema_version": "static-baseline-comparison-v1",
+  "status": "invariant_preserved",
+  "evidence_status": "incomplete",
+  "comparison_scope": "hard_runtime_only",
+  "report_status": {
+    "historical": "completed",
+    "current": "incomplete",
+    "both_completed": false
+  },
+  "historical": {
+    "dataset_hash": "240846bdb3d3dbb0b5c2b16df9df4b9d8f45a24c06bd8b77abd84910edb10ff5",
+    "selected_cases": 300,
+    "completed_cases": 300,
+    "repetitions": 3,
+    "attempts": 900,
+    "hard_passed_cases": 300,
+    "judge": "on",
+    "judge_signature": {
+      "mode": "on",
+      "config_hash": "sha256:ddee66966fff9c3575fde2fce3e79b286df21277aa13a3302de9cc800e6df763",
+      "models": [
+        "deepseek-chat"
+      ],
+      "prompt_hash": "sha256:ea23df3f713b564ca5a0f431940c7568337b12c6cda72580a89822510beedf5f",
+      "rubric_hash": "sha256:c11dbb3371f0fb31bbe01df8ed74c10238b620b3840cf1e998eb9febc9a42ceb",
+      "rubric_version": "1.0"
+    },
+    "final_pass": 298,
+    "all_repetitions_pass_rate": 0.9933,
+    "tracks": {
+      "intent_route": {
+        "selected": 150,
+        "attempts": 450,
+        "hard_pass": 150
+      },
+      "scripted_clarification": {
+        "selected": 20,
+        "attempts": 60,
+        "hard_pass": 20
+      },
+      "tool_workflow": {
+        "selected": 60,
+        "attempts": 180,
+        "hard_pass": 60
+      },
+      "rag_grounding": {
+        "selected": 50,
+        "attempts": 150,
+        "hard_pass": 50
+      },
+      "guardrail_handoff": {
+        "selected": 20,
+        "attempts": 60,
+        "hard_pass": 20
+      }
+    }
+  },
+  "current": {
+    "dataset_hash": "240846bdb3d3dbb0b5c2b16df9df4b9d8f45a24c06bd8b77abd84910edb10ff5",
+    "selected_cases": 300,
+    "completed_cases": 300,
+    "repetitions": 3,
+    "attempts": 900,
+    "hard_passed_cases": 300,
+    "judge": "on",
+    "judge_signature": {
+      "mode": "on",
+      "config_hash": "sha256:ddee66966fff9c3575fde2fce3e79b286df21277aa13a3302de9cc800e6df763",
+      "models": [
+        "deepseek-chat"
+      ],
+      "prompt_hash": "sha256:ea23df3f713b564ca5a0f431940c7568337b12c6cda72580a89822510beedf5f",
+      "rubric_hash": "sha256:c11dbb3371f0fb31bbe01df8ed74c10238b620b3840cf1e998eb9febc9a42ceb",
+      "rubric_version": "1.0"
+    },
+    "final_pass": 290,
+    "all_repetitions_pass_rate": 0.9667,
+    "tracks": {
+      "intent_route": {
+        "selected": 150,
+        "attempts": 450,
+        "hard_pass": 150
+      },
+      "scripted_clarification": {
+        "selected": 20,
+        "attempts": 60,
+        "hard_pass": 20
+      },
+      "tool_workflow": {
+        "selected": 60,
+        "attempts": 180,
+        "hard_pass": 60
+      },
+      "rag_grounding": {
+        "selected": 50,
+        "attempts": 150,
+        "hard_pass": 50
+      },
+      "guardrail_handoff": {
+        "selected": 20,
+        "attempts": 60,
+        "hard_pass": 20
+      }
+    }
+  },
+  "checks": {
+    "dataset_hash": true,
+    "dataset_shape": true,
+    "track_shape": true,
+    "hard_pass": true
+  },
+  "judge_dependent": {
+    "status": "not_comparable",
+    "reports_complete": false,
+    "signature_match": true,
+    "historical_judge": "on",
+    "current_judge": "on",
+    "historical_signature": {
+      "mode": "on",
+      "config_hash": "sha256:ddee66966fff9c3575fde2fce3e79b286df21277aa13a3302de9cc800e6df763",
+      "models": [
+        "deepseek-chat"
+      ],
+      "prompt_hash": "sha256:ea23df3f713b564ca5a0f431940c7568337b12c6cda72580a89822510beedf5f",
+      "rubric_hash": "sha256:c11dbb3371f0fb31bbe01df8ed74c10238b620b3840cf1e998eb9febc9a42ceb",
+      "rubric_version": "1.0"
+    },
+    "current_signature": {
+      "mode": "on",
+      "config_hash": "sha256:ddee66966fff9c3575fde2fce3e79b286df21277aa13a3302de9cc800e6df763",
+      "models": [
+        "deepseek-chat"
+      ],
+      "prompt_hash": "sha256:ea23df3f713b564ca5a0f431940c7568337b12c6cda72580a89822510beedf5f",
+      "rubric_hash": "sha256:c11dbb3371f0fb31bbe01df8ed74c10238b620b3840cf1e998eb9febc9a42ceb",
+      "rubric_version": "1.0"
+    },
+    "input_hashes": {
+      "status": "mismatch",
+      "historical_count": 450,
+      "current_count": 450,
+      "shared_count": 450,
+      "matching_count": 0
+    },
+    "final_pass": {
+      "status": "N/A",
+      "reason": "one or both reports are incomplete"
+    }
+  },
+  "confidence_note": "Hard/runtime invariants are directly comparable; Judge-dependent Final Pass requires the same Judge mode, model, prompt, and rubric."
+}

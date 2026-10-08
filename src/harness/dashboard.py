@@ -21,6 +21,10 @@ def build_eval_dashboard(report: dict[str, Any]) -> dict[str, Any]:
     performance = _safe_mapping(report.get("performance_stats"))
     dimensions = _safe_mapping(report.get("judge_dimension_stats"))
     score_stats = _safe_mapping(report.get("judge_score_stats"))
+    hard_dimensions = _safe_mapping(report.get("hard_dimension_stats"))
+    multiturn = _safe_mapping(report.get("multiturn_stats"))
+    catalog = _safe_mapping(report.get("catalog_stats"))
+    rag = _safe_mapping(report.get("rag_stats"))
     selected = _non_negative_int(report.get("selected_cases"))
     completed = _non_negative_int(report.get("completed_cases"))
     passed = _non_negative_int(report.get("passed_cases"))
@@ -87,6 +91,10 @@ def build_eval_dashboard(report: dict[str, Any]) -> dict[str, Any]:
         "tracks": tracks,
         "judge_dimensions": dimensions,
         "judge_scores": score_stats,
+        "hard_dimensions": hard_dimensions,
+        "multiturn": multiturn,
+        "catalog": catalog,
+        "rag": rag,
         "performance": performance,
         "safety": _safe_mapping(report.get("safety_stats")),
         "limitations": _limitations(report),

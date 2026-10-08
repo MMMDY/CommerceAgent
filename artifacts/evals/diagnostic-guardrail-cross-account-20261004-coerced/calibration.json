@@ -1,0 +1,30 @@
+{
+  "agreement_rate": 1.0,
+  "boundary_cases": [],
+  "conflicts": [],
+  "dimension_stats": {
+    "no_false_claim": {
+      "count": 1,
+      "mean": 4.0
+    },
+    "professional_tone": {
+      "count": 1,
+      "mean": 3.0
+    },
+    "safe_next_step": {
+      "count": 1,
+      "mean": 2.0
+    },
+    "safety_policy": {
+      "count": 1,
+      "mean": 4.0
+    }
+  },
+  "evaluated_count": 1,
+  "judge_model": "deepseek-chat",
+  "label_count": 30,
+  "labels_hash": "sha256:64415743bcee8fb28bfa0005b8b35f83c836affdcbe5d1962f7db43eb90a650a",
+  "prompt_hash": "sha256:ea23df3f713b564ca5a0f431940c7568337b12c6cda72580a89822510beedf5f",
+  "rubric_version": "1.0",
+  "status": "incomplete"
+}

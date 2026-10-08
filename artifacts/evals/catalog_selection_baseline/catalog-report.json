@@ -1,0 +1,1809 @@
+{
+  "schema_version": "catalog-report-v1",
+  "dataset_id": "long_tail_catalog",
+  "dataset_version": "candidate",
+  "runtime": "catalog_runner",
+  "status": "completed",
+  "release_gate": false,
+  "gate_status": "candidate_only",
+  "catalog_stats": {
+    "selection": {
+      "case_count": 99,
+      "top1": {
+        "passed": 31,
+        "total": 99,
+        "rate": 0.3131,
+        "metric_id": "catalog.selection.top1",
+        "numerator": 31,
+        "denominator": 99,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "complete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "constraint_satisfaction": {
+        "passed": 2,
+        "total": 99,
+        "rate": 0.0202,
+        "metric_id": "catalog.selection.constraint_satisfaction",
+        "numerator": 2,
+        "denominator": 99,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "complete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "trap_rejection": {
+        "passed": 31,
+        "total": 99,
+        "rate": 0.3131,
+        "metric_id": "catalog.selection.trap_rejection",
+        "numerator": 31,
+        "denominator": 99,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "complete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      }
+    },
+    "response": {
+      "case_count": 0,
+      "evidence_grounding": {
+        "mean": null,
+        "count": 0,
+        "metric_id": "catalog.response.evidence_grounding",
+        "numerator": null,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "claim evidence references product_id and spec_key"
+      },
+      "unsupported_claim_count": 0
+    },
+    "safety": {
+      "case_count": 0,
+      "none_of_candidates_accuracy": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.safety.none_of_candidates_accuracy",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "forbidden_action_count": 0
+    },
+    "slices": {
+      "by_failure_type": {},
+      "by_trap_family": {},
+      "by_domain": {}
+    }
+  },
+  "failure_reasons": {
+    "catalog_top1_mismatch": 68,
+    "catalog_required_constraint_mismatch": 97,
+    "catalog_trap_not_rejected": 68
+  },
+  "evaluations": [
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0001_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0002_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0003_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0004_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0005_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0006_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0007_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0008_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0009_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0010_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0011_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0012_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0013_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0014_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0015_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0016_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0017_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0018_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0019_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0020_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0021_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0022_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0023_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0024_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0025_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0026_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0027_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0028_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0029_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0030_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0031_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0032_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0033_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0034_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0035_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0036_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0037_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0038_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0039_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0040_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0041_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0042_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0043_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0044_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0045_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0046_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0047_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0048_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0049_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0050_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0051_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0052_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0053_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0054_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0055_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0056_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0057_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0058_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0059_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0060_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0061_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0062_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0063_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0064_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0065_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0066_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0067_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0068_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0069_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0070_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0071_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0072_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0074_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0075_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0076_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0077_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0078_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0079_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0080_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0081_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0082_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0083_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0084_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0085_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0086_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0087_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0088_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0089_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0090_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0091_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0092_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0093_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0094_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0095_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0096_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0097_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0098_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0099_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0100_catalog_selection",
+      "task_type": "catalog_selection_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    }
+  ]
+}

@@ -100,6 +100,79 @@ def test_classifier_uses_explicit_profile_at_temperature_point_one() -> None:
     assert gateway.classifier_config_hash != gateway.config_hash
 
 
+def test_classifier_normalizes_provider_vocabulary_and_alternative_objects() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "intent": "order_status",
+                                    "risk_hint": "low",
+                                    "route_hint": "order_support",
+                                    "confidence": 0.95,
+                                    "domain_confidence": 0.95,
+                                    "risk_confidence": 0.9,
+                                    "required_slots": ["order_id"],
+                                    "domain": "ecommerce",
+                                    "request_risk_level": "low",
+                                    "alternatives": [
+                                        {"intent": "track_order", "confidence": 0.8},
+                                        {"intent": "order_details", "confidence": 0.7},
+                                    ],
+                                }
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    gateway = OpenAICompatibleGateway(
+        _settings(), httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+    result = gateway.classify(_prompt()).classification
+
+    assert result.risk_hint is RiskHint.READ_ONLY
+    assert result.domain.value == "commerce"
+    assert result.request_risk_level.value == "low"
+    assert result.alternatives == ("track_order", "order_details")
+
+
+def test_classifier_unknown_provider_labels_fail_closed_to_unknown() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"intent":"order_status","risk_hint":"maybe_write",'
+                                '"route_hint":"order_query","confidence":1,'
+                                '"domain":"retail_unknown","request_risk_level":"critical"}'
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    gateway = OpenAICompatibleGateway(
+        _settings(), httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+    result = gateway.classify(_prompt()).classification
+
+    assert result.risk_hint is RiskHint.UNKNOWN
+    assert result.domain.value == "unknown"
+    assert result.request_risk_level.value == "unknown"
+
+
 def test_classifier_and_agent_share_connection_but_use_separate_profiles() -> None:
     requests: list[httpx.Request] = []
 
@@ -180,7 +253,6 @@ def test_provider_payload_redacts_pii_at_classifier_and_agent_boundaries() -> No
     "content",
     (
         "not-json",
-        '{"intent":"x","risk_hint":"invalid","route_hint":"x","confidence":1}',
         '{"intent":"x","risk_hint":"read_only","route_hint":"x","confidence":2}',
     ),
 )

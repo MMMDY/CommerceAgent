@@ -168,6 +168,7 @@ class OpenAICompatibleGateway(ModelGateway):
             "Return exactly one JSON object and no prose or markdown. "
             "Required fields: intent, risk_hint, route_hint, confidence, domain_confidence, "
             "risk_confidence, required_slots, domain, request_risk_level, alternatives. "
+            "risk_hint must be read_only, write, or unknown; "
             "All confidence fields must be 0 through 1. confidence is overall; "
             "domain_confidence is only for domain and risk_confidence is only for content risk. "
             "domain must be commerce, social, capability, unsupported, or unknown; "
@@ -224,7 +225,7 @@ class OpenAICompatibleGateway(ModelGateway):
                     _normalize_token_usage(body.get("usage")) if isinstance(body, dict) else None
                 )
                 content = body["choices"][0]["message"]["content"]
-                classification = IntentClassification.model_validate_json(content.strip())
+                classification = _parse_classification(content)
                 combined_usage = _combine_token_usage(observed_usage)
                 if combined_usage is None:
                     combined_usage = TokenUsage(
@@ -389,6 +390,94 @@ def _normalize_token_usage(raw: object) -> TokenUsage | None:
         estimated=any(value is None for value in (input_tokens, output_tokens, total_tokens)),
         provider_usage_version=provider_usage_version,
     )
+
+
+def _parse_classification(content: object) -> IntentClassification:
+    """Parse a provider candidate at the untrusted gateway boundary.
+
+    OpenAI-compatible APIs share the transport shape, not the model's output
+    vocabulary.  In particular, some providers return ``ecommerce`` instead
+    of our ``commerce`` domain, ``low`` instead of the side-effect hint
+    ``read_only``, and alternatives as objects with confidence metadata.
+    Normalize only these explicitly supported aliases before validating the
+    strict internal contract.  Unknown enum values become ``unknown`` so the
+    router cannot gain permission from a provider-specific label.
+    """
+
+    if not isinstance(content, str):
+        raise ValueError("classification content must be a JSON string")
+    candidate = content.strip()
+    if candidate.startswith("```json") and candidate.endswith("```"):
+        candidate = candidate[7:-3].strip()
+    elif candidate.startswith("```") and candidate.endswith("```"):
+        candidate = candidate[3:-3].strip()
+
+    raw = json.loads(candidate)
+    if not isinstance(raw, Mapping):
+        raise ValueError("classification must be a JSON object")
+
+    # Construct a new object instead of forwarding arbitrary provider fields.
+    # This keeps the model contract strict while allowing harmless provider
+    # metadata to remain outside the trusted classification.
+    allowed_fields = {
+        "intent",
+        "route_hint",
+        "confidence",
+        "domain_confidence",
+        "risk_confidence",
+        "required_slots",
+        "request_risk_level",
+    }
+    normalized: dict[str, object] = {
+        key: raw[key] for key in allowed_fields if key in raw
+    }
+
+    risk_hint = raw.get("risk_hint")
+    if risk_hint in {"read_only", "write", "unknown"}:
+        normalized["risk_hint"] = risk_hint
+    elif risk_hint == "low":
+        # DeepSeek's classifier profile uses content-risk terminology here.
+        # ``low`` is compatible with a read-only hint for routing purposes;
+        # write intents still resolve to their code-owned workflow and must
+        # pass the existing confirmation/safety gates.
+        normalized["risk_hint"] = "read_only"
+    else:
+        normalized["risk_hint"] = "unknown"
+
+    domain = raw.get("domain")
+    domain_aliases = {
+        "ecommerce": "commerce",
+        "commerce": "commerce",
+        "social": "social",
+        "capability": "capability",
+        "unsupported": "unsupported",
+        "unknown": "unknown",
+    }
+    normalized["domain"] = (
+        domain_aliases.get(domain, "unknown") if isinstance(domain, str) else "unknown"
+    )
+
+    risk_level = raw.get("request_risk_level")
+    normalized["request_risk_level"] = (
+        risk_level if risk_level in {"low", "medium", "high", "unknown"} else "unknown"
+    )
+
+    alternatives = raw.get("alternatives", ())
+    if alternatives is None:
+        alternatives = ()
+    if not isinstance(alternatives, list | tuple):
+        raise ValueError("classification alternatives must be a list")
+    normalized_alternatives: list[str] = []
+    for alternative in alternatives:
+        if isinstance(alternative, str):
+            normalized_alternatives.append(alternative)
+        elif isinstance(alternative, Mapping) and isinstance(alternative.get("intent"), str):
+            normalized_alternatives.append(alternative["intent"])
+        else:
+            raise ValueError("classification alternative has an invalid shape")
+    normalized["alternatives"] = normalized_alternatives
+
+    return IntentClassification.model_validate(normalized)
 
 
 def _combine_token_usage(attempts: Sequence[TokenUsage | None]) -> TokenUsage | None:

@@ -69,6 +69,22 @@ type Visualization = {
   model_invocations: ModelInvocation[];
   tool_invocations: ToolInvocation[];
 };
+type RunRelation = {
+  failure_id: string;
+  signal: string;
+  severity: string;
+  cluster_key: string;
+  status: string;
+  eval_run_id?: string | null;
+  case_id?: string | null;
+};
+type EvalRelation = {
+  eval_run_id: string;
+  case_id: string;
+  attempt_no: number;
+  track: string;
+  final_pass: boolean | null;
+};
 
 const decisionLabels: Record<string, string> = {
   low: "低风险", medium: "中风险", high: "高风险", unknown: "未知",
@@ -130,10 +146,24 @@ function stateLabel(state: string): string {
   } as Record<string, string>)[state] ?? state;
 }
 
+type TraceReferenceEvent = Pick<TraceEvent, "type" | "payload">;
+
+export function relatedIds(events: TraceReferenceEvent[], eventTypes: string[], keys: string[]): string[] {
+  const values = events.flatMap((event) => {
+    if (!eventTypes.includes(event.type)) return [];
+    return keys.flatMap((key) => {
+      const value = event.payload[key];
+      return typeof value === "string" && value.length > 0 ? [value] : [];
+    });
+  });
+  return [...new Set(values)];
+}
+
 export function RunInsight({ runId }: { runId: string }) {
   const [data, setData] = useState<Visualization | null>(null);
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [relations, setRelations] = useState<{ failures: RunRelation[]; evaluations: EvalRelation[] }>({ failures: [], evaluations: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [partialError, setPartialError] = useState<string | null>(null);
@@ -150,19 +180,23 @@ export function RunInsight({ runId }: { runId: string }) {
     setForbidden(false);
     setTraceUnavailable(false);
     setEvidenceUnavailable(false);
+    setRelations({ failures: [], evaluations: [] });
     const load = async () => {
       try {
         const visualization = await api<Visualization>(`/v1/runs/${encodeURIComponent(runId)}/visualization`, { signal: controller.signal });
         setData(visualization);
-        const [traceResult, evidenceResult] = await Promise.allSettled([
+        const [traceResult, evidenceResult, relationsResult] = await Promise.allSettled([
           api<TraceEvent[]>(`/v1/runs/${encodeURIComponent(runId)}/timeline`, { signal: controller.signal }),
           api<Evidence[]>(`/v1/runs/${encodeURIComponent(runId)}/evidence`, { signal: controller.signal }),
+          api<{ failures: RunRelation[]; evaluations: EvalRelation[] }>(`/v1/runs/${encodeURIComponent(runId)}/relations`, { signal: controller.signal }),
         ]);
         const partials: string[] = [];
         if (traceResult.status === "fulfilled") setTrace(traceResult.value);
         else { setTraceUnavailable(true); partials.push(traceResult.reason instanceof ApiError && traceResult.reason.status === 403 ? "事件链无权限" : "事件链暂不可用"); }
         if (evidenceResult.status === "fulfilled") setEvidence(evidenceResult.value);
         else { setEvidenceUnavailable(true); partials.push(evidenceResult.reason instanceof ApiError && evidenceResult.reason.status === 403 ? "RAG 证据无权限" : "RAG 证据暂不可用"); }
+        if (relationsResult.status === "fulfilled") setRelations(relationsResult.value);
+        else partials.push(relationsResult.reason instanceof ApiError && relationsResult.reason.status === 403 ? "关联资源无权限" : "关联资源暂不可用");
         if (partials.length > 0) setPartialError(`${partials.join("、")}；其余 Run 证据仍可查看`);
       } catch (reason) {
         if (reason instanceof Error && reason.name === "AbortError") return;
@@ -189,6 +223,8 @@ export function RunInsight({ runId }: { runId: string }) {
     { id: "executor", label: "Executor", value: data.decision.route, detail: "最终选择的业务路径", state: data.decision.route ? "completed" : "not_applicable" },
   ] : [];
   const visibleTrace = trace.slice(-20);
+  const relatedReleaseIds = relatedIds(trace, ["release_assigned"], ["release_id"]);
+  const relatedSkillIds = relatedIds(trace, ["skill_matched"], ["skill_id"]);
 
   if (loading) return <PageState kind="loading" title="正在读取 Run 可观测数据…" />;
   if (error) return <PageState kind={forbidden ? "forbidden" : "error"} title="无法加载 Run" detail={error} action={{ label: "重试", onClick: () => setReload((value) => value + 1) }} />;
@@ -199,6 +235,15 @@ export function RunInsight({ runId }: { runId: string }) {
       <section className={styles.runHero}>
         <div><p className={styles.eyebrow}>Run · {data.run_id}</p><h3>执行路径与资源消耗</h3><p>当前步骤：{data.current_step}</p></div>
         <StatusTag value={data.status} />
+      </section>
+      <section className={styles.observabilityCard} aria-label="Run 关联控制面">
+        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Related evidence</p><h3>关联评测 / 失败学习 / 发布证据</h3></div><span>仅展示事件中明确记录的 ID</span></div>
+        <div className={styles.flowLinks}>
+          {relatedReleaseIds.length > 0 ? relatedReleaseIds.map((id) => <a key={`release-${id}`} href={`/releases/${encodeURIComponent(id)}`}>Release {id} ↗</a>) : <span className={styles.muted}>Release：N/A</span>}
+          {relatedSkillIds.length > 0 ? relatedSkillIds.map((id) => <a key={`skill-${id}`} href={`/skills/${encodeURIComponent(id)}`}>Skill {id} ↗</a>) : <span className={styles.muted}>Skill：N/A</span>}
+          {relations.evaluations.length > 0 ? relations.evaluations.map((item) => <a key={`eval-${item.eval_run_id}-${item.case_id}-${item.attempt_no}`} href={`/evals/${encodeURIComponent(item.eval_run_id)}?case_id=${encodeURIComponent(item.case_id)}`}>评测 {item.case_id} · Attempt {item.attempt_no} ↗</a>) : <span className={styles.muted}>评测：N/A</span>}
+          {relations.failures.length > 0 ? relations.failures.map((item) => <a key={`failure-${item.failure_id}`} href={`/failures/${encodeURIComponent(item.failure_id)}`}>失败 {item.failure_id.slice(0, 8)}… ↗</a>) : <span className={styles.muted}>失败：N/A</span>}
+        </div>
       </section>
       {partialError ? <PageState kind="partial" title="Run 展示不完整" detail={partialError} /> : null}
 
@@ -245,17 +290,17 @@ export function RunInsight({ runId }: { runId: string }) {
         <div className={styles.waterfall}>
           {data.timings.map((item) => <div className={styles.waterfallRow} key={item.id}><span>{item.label}</span><div><i className={item.state === "measured" ? styles.barMeasured : styles.barUnknown} style={{ width: item.duration_ms === null ? "100%" : `${Math.max(3, item.duration_ms / maxTiming * 100)}%` }} /></div><strong>{item.state === "not_applicable" ? "不适用" : formatDurationMs(item.duration_ms)}</strong></div>)}
         </div>
-        <table className={styles.dataTable}><caption>阶段时延语义化数据表</caption><thead><tr><th>阶段</th><th>状态</th><th>时延</th></tr></thead><tbody>{data.timings.map((item) => <tr key={item.id}><td>{item.label}</td><td>{item.state}</td><td>{item.state === "not_applicable" ? "不适用" : formatDurationMs(item.duration_ms)}</td></tr>)}</tbody></table>
+        <table className={styles.dataTable}><caption>阶段时延语义化数据表</caption><thead><tr><th>阶段</th><th>状态</th><th>时延</th></tr></thead><tbody>{data.timings.map((item) => <tr key={item.id}><td>{item.label}</td><td><StatusTag value={item.state} label={stateLabel(item.state)} /></td><td>{item.state === "not_applicable" ? "不适用" : formatDurationMs(item.duration_ms)}</td></tr>)}</tbody></table>
       </section>
 
       <section className={styles.observabilityCard}>
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Model calls</p><h3>模型调用与 Token / 成本</h3></div><span>{data.model_invocations.length} 次调用</span></div>
-        {data.model_invocations.length === 0 ? <p className={styles.empty}>本 Run 没有模型调用记录。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><thead><tr><th>用途</th><th>模型</th><th>状态</th><th>时延</th><th>TTFT</th><th>输入</th><th>缓存输入</th><th>输出</th><th>推理</th><th>总 Token</th><th>成本</th></tr></thead><tbody>{data.model_invocations.map((item) => <tr key={item.id}><td>{item.purpose}<small>{item.step_id}</small></td><td>{item.provider}/{item.model}</td><td>{item.status}{item.error_code ? <small>{item.error_code}</small> : null}</td><td>{formatDurationMs(item.latency_ms)}</td><td>{formatDurationMs(item.first_token_latency_ms)}</td><td>{formatNumber(item.token_usage.input_tokens)}</td><td>{formatNumber(item.token_usage.cached_input_tokens)}</td><td>{formatNumber(item.token_usage.output_tokens)}</td><td>{formatNumber(item.token_usage.reasoning_tokens)}</td><td>{formatNumber(item.token_usage.total_tokens)}{item.token_usage.estimated ? <small>估算</small> : null}</td><td>{formatUsdMicros(item.cost_microusd)}{!item.priced ? <small>未定价</small> : null}</td></tr>)}</tbody></table></div>}
+        {data.model_invocations.length === 0 ? <p className={styles.empty}>本 Run 没有模型调用记录。</p> : <div className={styles.tableScroller}><table className={styles.dataTable}><thead><tr><th>用途</th><th>模型</th><th>状态</th><th>时延</th><th>TTFT</th><th>输入</th><th>缓存输入</th><th>输出</th><th>推理</th><th>总 Token</th><th>成本</th></tr></thead><tbody>{data.model_invocations.map((item) => <tr key={item.id}><td>{item.purpose}<small>{item.step_id}</small></td><td>{item.provider}/{item.model}</td><td><StatusTag value={item.status} />{item.error_code ? <small>{item.error_code}</small> : null}</td><td>{formatDurationMs(item.latency_ms)}</td><td>{formatDurationMs(item.first_token_latency_ms)}</td><td>{formatNumber(item.token_usage.input_tokens)}</td><td>{formatNumber(item.token_usage.cached_input_tokens)}</td><td>{formatNumber(item.token_usage.output_tokens)}</td><td>{formatNumber(item.token_usage.reasoning_tokens)}</td><td>{formatNumber(item.token_usage.total_tokens)}{item.token_usage.estimated ? <small>估算</small> : null}</td><td>{formatUsdMicros(item.cost_microusd)}{!item.priced ? <small>未定价</small> : null}</td></tr>)}</tbody></table></div>}
       </section>
 
       <section className={styles.observabilityCard}>
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Tools</p><h3>工具与安全边界</h3></div><span>不展示参数与返回原文</span></div>
-        {data.tool_invocations.length === 0 ? <p className={styles.empty}>本 Run 没有工具调用。</p> : <table className={styles.dataTable}><thead><tr><th>工具</th><th>步骤</th><th>风险</th><th>尝试</th><th>状态</th><th>时延</th></tr></thead><tbody>{data.tool_invocations.map((item) => <tr key={item.id}><td>{item.tool_name}</td><td>{item.step_id}</td><td>{item.risk_level}</td><td>{item.attempt_no}</td><td>{item.status}{item.error_code ? <small>{item.error_code}</small> : null}</td><td>{formatDurationMs(item.latency_ms)}</td></tr>)}</tbody></table>}
+        {data.tool_invocations.length === 0 ? <p className={styles.empty}>本 Run 没有工具调用。</p> : <table className={styles.dataTable}><thead><tr><th>工具</th><th>步骤</th><th>风险</th><th>尝试</th><th>状态</th><th>时延</th></tr></thead><tbody>{data.tool_invocations.map((item) => <tr key={item.id}><td>{item.tool_name}</td><td>{item.step_id}</td><td><StatusTag value={item.risk_level} /></td><td>{item.attempt_no}</td><td><StatusTag value={item.status} />{item.error_code ? <small>{item.error_code}</small> : null}</td><td>{formatDurationMs(item.latency_ms)}</td></tr>)}</tbody></table>}
       </section>
 
       <section className={styles.observabilityCard}>

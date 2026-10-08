@@ -4,7 +4,7 @@
 
 ### 让电商客服 Agent 的每一步都可见、可控、可恢复
 
-一个自研的电商客服 Agent 演示工作台：支持意图路由、受策略约束的工具调用、RAG 知识检索、人工审核、持久化 Run Trace，以及成功、等待、失败都不丢回复的完整用户闭环。
+一个自研的电商客服 Agent 编排与持续进化工作台：打通“请求路由 → ReAct/Deterministic Workflow 双流执行 → RAG/Tool 调用 → Guardrail 与安全兜底 → Trace 监控 → Badcase 回流 → LLM-as-a-Judge 评测 → Skill 演进”的完整链路。
 
 <p>
   <a href="#30-秒启动"><strong>30 秒启动</strong></a> ·
@@ -20,7 +20,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.116-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-348%20passed-22c55e?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-410%20passed-22c55e?logo=pytest&logoColor=white)
 
 </div>
 
@@ -32,16 +32,20 @@
 
 ## 为什么值得看
 
-大多数客服 Agent Demo 只展示最后一句答案；CommerceAgent 展示的是一条完整、可审计的执行链：
+大多数客服 Agent Demo 只展示最后一句答案；CommerceAgent 展示的是一条完整、可审计、可恢复和可持续改进的执行链：
 
 ```text
 用户消息
    ↓
-意图与风险识别 → 代码锁定路由 → 模型提出下一步
-   ↓                         ↓
-状态机 + Trace          安全校验 / 权限 / 工具边界
-   ↓                         ↓
-工具执行 → 可信观察 → checkpoint → 最终回复 / 等待用户 / 人工审核 / 可重试失败
+Safety Router → Intent Routing → 代码锁定 route / execution mode
+   ↓                              ↓
+长尾 Fallback / Handoff       ReAct 只读流 / Deterministic Workflow 事务流
+   ↓                              ↓
+Guardrail / Policy / Owner Check → RAG / Tool → 可信 Observation
+                                  ↓
+                       checkpoint + Run Trace + 终态回复
+                                  ↓
+             Badcase → Attribution → Judge → Skill → Shadow/Canary
 ```
 
 核心原则很简单：
@@ -50,6 +54,7 @@
 - 有副作用的操作，先预览、再确认、可人工接管；
 - 每个已受理 Run，无论成功还是失败，都要给用户一个明确结果；
 - 失败可以重试，但不靠无限重试或自动换会话掩盖问题。
+- 失败信号进入归因和评测链路，但 Skill 必须经过离线门禁与人工审批后才能发布。
 
 ## 30 秒启动
 
@@ -202,6 +207,105 @@ sequenceDiagram
 | Read-only loop | 订单、商品、物流、政策查询 | 有界步骤、工具 allowlist、可信观察、无写副作用 |
 | Deterministic workflow | 退款、取消、换货、改地址 | 代码编排、预览确认、幂等 commit、结果核验、人工接管 |
 
+### 意图路由与执行模式
+
+意图分类器只产生不可信的候选，不直接决定权限、工具或执行模式；代码维护的 `route_catalog` 再把候选转换为受信任的 `RouteDecision`。
+
+```text
+Safety Router
+   ↓
+Intent Classifier
+   → intent / domain / risk / confidence / required_slots / alternatives
+   ↓
+Confidence Calibration
+   ↓
+IntentRouter（代码路由表）
+   ├── execute → readonly_loop / workflow
+   ├── ask_user → 补充槽位或澄清意图
+   └── handoff → 人工接管 / 安全降级
+```
+
+当前路由目录包含 **30 个默认入口**：
+
+- 13 个 Workflow 意图：购物车新增/删除、取消订单、修改订单、发票、配送异常、缺件、破损、错发、退款、退货、换货、支付等；
+- 16 个只读业务意图：订单、物流、运费、退款状态/政策、退货政策、商品、支付、客服、技术支持和促销政策等；
+- 1 个 `human_agent` 强制人工入口；
+- 开启 `routing_v2 + conversational_fallback` 后，额外支持 `greeting`、`thanks`、`social_chat`、`capability_query` 和 `unsupported_low_risk` 5 个长尾/会话入口，总计 **35 个路由入口**。
+
+默认业务路由的分类置信度门槛为 `0.8`；低于门槛进入 `ask_user`，未知意图、风险冲突、领域冲突或人类请求进入 `handoff`。长尾会话路由还要求 domain/risk confidence 达到门槛，并且只能用于低风险会话。
+
+### Agent 工具目录
+
+Runtime 注册表当前包含 **17 个 ToolSpec**，其中 **16 个模型可见工具**，另有 1 个仅供内部控制流使用的 `request_handoff`。
+
+| 类目 | 数量 | 模型可见工具 | 作用域/边界 |
+|---|---:|---|---|
+| 商品与知识只读 | 4 | `search_catalog`、`get_product_detail`、`compare_products`、`retrieve_knowledge` | catalog/knowledge read；RAG 必须返回可信 evidence |
+| 订单与交易只读 | 5 | `list_my_orders`、`get_order_status`、`get_delivery_tracking`、`get_payment_status`、`get_refund_status` | order/delivery/payment/refund read；订单资源执行 owner check |
+| Workflow 预览 | 5 | `prepare_cancel_order`、`prepare_update_shipping_address`、`prepare_refund`、`prepare_return`、`prepare_exchange` | 只负责准备和预览，不负责最终 commit |
+| 低风险持久化请求 | 2 | `create_invoice_request`、`report_delivery_issue` | 代码拥有提交边界，结果未知时转人工 |
+| 内部接管 | 1 | `request_handoff`（不可见） | 仅由运行时创建人工工单 |
+
+模型调用工具前必须经过工具版本、当前 workflow/step、required scopes、参数 schema、系统字段拒绝、tenant/actor/owner 和 policy 检查。模型不能在 `args` 中传入 `tenant_id`、`actor_id`、`owner_id`、`confirmation_token` 或 `policy_version` 等系统字段。
+
+### Workflow 阶段
+
+写操作的通用 Workflow 定义为 8 个阶段：
+
+```text
+authenticate
+  → load_resource
+  → check_eligibility
+  → collect_slots
+  → prepare
+  → confirm_mutation
+  → commit_mutation
+  → verify_mutation
+```
+
+| 阶段 | 主要职责 | 失败后的结果 |
+|---|---|---|
+| `authenticate` | 验证租户、Actor 和会话身份 | fail closed |
+| `load_resource` | 读取订单/商品并校验资源存在 | `RESOURCE_NOT_FOUND` 或转人工 |
+| `check_eligibility` | 校验状态、售后政策和操作资格 | 不满足条件则明确拒绝或人工处理 |
+| `collect_slots` | 收集订单号、商品号、原因、新地址等必填槽位 | `waiting_user` |
+| `prepare` | 生成规范化参数、影响范围、金额、策略版本和确认摘要 | 生成确认卡和一次性 token |
+| `confirm_mutation` | 校验用户确认、token、hash、过期时间和幂等版本 | 拒绝则取消，失效则不提交 |
+| `commit_mutation` | 进入唯一 durable mutation boundary | 成功、失败或未知 |
+| `verify_mutation` | 回读业务状态并与预期结果核对 | mismatch/unknown 转人工 |
+
+退款、退货、换货、取消和改地址使用确认型 Workflow；发票申请和配送异常属于低风险持久化请求，由代码执行一次性 durable boundary，不提供模型可见的 commit 工具。所有 Demo adapter 当前仍是 mock business fixture。
+
+### 一次请求的模块执行顺序
+
+```text
+1. API 接收消息
+   ↓ 原子写入 Conversation / Message / Run
+2. SafetyRouter
+   ↓ 硬阻断检查、语义风险分流、P0 audit
+3. IntentClassifier
+   ↓ 独立 RoutingPromptView，只暴露必要对话内容
+4. Confidence Calibration
+   ↓ 校准 intent/domain/risk confidence
+5. IntentRouter
+   ↓ 代码锁定 intent、route、workflow version、response policy
+6. Skill / Release 观测
+   ↓ 只读匹配；Shadow 只记录候选，不执行候选工具
+7. 执行器选择
+   ├── Readonly AgentLoop
+   └── WorkflowExecutor / mutation boundary
+8. DecisionValidator / ToolRegistry / Policy / Owner Check
+   ↓
+9. Tool / RAG / Workflow adapter
+   ↓ 输出脱敏、归一化、可信 Observation
+10. Reduce → Checkpoint → Durable Event
+   ↓
+11. 下一轮决策、等待用户、等待确认、等待人工或终态回复
+12. 反馈 / Failure Signal / Eval / Skill 控制面回流
+```
+
+其中 `SafetyRouter` 位于业务路由和 Skill 检索之前；模型调用和工具调用之间、工具返回和下一轮模型之间都存在取消、deadline 和可信边界检查。辅助监控或 Release 控制面异常时，请求仍由正常 Safety/Router 路径控制，不会放宽工具权限。
+
 ### 数据与信任边界
 
 ```text
@@ -249,12 +353,16 @@ sequenceDiagram
 | `GET` | `/v1/runs/{run_id}/human-review` | 查看人工审核工单 |
 | `GET` | `/v1/runs/{run_id}/visualization` | 获取脱敏 Agent 流程、时延、Token、成本和工具摘要 |
 | `POST` | `/v1/runs/{run_id}/feedback` | 提交 owner 点赞/点踩与可选授权纠错 |
+| `GET` | `/v1/evals/{eval_run_id}/dashboard` | 查看评测流程、Rubric 平均分、分布和 Gate |
+| `GET` | `/v1/evals/{eval_run_id}/markdown` | 下载同一评测批次的 Markdown 报告 |
 | `GET` | `/internal/v1/operations/summary` | 查看 P50/P95/P99、Token、成本和趋势 |
 | `GET` | `/internal/v1/safety/events` | 管理员查看脱敏 P0 Safety 审计事件（需 admin） |
 | `GET` | `/internal/v1/failures` | 查看脱敏失败样本与归因状态（需 admin） |
 | `POST` | `/internal/v1/failures/{failure_id}/skill` | 达到 5 个独立来源后创建待审 Skill 候选（需 admin） |
 | `GET` | `/internal/v1/skills` | 查看 Skill 状态漏斗和审批队列（需 admin） |
 | `GET` | `/internal/v1/releases` | 查看 Shadow/Canary 发布阶段（需 admin） |
+
+上线评测、真人审批、7 天 Shadow、Canary 和传播证据的操作步骤见 [`docs/runbooks/release-evaluation-gates.md`](docs/runbooks/release-evaluation-gates.md)。
 
 示例：
 
@@ -287,7 +395,7 @@ npm ci
 npm run build
 ```
 
-当前代码回归：`367 passed, 56 skipped`；隔离 PostgreSQL contract：`45 passed`。Live Model、Live RAG、Recovery 和未配置 `DATABASE_TEST_URL` 的测试按条件跳过，不能解读为线上能力证据。完整命令与限制见 [最新验证证据](docs/plan/evidence/phase-n0-validation-20260918-rerun.md)。项目采用有明确超时、步骤和结束条件的测试，不设置连续 24 小时运行测试。
+当前工作区回归：无数据库条件为 `410 passed, 64 skipped`；使用一次性隔离 PostgreSQL 的完整 contract/recovery 验证见证据文档，前端 Vitest `24 passed`，typecheck、lint、production build 和 bundle/license 检查通过。跳过项主要是未配置的 `DATABASE_TEST_URL` 和未开启的外部模型 Live Test；这些结果不能解读为线上能力证据。当前工作区新增迁移 `20260919_0026`，部署前需将 Alembic head、readiness 预期版本和 Demo 数据库版本统一后再执行迁移。最新命令、前端验证、人工复核指标合同、基线冻结器、传播测量器和限制见 [最新验证证据](docs/plan/evidence/phase-n7-latest-validation-20260918.md)、[隔离 PostgreSQL 证据](docs/plan/evidence/phase-n7-isolated-postgres-validation-20260919.md) 与 [demo runtime 证据](docs/plan/evidence/phase-n7-demo-runtime-validation-20260919.md)。项目采用有明确超时、步骤和结束条件的测试，不设置连续 24 小时运行测试。
 
 ### 运行评测
 
@@ -341,6 +449,7 @@ docker compose --profile maintenance run --rm migrate
 - [故障恢复](docs/runbooks/failure-recovery.md)
 - [备份与恢复](docs/runbooks/backup-restore.md)
 - [安全边界](docs/runbooks/security.md)
+- [评测、审批与发布证据 Runbook](docs/runbooks/release-evaluation-gates.md)：说明无人审批、7 天 Shadow、Canary、自动停止和一分钟传播证据的采集边界。
 
 ## 路线图
 
@@ -351,6 +460,7 @@ docker compose --profile maintenance run --rm migrate
 - [x] PostgreSQL checkpoint、幂等和启动补偿
 - [x] 有界评测与 release evidence
 - [x] Run 流程、时延、Token、成本和评测平均分可视化
+- [x] Agent 主流程、RAG/Tool/Skill/Fallback 分支、Safety 趋势和 Run/评测/失败/发布下钻可视化
 - [x] 失败样本、Skill 审批和发布控制面基础接口/页面
 - [x] 自动评测无真人时保持 Skill `PENDING_REVIEW`，禁止自动越级上线
 - [ ] 接入真实订单、退款和物流服务适配器
@@ -369,11 +479,19 @@ docker compose --profile maintenance run --rm migrate
 ### 评测
 
 - [300-case 数据集、Track 划分与混合判分协议](evals/commerce_bench_zh/README.md)：说明确定性 hard evaluation、LLM Judge、运行和数据适用边界。
+- [长尾候选评测集](evals/long_tail_zh/README.md) 与 [长尾样本](evals/long_tail_zh/cases.jsonl)：当前 6 条合成候选样本，独立于主回归集，不自动进入线上路由或 Skill Registry。
+- [高危候选评测集](evals/safety_zh/README.md) 与 [高危样本](evals/safety_zh/cases.jsonl)：当前 5 条安全候选样本，必须通过 Hard Gate、独立 Judge 和真人审批后才可作为 Release 证据。
 - [Judge Rubric](evals/commerce_bench_zh/rubrics.json) 与 [Judge Prompt/运行约束](evals/commerce_bench_zh/JUDGE_PROMPT.md)。
 - [数据集质量审核记录](evals/commerce_bench_zh/quality-audit.md)、[来源选择与哈希](evals/commerce_bench_zh/SOURCES.md)及[数据许可说明](evals/commerce_bench_zh/LICENSE-DATA.md)。
 - [总体设计中的评测指标与发布门槛](docs/plan/feasibility-and-implementation-plan.md#11-评测指标与发布门槛)。
 - [最新 Internal Beta 评测摘要](docs/releases/internal-beta-20260916-r4/release-summary.md)：历史 deterministic/独立 Judge 报告，300 case × 3 次共 900 次运行，hard pass `300/300`，最终通过 `296/300`，三次全通过率 `0.9867`；该数值不是线上准确率。
 - [下一代评测与失败学习验证证据](docs/plan/evidence/phase-n0-validation-20260918-rerun.md)：包含当前测试、前端流程可视化、失败归因、Skill 审批边界和线上证据限制。
+- [最新阶段回归与前端流程证据](docs/plan/evidence/phase-n7-latest-validation-20260918.md)：包含当前 Python/前端回归、报告聚合、流程证据和限制。
+- [跨资源下钻与 Dashboard/Markdown 一致性](docs/plan/evidence/phase-n7-cross-resource-drilldown-20260918.md)。
+- [Safety 趋势可视化](docs/plan/evidence/phase-n7-safety-trend-visualization-20260919.md) 与 [人工安全复核指标合同](docs/plan/evidence/phase-n7-human-safety-review-contract-20260918.md)。
+- [高危评测人工审批控制](docs/plan/evidence/phase-n7-evaluation-human-approval-control-20260918.md)：无人审批时保持 `pending`，不自动上线。
+- [项目详细介绍](docs/summary/commerce-agent-detailed-introduction.md)：包括意图路由、工具目录、Workflow 阶段、模块执行顺序、RAG、评测和 Skill 演进。
+- [面试准备](docs/summary/commerce-agent-interview-preparation.md)：包括项目介绍、技术问答、Demo 顺序、关键数字和生产边界。
 - 详细报告在 `evals/reports/release-20260916-bounded-judge-v2/report.md` 和 `report.json`；评测报告目录默认被 `.gitignore` 忽略，仅在本地生成，不随仓库提交。
 
 ## 设计文档

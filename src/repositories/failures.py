@@ -79,13 +79,35 @@ class FailureRepository:
                 )
         return self.get(tenant_id=tenant_id, failure_id=failure_id)  # type: ignore[return-value]
 
-    def list(self, *, tenant_id: str, limit: int = 100, status: str | None = None) -> tuple[FailureCaseView, ...]:
+    def list(
+        self,
+        *,
+        tenant_id: str,
+        limit: int = 100,
+        status: str | None = None,
+        cluster_key: str | None = None,
+        run_id: UUID | None = None,
+        eval_run_id: UUID | None = None,
+        case_id: str | None = None,
+    ) -> tuple[FailureCaseView, ...]:
         limit = max(1, min(limit, 500))
         params: dict[str, Any] = {"tenant_id": tenant_id, "limit": limit}
         clause = "tenant_id = :tenant_id"
         if status:
             clause += " AND status = :status"
             params["status"] = status
+        if cluster_key:
+            clause += " AND cluster_key = :cluster_key"
+            params["cluster_key"] = cluster_key
+        if run_id is not None:
+            clause += " AND run_id = :run_id"
+            params["run_id"] = run_id
+        if eval_run_id is not None:
+            clause += " AND eval_run_id = :eval_run_id"
+            params["eval_run_id"] = eval_run_id
+        if case_id:
+            clause += " AND case_id = :case_id"
+            params["case_id"] = case_id
         with self._engine.connect() as connection:
             rows = connection.execute(
                 text(
@@ -103,13 +125,26 @@ class FailureRepository:
             ).mappings().all()
         return tuple(self._view(row) for row in rows)
 
-    def summary(self, *, tenant_id: str, window_days: int = 30, limit: int = 10) -> dict[str, object]:
+    def summary(
+        self,
+        *,
+        tenant_id: str,
+        window_days: int = 30,
+        limit: int = 10,
+        cluster_key: str | None = None,
+    ) -> dict[str, object]:
         """Return bounded aggregate failure telemetry without failure text."""
 
         if not 1 <= window_days <= 90:
             raise ValueError("window_days must be between 1 and 90")
         limit = max(1, min(limit, 50))
-        params = {"tenant_id": tenant_id, "window_days": window_days, "limit": limit}
+        params: dict[str, Any] = {"tenant_id": tenant_id, "window_days": window_days, "limit": limit}
+        cluster_filter = ""
+        taxonomy_cluster_filter = ""
+        if cluster_key:
+            params["cluster_key"] = cluster_key
+            cluster_filter = "AND cluster_key = :cluster_key "
+            taxonomy_cluster_filter = "AND failure.cluster_key = :cluster_key "
         with self._engine.connect() as connection:
             clusters = connection.execute(
                 text(
@@ -118,7 +153,8 @@ class FailureRepository:
                     "FROM evaluation.failure_cases "
                     "WHERE tenant_id = :tenant_id "
                     "AND created_at >= now() - make_interval(days => :window_days) "
-                    "GROUP BY cluster_key ORDER BY case_count DESC, cluster_key LIMIT :limit"
+                    + cluster_filter
+                    + "GROUP BY cluster_key ORDER BY case_count DESC, cluster_key LIMIT :limit"
                 ),
                 params,
             ).mappings().all()
@@ -133,7 +169,8 @@ class FailureRepository:
                     ") AS latest ON TRUE "
                     "WHERE failure.tenant_id = :tenant_id "
                     "AND failure.created_at >= now() - make_interval(days => :window_days) "
-                    "GROUP BY category ORDER BY case_count DESC, category"
+                    + taxonomy_cluster_filter
+                    + "GROUP BY category ORDER BY case_count DESC, category"
                 ),
                 params,
             ).mappings().all()
@@ -142,7 +179,8 @@ class FailureRepository:
                     "SELECT severity, count(*)::bigint AS case_count "
                     "FROM evaluation.failure_cases WHERE tenant_id = :tenant_id "
                     "AND created_at >= now() - make_interval(days => :window_days) "
-                    "GROUP BY severity ORDER BY severity"
+                    + cluster_filter
+                    + "GROUP BY severity ORDER BY severity"
                 ),
                 params,
             ).mappings().all()
@@ -151,7 +189,8 @@ class FailureRepository:
                     "SELECT status, count(*)::bigint AS case_count "
                     "FROM evaluation.failure_cases WHERE tenant_id = :tenant_id "
                     "AND created_at >= now() - make_interval(days => :window_days) "
-                    "GROUP BY status ORDER BY status"
+                    + cluster_filter
+                    + "GROUP BY status ORDER BY status"
                 ),
                 params,
             ).mappings().all()
@@ -163,7 +202,8 @@ class FailureRepository:
                     "count(*) FILTER (WHERE status = 'reviewed')::bigint AS reviewed_count "
                     "FROM evaluation.failure_cases WHERE tenant_id = :tenant_id "
                     "AND created_at >= now() - make_interval(days => :window_days) "
-                    "GROUP BY bucket ORDER BY bucket"
+                    + cluster_filter
+                    + "GROUP BY bucket ORDER BY bucket"
                 ),
                 params,
             ).mappings().all()

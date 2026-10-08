@@ -92,7 +92,14 @@ class SkillRepository:
             ).mappings().one()
         return dict(row)
 
-    def list(self, *, tenant_id: str, status: str | None = None, limit: int = 100) -> tuple[dict[str, Any], ...]:
+    def list(
+        self,
+        *,
+        tenant_id: str,
+        status: str | None = None,
+        limit: int = 100,
+        cluster_key: str | None = None,
+    ) -> tuple[dict[str, Any], ...]:
         self.expire_due(tenant_id=tenant_id)
         limit = max(1, min(limit, 500))
         clause = "tenant_id = :tenant_id"
@@ -100,6 +107,9 @@ class SkillRepository:
         if status:
             clause += " AND status = :status"
             params["status"] = status
+        if cluster_key:
+            clause += " AND cluster_key = :cluster_key"
+            params["cluster_key"] = cluster_key
         with self._engine.connect() as connection:
             rows = connection.execute(
                 text(

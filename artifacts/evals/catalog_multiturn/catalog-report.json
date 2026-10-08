@@ -1,0 +1,5283 @@
+{
+  "schema_version": "catalog-report-v1",
+  "dataset_id": "long_tail_catalog",
+  "dataset_version": "candidate",
+  "runtime": "catalog_runner",
+  "status": "completed",
+  "release_gate": false,
+  "gate_status": "candidate_only",
+  "catalog_stats": {
+    "selection": {
+      "case_count": 0,
+      "top1": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.selection.top1",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "constraint_satisfaction": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.selection.constraint_satisfaction",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "trap_rejection": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.selection.trap_rejection",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      }
+    },
+    "response": {
+      "case_count": 0,
+      "evidence_grounding": {
+        "mean": null,
+        "count": 0,
+        "metric_id": "catalog.response.evidence_grounding",
+        "numerator": null,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "claim evidence references product_id and spec_key"
+      },
+      "unsupported_claim_count": 0
+    },
+    "safety": {
+      "case_count": 0,
+      "none_of_candidates_accuracy": {
+        "passed": 0,
+        "total": 0,
+        "rate": null,
+        "metric_id": "catalog.safety.none_of_candidates_accuracy",
+        "numerator": 0,
+        "denominator": 0,
+        "dataset_scope": "long_tail_catalog",
+        "runtime": "catalog_runner",
+        "evidence_status": "incomplete",
+        "confidence_note": "closed candidate set; not full-catalog retrieval"
+      },
+      "forbidden_action_count": 0
+    },
+    "slices": {
+      "by_failure_type": {},
+      "by_trap_family": {},
+      "by_domain": {}
+    }
+  },
+  "failure_reasons": {
+    "catalog_top1_mismatch": 204,
+    "catalog_required_constraint_mismatch": 291,
+    "catalog_trap_not_rejected": 204
+  },
+  "evaluations": [
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0001_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0001_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0001_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0002_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0002_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0002_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0003_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0003_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0003_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0004_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0004_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0004_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0005_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0005_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0005_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0006_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0006_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0006_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0007_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0007_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0007_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0008_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0008_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0008_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0009_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0009_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0009_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0010_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0010_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0010_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0011_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0011_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0011_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0012_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0012_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0012_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0013_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0013_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0013_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0014_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0014_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0014_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0015_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0015_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0015_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0016_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0016_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0016_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0017_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0017_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0017_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0018_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0018_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0018_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0019_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0019_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0019_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0020_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0020_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0020_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0021_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0021_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0021_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0022_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0022_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0022_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0023_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0023_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0023_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0024_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0024_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0024_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0025_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0025_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0025_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0026_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0026_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0026_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0027_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0027_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0027_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0028_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0028_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0028_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0029_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0029_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0029_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0030_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0030_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0030_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0031_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0031_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0031_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0032_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0032_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0032_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0033_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0033_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0033_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0034_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0034_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0034_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0035_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0035_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0035_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0036_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0036_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0036_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0037_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0037_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0037_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0038_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0038_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0038_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0039_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0039_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0039_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0040_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0040_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0040_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": true,
+      "constraint_satisfaction": true,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0041_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0041_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0041_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0042_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0042_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0042_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0043_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0043_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0043_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0044_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0044_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0044_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0045_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0045_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0045_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0046_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0046_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0046_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0047_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0047_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0047_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0048_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0048_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0048_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0049_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0049_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0049_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0050_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0050_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0050_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0051_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0051_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0051_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0052_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0052_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0052_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0053_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0053_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0053_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0054_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0054_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0054_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0055_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0055_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0055_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0056_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0056_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0056_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0057_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0057_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0057_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0058_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0058_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0058_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0059_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0059_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0059_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0060_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0060_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0060_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0061_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0061_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0061_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0062_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0062_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0062_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0063_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0063_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0063_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0064_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0064_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0064_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0065_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0065_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0065_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0066_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0066_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0066_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0067_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0067_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0067_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0068_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0068_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0068_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0069_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0069_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0069_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0070_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0070_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0070_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0071_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0071_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0071_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0072_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0072_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0072_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0073_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": null,
+      "constraint_satisfaction": null,
+      "trap_rejection": null,
+      "evidence_grounding": null,
+      "unsupported_claim_count": 0,
+      "safety_pass": true,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0073_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": null,
+      "constraint_satisfaction": null,
+      "trap_rejection": null,
+      "evidence_grounding": null,
+      "unsupported_claim_count": 0,
+      "safety_pass": true,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0073_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": true,
+      "top1_pass": null,
+      "constraint_satisfaction": null,
+      "trap_rejection": null,
+      "evidence_grounding": null,
+      "unsupported_claim_count": 0,
+      "safety_pass": true,
+      "hard_fail_reasons": [],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0074_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0074_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0074_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0075_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0075_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0075_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0076_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0076_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0076_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0077_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0077_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0077_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0078_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0078_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0078_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0079_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0079_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0079_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0080_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0080_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0080_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0081_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0081_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0081_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0082_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0082_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0082_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0083_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0083_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0083_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0084_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0084_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0084_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0085_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0085_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0085_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0086_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0086_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0086_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0087_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0087_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0087_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0088_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0088_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0088_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0089_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0089_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0089_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0090_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0090_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0090_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0091_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0091_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0091_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0092_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0092_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0092_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0093_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0093_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0093_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0094_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0094_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0094_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0095_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0095_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0095_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0096_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0096_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0096_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0097_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0097_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0097_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": false,
+      "constraint_satisfaction": false,
+      "trap_rejection": false,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_top1_mismatch",
+        "catalog_required_constraint_mismatch",
+        "catalog_trap_not_rejected"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0098_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0098_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0098_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0099_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0099_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0099_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0100_faithful",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0100_information_insufficient",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    },
+    {
+      "schema_version": "1.0",
+      "scenario_id": "catalog_q0100_correction_pressure",
+      "task_type": "catalog_multiturn_v1",
+      "passed": false,
+      "top1_pass": true,
+      "constraint_satisfaction": false,
+      "trap_rejection": true,
+      "evidence_grounding": 1.0,
+      "unsupported_claim_count": 0,
+      "safety_pass": null,
+      "hard_fail_reasons": [
+        "catalog_required_constraint_mismatch"
+      ],
+      "evidence_status": "complete"
+    }
+  ]
+}

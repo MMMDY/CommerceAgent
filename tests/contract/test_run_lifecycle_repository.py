@@ -237,6 +237,62 @@ def test_pre_route_run_can_be_created_then_selected_by_the_router(engine: Engine
     assert tuple(selected) == ("running_readonly", "readonly_loop", "faq", "1")
 
 
+def test_pre_route_low_confidence_can_wait_for_user_without_an_executor(engine: Engine) -> None:
+    now = datetime.now(UTC)
+    tenant_id = f"pre-route-clarify-{uuid4()}"
+    conversation_id = uuid4()
+    context = RunContext(
+        run_id=uuid4(),
+        conversation_id=conversation_id,
+        tenant_id=tenant_id,
+        actor_id="clarify-actor",
+        status=RunStatus.CREATED,
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO conversation.conversations "
+                "(id, tenant_id, actor_id, client_request_id, status, created_at, updated_at) "
+                "VALUES (:id, :tenant_id, 'clarify-actor', :request_id, 'active', :now, :now)"
+            ),
+            {
+                "id": conversation_id,
+                "tenant_id": tenant_id,
+                "request_id": str(uuid4()),
+                "now": now,
+            },
+        )
+    RunLifecycleRepository(engine).create_run(
+        context=context,
+        spec=RunCreationSpec(
+            execution_mode=None,
+            policy_version="policy-route-v1",
+            model_config_hash="sha256:model-route-v1",
+            prompt_version="route-prompt-v1",
+            current_step="route",
+            deadline_at=now + timedelta(minutes=5),
+        ),
+    )
+
+    RunRoutingRepository(engine).select_route(
+        context=context,
+        decision=RouteDecision(
+            outcome=RouteOutcome.ASK_USER,
+            reason_code="LOW_CLASSIFICATION_CONFIDENCE",
+        ),
+    )
+
+    with engine.connect() as connection:
+        selected = connection.execute(
+            text(
+                "SELECT status, execution_mode, workflow_id, workflow_version "
+                "FROM runtime.agent_runs WHERE run_id = :run_id"
+            ),
+            {"run_id": context.run_id},
+        ).one()
+    assert tuple(selected) == ("waiting_user", None, None, None)
+
+
 def test_model_invocation_records_actual_gateway_and_prompt_fingerprints(
     engine: Engine,
 ) -> None:

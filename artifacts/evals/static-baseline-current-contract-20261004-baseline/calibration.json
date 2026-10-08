@@ -1,0 +1,70 @@
+{
+  "agreement_rate": 1.0,
+  "boundary_cases": [],
+  "conflicts": [],
+  "dimension_stats": {
+    "answerability": {
+      "count": 6,
+      "mean": 3.8333
+    },
+    "asks_needed_attribute": {
+      "count": 6,
+      "mean": 4.0
+    },
+    "clarity": {
+      "count": 18,
+      "mean": 3.9444
+    },
+    "confirmation_clarity": {
+      "count": 10,
+      "mean": 4.0
+    },
+    "context_relevance": {
+      "count": 6,
+      "mean": 4.0
+    },
+    "evidence_grounding": {
+      "count": 8,
+      "mean": 4.0
+    },
+    "factual_correctness": {
+      "count": 8,
+      "mean": 4.0
+    },
+    "naturalness": {
+      "count": 6,
+      "mean": 3.6667
+    },
+    "no_false_claim": {
+      "count": 16,
+      "mean": 4.0
+    },
+    "professional_tone": {
+      "count": 6,
+      "mean": 3.1667
+    },
+    "question_coverage": {
+      "count": 8,
+      "mean": 4.0
+    },
+    "safe_next_step": {
+      "count": 6,
+      "mean": 2.1667
+    },
+    "safety_policy": {
+      "count": 6,
+      "mean": 4.0
+    },
+    "task_progress": {
+      "count": 10,
+      "mean": 4.0
+    }
+  },
+  "evaluated_count": 30,
+  "judge_model": "deepseek-chat",
+  "label_count": 30,
+  "labels_hash": "sha256:64415743bcee8fb28bfa0005b8b35f83c836affdcbe5d1962f7db43eb90a650a",
+  "prompt_hash": "sha256:ea23df3f713b564ca5a0f431940c7568337b12c6cda72580a89822510beedf5f",
+  "rubric_version": "1.0",
+  "status": "complete"
+}

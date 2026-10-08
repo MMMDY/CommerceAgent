@@ -1,0 +1,25 @@
+{
+  "schema_version": "layered-evaluation-evidence-audit-v1",
+  "status": "incomplete",
+  "release_gate": false,
+  "checks": {
+    "human_review_complete": false,
+    "baseline_status": false,
+    "baseline_reports_complete": true,
+    "hard_checks_complete": true,
+    "baseline_shape": true,
+    "judge_dependent_comparable": false,
+    "final_pass_unchanged": false
+  },
+  "blocking_reasons": [
+    "human_review_complete",
+    "baseline_status",
+    "judge_dependent_comparable",
+    "final_pass_unchanged"
+  ],
+  "requirements": {
+    "minimum_reviewed": 20,
+    "expected_cases": 300,
+    "expected_attempts": 900
+  }
+}

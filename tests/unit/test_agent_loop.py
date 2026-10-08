@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from src.agent.loop import AgentLoop
+from src.agent.loop import AgentLoop, _bind_compound_delivery_order
 from src.agent.validation import DecisionBoundary, DecisionValidator
 from src.models.gateway import DeterministicFakeModel
 from src.protocols import (
@@ -51,6 +51,31 @@ def _prompt() -> PromptView:
         evidence_ids=(),
         remaining_steps=1,
     )
+
+
+def test_compound_delivery_call_is_bound_to_trusted_order_observation() -> None:
+    decision = Decision(
+        type=DecisionType.CALL_TOOL,
+        intent="track_order",
+        route="order_query",
+        confidence=1,
+        tool="get_delivery_tracking",
+        args={"tracking_id": "TRK-DEMO-001"},
+    )
+    context = _context()
+    context = context.model_copy(
+        update={
+            "state": {
+                "tool_data_by_name": {
+                    "get_order_status": {"order": {"order_id": "ORD-DEMO-001"}}
+                }
+            }
+        }
+    )
+
+    repaired = _bind_compound_delivery_order(decision, context)
+
+    assert repaired.args == {"order_id": "ORD-DEMO-001"}
 
 
 def test_loop_terminates_before_model_for_cancel_deadline_and_max_steps() -> None:

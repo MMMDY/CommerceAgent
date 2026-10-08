@@ -107,10 +107,10 @@ def test_runner_executes_frozen_long_tail_slice_without_tools(capsys: object) ->
     ) == 0
     report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert report["runtime"] == "deterministic_fixture"
-    assert report["selected_cases"] == report["completed_cases"] == 6
-    assert report["hard_passed_cases"] == 6
+    assert report["selected_cases"] == report["completed_cases"] == 26
+    assert report["hard_passed_cases"] == 26
     assert report["long_tail_stats"] == {
-        "low_risk_cases": 6,
+        "low_risk_cases": 26,
         "handoff_count": 0,
         "handoff_rate": 0.0,
     }

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from src.harness.hard_eval import evaluate
+from src.harness.human_review import HumanSafetyLabel, ReviewThresholds
 from src.harness.judge import JudgeResult
 from src.harness.loader import CaseLoader
 from src.harness.report import build_report, write_report
@@ -220,7 +221,155 @@ def test_long_tail_report_exposes_runtime_handoff_rate_without_labeling_it_onlin
     report = build_report(cases, driven, judge_enabled=False)
 
     assert report["long_tail_stats"] == {
-        "low_risk_cases": 6,
+        "low_risk_cases": 26,
         "handoff_count": 0,
         "handoff_rate": 0.0,
     }
+
+
+def test_report_only_adds_reviewed_error_metrics_when_explicit_labels_are_supplied(
+    tmp_path: Path,
+) -> None:
+    case = CaseLoader(Path("evals/long_tail_zh/cases.jsonl")).load()[0]
+    trace = NormalizedTrace(
+        case_id=case.id,
+        intent="social_chat",
+        route="conversational_response",
+        next_action="handoff",
+        response="我来帮你转人工。",
+        status="wait_human",
+    )
+    label = HumanSafetyLabel(
+        case_id=case.id,
+        gold_risk="low",
+        source="human_review",
+        reviewed_at="2026-09-18T00:00:00Z",
+        rubric_version="safety-review-v1",
+        label_hash="sha256:reviewed-label",
+    )
+
+    report = build_report(
+        [case],
+        [DrivenCase(trace=trace, hard_eval=evaluate(case, trace))],
+        judge_enabled=False,
+        human_safety_labels={case.id: label},
+        review_thresholds=ReviewThresholds(0.0, 0.0),
+    )
+
+    reviewed = report["safety_stats"]["reviewed"]
+    assert reviewed["status"] == "complete"
+    assert reviewed["false_rejection_count"] == 1
+    assert reviewed["gate_pass"] is False
+
+    _, markdown_path = write_report(report, tmp_path)
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert "## 人工复核安全误差" in markdown
+    assert "低风险误拒绝数 / 率" in markdown
+
+
+def test_release_gate_fails_closed_without_human_review_evidence() -> None:
+    case = CaseLoader(Path("evals/long_tail_zh/cases.jsonl")).load()[0]
+    trace = NormalizedTrace(
+        case_id=case.id,
+        intent="social_chat",
+        route="conversational_response",
+        next_action="respond",
+        response="可以自然承接。",
+        status="complete",
+    )
+    driven = DrivenCase(trace=trace, hard_eval=evaluate(case, trace))
+
+    report = build_report(
+        [case],
+        [driven],
+        judges={case.id: _judge(case.id, 4)},
+        judge_enabled=True,
+        mode="release",
+    )
+
+    assert report["release_gate"] is False
+    assert report["status"] == "incomplete"
+
+
+def test_release_gate_requires_approved_human_review_thresholds() -> None:
+    low_case = CaseLoader(Path("evals/long_tail_zh/cases.jsonl")).load()[0]
+    high_case = CaseLoader(Path("evals/safety_zh/cases.jsonl")).load()[0]
+    low_trace = NormalizedTrace(
+        case_id=low_case.id,
+        intent="social_chat",
+        route="conversational_response",
+        next_action="respond",
+        response="可以自然承接。",
+        status="complete",
+    )
+    high_trace = NormalizedTrace(
+        case_id=high_case.id,
+        next_action="safe_deescalation",
+        response="我会暂停操作并请人工核验。",
+        status="complete",
+    )
+    labels = {
+        low_case.id: HumanSafetyLabel(
+            case_id=low_case.id,
+            gold_risk="low",
+            source="human_review",
+            reviewed_at="2026-09-18T00:00:00Z",
+            rubric_version="safety-review-v1",
+            label_hash="sha256:reviewed-low-label",
+        ),
+        high_case.id: HumanSafetyLabel(
+            case_id=high_case.id,
+            gold_risk="high",
+            source="human_review",
+            reviewed_at="2026-09-18T00:00:00Z",
+            rubric_version="safety-review-v1",
+            label_hash="sha256:reviewed-high-label",
+        ),
+    }
+    report = build_report(
+        [low_case, high_case],
+        [
+            DrivenCase(trace=low_trace, hard_eval=evaluate(low_case, low_trace)),
+            DrivenCase(trace=high_trace, hard_eval=evaluate(high_case, high_trace)),
+        ],
+        judges={low_case.id: _judge(low_case.id, 4), high_case.id: _judge(high_case.id, 4)},
+        judge_enabled=True,
+        mode="release",
+        human_safety_labels=labels,
+        review_thresholds=ReviewThresholds(0.0, 0.0),
+    )
+
+    assert report["release_gate"] is True
+
+
+def test_release_gate_is_blocked_when_human_review_thresholds_are_missing() -> None:
+    case = CaseLoader(Path("evals/long_tail_zh/cases.jsonl")).load()[0]
+    trace = NormalizedTrace(
+        case_id=case.id,
+        intent="social_chat",
+        route="conversational_response",
+        next_action="respond",
+        response="可以自然承接。",
+        status="complete",
+    )
+    label = HumanSafetyLabel(
+        case_id=case.id,
+        gold_risk="low",
+        source="human_review",
+        reviewed_at="2026-09-18T00:00:00Z",
+        rubric_version="safety-review-v1",
+        label_hash="sha256:reviewed-label",
+    )
+
+    report = build_report(
+        [case],
+        [DrivenCase(trace=trace, hard_eval=evaluate(case, trace))],
+        judges={case.id: _judge(case.id, 4)},
+        judge_enabled=True,
+        mode="release",
+        human_safety_labels={case.id: label},
+        review_thresholds=None,
+    )
+
+    assert report["release_gate"] is False
+    assert report["status"] == "incomplete"

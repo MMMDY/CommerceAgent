@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from src.harness.human_review import HumanSafetyLabel, ReviewThresholds, reviewed_safety_stats
 from src.harness.judge import JudgeResult
 from src.harness.run_driver import DrivenCase
 from src.harness.schema import EvalCase
@@ -67,6 +68,10 @@ def build_report(
     repetitions: int = 1,
     cancelled: bool = False,
     judge_enabled: bool | None = None,
+    human_safety_labels: dict[str, HumanSafetyLabel] | None = None,
+    review_thresholds: ReviewThresholds | None = None,
+    multiturn_stats: dict[str, Any] | None = None,
+    catalog_stats: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     judges = judges or {}
     judge_requested = bool(judges) if judge_enabled is None else judge_enabled
@@ -206,6 +211,53 @@ def build_report(
     performance_stats = _performance_stats(rows)
     safety_stats = _safety_stats(rows)
     long_tail_stats = _long_tail_stats(rows)
+    hard_dimension_stats = _hard_dimension_stats(
+        rows, dataset_scope=dataset_id or "unknown", runtime=runtime or "unknown"
+    )
+    failure_reason_stats = _failure_reason_stats(rows)
+    rag_stats = _rag_stats(rows, dataset_scope=dataset_id or "unknown", runtime=runtime or "unknown")
+    requires_review_gate = any(
+        row["track"] in {"long_tail_response_v1", "safety_response_v2"}
+        for row in rows
+    )
+    reviewed_stats: dict[str, Any] | None = None
+    if human_safety_labels is not None:
+        reviewed_stats = reviewed_safety_stats(
+            rows,
+            human_safety_labels,
+            thresholds=review_thresholds,
+        )
+        safety_stats = {**safety_stats, "reviewed": reviewed_stats}
+        long_tail_stats = {**long_tail_stats, "reviewed": reviewed_stats}
+    release_gate = bool(
+        mode == "release"
+        and judge_enabled
+        and not any(r["self_judged"] for r in rows)
+        and not judge_incomplete
+        and all(r["hard_pass"] for r in rows)
+    )
+    # A Judge result is not a substitute for an independently reviewed safety
+    # label set.  Release evaluation for long-tail/safety tracks must have
+    # both complete labels and approved thresholds; missing evidence blocks
+    # the gate instead of becoming an implicit pass.
+    if requires_review_gate:
+        release_gate = (
+            release_gate
+            and reviewed_stats is not None
+            and reviewed_stats.get("gate_pass") is True
+        )
+    review_evidence_incomplete = requires_review_gate and (
+        reviewed_stats is None
+        or reviewed_stats.get("status") != "complete"
+        or reviewed_stats.get("gate_pass") is None
+    )
+    report_status = (
+        "cancelled"
+        if cancelled
+        else "incomplete"
+        if judge_incomplete or review_evidence_incomplete
+        else "completed"
+    )
     return {
         "schema_version": "2.0",
         "dataset_id": dataset_id,
@@ -227,13 +279,8 @@ def build_report(
         "judge": "on" if judge_enabled else "off",
         "self_judged": any(r["self_judged"] for r in rows),
         "provisional": any(r["self_judged"] for r in rows),
-        "release_gate": bool(
-            mode == "release"
-            and judge_enabled
-            and not any(r["self_judged"] for r in rows)
-            and not judge_incomplete
-        ),
-        "status": "cancelled" if cancelled else ("incomplete" if judge_incomplete else "completed"),
+        "release_gate": release_gate,
+        "status": report_status,
         "selected_cases": len(grouped),
         "completed_cases": len(grouped),
         "attempts": len(rows),
@@ -264,6 +311,11 @@ def build_report(
         "performance_stats": performance_stats,
         "safety_stats": safety_stats,
         "long_tail_stats": long_tail_stats,
+        "hard_dimension_stats": hard_dimension_stats,
+        "failure_reason_stats": failure_reason_stats,
+        "rag_stats": rag_stats,
+        "multiturn_stats": multiturn_stats,
+        "catalog_stats": catalog_stats,
         "results": rows,
     }
 
@@ -292,6 +344,26 @@ def write_report(report: dict[str, Any], output_dir: Path | str) -> tuple[Path, 
         report = {
             **report,
             "long_tail_stats": _long_tail_stats(report.get("results", [])),
+        }
+    if "hard_dimension_stats" not in report:
+        report = {
+            **report,
+            "hard_dimension_stats": _hard_dimension_stats(
+                report.get("results", []),
+                dataset_scope=str(report.get("dataset_id") or "unknown"),
+                runtime=str(report.get("runtime") or "unknown"),
+            ),
+        }
+    if "failure_reason_stats" not in report:
+        report = {**report, "failure_reason_stats": _failure_reason_stats(report.get("results", []))}
+    if "rag_stats" not in report:
+        report = {
+            **report,
+            "rag_stats": _rag_stats(
+                report.get("results", []),
+                dataset_scope=str(report.get("dataset_id") or "unknown"),
+                runtime=str(report.get("runtime") or "unknown"),
+            ),
         }
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -385,6 +457,58 @@ def write_report(report: dict[str, Any], output_dir: Path | str) -> tuple[Path, 
                 f"{_metric_value(metric, 'p50')} | {_metric_value(metric, 'p95')} | "
                 f"{_metric_value(metric, 'p99')} |"
             )
+    hard_dimensions = report.get("hard_dimension_stats", {})
+    if hard_dimensions:
+        lines.extend(
+            [
+                "",
+                "## Hard Dimension 分层指标",
+                "",
+                "每个指标保留独立分子、分母和证据状态；商品封闭候选与多轮指标不并入静态总通过率。",
+                "",
+                "| Track | 维度 | 分子 | 分母 | 通过率 | Evidence |",
+                "|---|---|---:|---:|---:|---|",
+            ]
+        )
+        for track, dimensions in hard_dimensions.items():
+            for name, metric in dimensions.items():
+                lines.append(
+                    f"| {track} | {name} | {metric.get('numerator', 'N/A')} | "
+                    f"{metric.get('denominator', 'N/A')} | {_metric_value(metric, 'rate')} | "
+                    f"{_display(metric.get('evidence_status'))} |"
+                )
+    multiturn_stats = report.get("multiturn_stats")
+    if isinstance(multiturn_stats, dict):
+        lines.extend(["", "## Multi-turn 双侧指标", "", "| 指标 | 均值 / 通过率 | 样本数 |", "|---|---:|---:|"])
+        for name in ("intent_coverage", "agenda_progress", "exposed_intent_accuracy", "task_success_rate"):
+            metric = multiturn_stats.get(name)
+            if isinstance(metric, dict):
+                lines.append(f"| {name} | {_metric_value(metric, 'mean')} | {_value_or_na(metric.get('denominator', metric.get('count'))) } |")
+        lines.append(f"| evaluation_noise_count | {_value_or_na(multiturn_stats.get('evaluation_noise_count'))} | N/A |")
+    catalog_stats = report.get("catalog_stats")
+    if isinstance(catalog_stats, dict):
+        lines.extend(["", "## Catalog 长尾分层指标", "", "| Track | 指标 | 分子 | 分母 | 比率 | Evidence |", "|---|---|---:|---:|---:|---|"])
+        for track, values in catalog_stats.items():
+            if not isinstance(values, dict):
+                continue
+            for name, metric in values.items():
+                if not isinstance(metric, dict) or "metric_id" not in metric:
+                    continue
+                lines.append(
+                    f"| {track} | {name} | {metric.get('numerator', 'N/A')} | "
+                    f"{metric.get('denominator', 'N/A')} | {_metric_value(metric, 'rate')} | "
+                    f"{_display(metric.get('evidence_status'))} |"
+                )
+    rag_stats = report.get("rag_stats")
+    if isinstance(rag_stats, dict):
+        lines.extend(["", "## RAG Evidence 指标", "", "| 指标 | 分子 | 分母 | 比率 | Evidence |", "|---|---:|---:|---:|---|"])
+        for name in ("recall_at_k", "precision_at_k", "grounding_rate"):
+            metric = rag_stats.get(name)
+            if isinstance(metric, dict):
+                lines.append(
+                    f"| {name} | {metric.get('numerator', 'N/A')} | {metric.get('denominator', 'N/A')} | "
+                    f"{_metric_value(metric, 'rate')} | {_display(metric.get('evidence_status'))} |"
+                )
     safety_stats = report.get("safety_stats", {})
     if safety_stats:
         lines.extend(
@@ -415,6 +539,29 @@ def write_report(report: dict[str, Any], output_dir: Path | str) -> tuple[Path, 
                 f"| 低风险样本数 | {long_tail_stats.get('low_risk_cases', 'N/A')} |",
                 f"| 转人工样本数 | {long_tail_stats.get('handoff_count', 'N/A')} |",
                 f"| 评测 Runtime 转人工率 | {_metric_value(long_tail_stats, 'handoff_rate')} |",
+            ]
+        )
+    reviewed_stats = safety_stats.get("reviewed")
+    if isinstance(reviewed_stats, dict):
+        lines.extend(
+            [
+                "",
+                "## 人工复核安全误差",
+                "",
+                "只有 `source=human_review` 且覆盖完整时才计算；"
+                "缺失标签或批准阈值不会被推断为通过。",
+                "",
+                "| 指标 | 数值 |",
+                "|---|---:|",
+                f"| 复核状态 | {_display(reviewed_stats.get('status'))} |",
+                f"| 已复核样本 | {_value_or_na(reviewed_stats.get('reviewed_case_count'))} |",
+                f"| 缺失标签 | {_value_or_na(reviewed_stats.get('missing_label_count'))} |",
+                f"| 安全漏判数 / 率 | {_value_or_na(reviewed_stats.get('false_negative_count'))} / "
+                f"{_metric_value(reviewed_stats, 'false_negative_rate')} |",
+                f"| 低风险误拒绝数 / 率 | "
+                f"{_value_or_na(reviewed_stats.get('false_rejection_count'))} / "
+                f"{_metric_value(reviewed_stats, 'false_rejection_rate')} |",
+                f"| 复核 Gate | {_value_or_na(reviewed_stats.get('gate_pass'))} |",
             ]
         )
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -496,6 +643,10 @@ def _display(value: object) -> str:
     return str(value) if isinstance(value, str) and value else "N/A"
 
 
+def _value_or_na(value: object) -> str:
+    return "N/A" if value is None else str(value)
+
+
 def _judge_stats(
     rows: Iterable[dict[str, Any]],
 ) -> tuple[dict[str, dict[str, dict[str, float | int]]], dict[str, dict[str, float | int]]]:
@@ -535,7 +686,7 @@ def _judge_stats(
     return dict(dimension_stats), dict(score_stats)
 
 
-def _safety_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int | float | bool]:
+def _safety_stats(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Return high-risk release-gate facts for the safety synthetic track."""
 
     safety_rows = [row for row in rows if row.get("track") == "safety_response_v2"]
@@ -561,7 +712,7 @@ def _safety_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int | float | boo
     }
 
 
-def _long_tail_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int | float]:
+def _long_tail_stats(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Expose low-risk handoff observations without calling them labels."""
 
     long_tail_rows = [row for row in rows if row.get("track") == "long_tail_response_v1"]
@@ -575,4 +726,85 @@ def _long_tail_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int | float]:
         "low_risk_cases": len(long_tail_rows),
         "handoff_count": handoff_count,
         "handoff_rate": round(handoff_count / len(long_tail_rows), 4),
+    }
+
+
+def _hard_dimension_stats(
+    rows: Iterable[dict[str, Any]], *, dataset_scope: str = "unknown", runtime: str = "unknown"
+) -> dict[str, Any]:
+    """Aggregate hard dimensions with an explicit numerator/denominator."""
+
+    values: dict[str, dict[str, dict[str, int]]] = defaultdict(lambda: defaultdict(lambda: {"passed": 0, "total": 0}))
+    for row in rows:
+        track = str(row.get("track", "unknown"))
+        for name, value in (row.get("dimensions") or {}).items():
+            metric = values[track][str(name)]
+            metric["total"] += 1
+            metric["passed"] += int(value is True)
+    return {
+        track: {
+            name: {
+                **metric,
+                "rate": round(metric["passed"] / metric["total"], 4) if metric["total"] else None,
+                "metric_id": f"hard.{track}.{name}",
+                "numerator": metric["passed"],
+                "denominator": metric["total"],
+                "dataset_scope": dataset_scope,
+                "runtime": runtime,
+                "evidence_status": "complete" if metric["total"] else "incomplete",
+                "confidence_note": "deterministic hard assertion",
+            }
+            for name, metric in dimensions.items()
+        }
+        for track, dimensions in values.items()
+    }
+
+
+def _failure_reason_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in rows:
+        counts.update(str(reason) for reason in row.get("hard_fail_reasons", ()))
+    return dict(counts)
+
+
+def _rag_stats(
+    rows: Iterable[dict[str, Any]], *, dataset_scope: str = "unknown", runtime: str = "unknown"
+) -> dict[str, Any]:
+    rag_rows = [row for row in rows if row.get("track") == "rag_grounding"]
+    if not rag_rows:
+        return {"status": "incomplete", "case_count": 0}
+    recall_hits = 0
+    gold_total = 0
+    retrieved_total = 0
+    precision_hits = 0
+    grounding_pass = 0
+    for row in rag_rows:
+        expected = row.get("expected") or {}
+        actual = row.get("actual") or {}
+        gold = {str(item) for item in expected.get("evidence_ids", ())}
+        retrieved = {str(item) for item in actual.get("evidence_ids", ())}
+        recall_hits += len(gold & retrieved)
+        gold_total += len(gold)
+        precision_hits += len(gold & retrieved)
+        retrieved_total += len(retrieved)
+        grounding_pass += int((row.get("dimensions") or {}).get("facts") is True)
+
+    def metric(metric_id: str, numerator: int, denominator: int, note: str) -> dict[str, Any]:
+        return {
+            "metric_id": metric_id,
+            "numerator": numerator,
+            "denominator": denominator,
+            "rate": round(numerator / denominator, 4) if denominator else None,
+            "dataset_scope": dataset_scope,
+            "runtime": runtime,
+            "evidence_status": "complete" if denominator else "incomplete",
+            "confidence_note": note,
+        }
+
+    return {
+        "status": "completed" if gold_total else "incomplete",
+        "case_count": len(rag_rows),
+        "recall_at_k": metric("rag.recall_at_k", recall_hits, gold_total, "gold evidence IDs from rag_grounding cases"),
+        "precision_at_k": metric("rag.precision_at_k", precision_hits, retrieved_total, "retrieved evidence IDs from normalized trace"),
+        "grounding_rate": metric("rag.grounding_rate", grounding_pass, len(rag_rows), "Hard required-fact grounding dimension"),
     }

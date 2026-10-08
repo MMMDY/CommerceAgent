@@ -102,6 +102,17 @@ class NormalizedTrace(Contract):
     evidence_ids: tuple[str, ...] = ()
     response: str = ""
     status: Literal["complete", "wait_user", "wait_human", "fail"]
+    # Optional multi-turn observability.  Static case callers can omit these
+    # fields, preserving the existing RuntimeCaseInput contract.
+    turn_id: int | None = Field(default=None, ge=1)
+    dialogue_id: str | None = None
+    retrieved_evidence_ids: tuple[str, ...] = ()
+    slot_values: dict[str, Any] = Field(default_factory=dict)
+    tool_attempts: tuple[str, ...] = ()
+    workflow_steps: tuple[str, ...] = ()
+    memory_reads: tuple[str, ...] = ()
+    memory_writes: tuple[str, ...] = ()
+    termination_reason: str | None = None
 
 
 class HardEvalResult(Contract):

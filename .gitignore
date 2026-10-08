@@ -28,5 +28,7 @@ backups/
 postgres-data/
 
 # Local planning and summary notes
-/docs/plan/
-/docs/summary/
+/docs/plan/image.png
+/docs/summary/CommerceAgent/docs/summary/commerce-agent-detailed-introduction.md
+/docs/summary/CommerceAgent/docs/summary/commerce-agent-interview-preparation.md
+
