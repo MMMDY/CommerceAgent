@@ -26,3 +26,7 @@ backups/
 *.pid
 *.state.json
 postgres-data/
+
+# Local planning and summary notes
+/docs/plan/
+/docs/summary/
